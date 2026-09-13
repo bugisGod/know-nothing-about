@@ -1,0 +1,88 @@
+---
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+  const projects = await getCollection('projects', ({ data }) => !data.draft);
+  return projects.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const d = entry.data;
+
+const fmt = (date: Date) =>
+  `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+---
+
+<Base title={d.title} description={d.description}>
+  <div class="container">
+  <article class="prose" data-pagefind-body>
+    <div class="crumbs"><a href="/projects/">项目复盘</a> / {d.status}</div>
+    <h1>{d.title}</h1>
+    <div class="page-meta">
+      {d.period && <span>{d.period}</span>}
+      {d.role && <span>{d.role}</span>}
+      <span>更新于 {fmt(d.date)}</span>
+    </div>
+    <div class="sub-lines">
+      <span class="tech">{d.tech.join(' / ')}</span>
+      {
+        (d.link || d.repo) && (
+          <span class="links">
+            {d.link && (
+              <a href={d.link} target="_blank" rel="noopener">
+                <Icon name="link" size={13} /> 线上地址
+              </a>
+            )}
+            {d.repo && (
+              <a href={d.repo} target="_blank" rel="noopener">
+                <Icon name="github" size={13} /> 仓库
+              </a>
+            )}
+          </span>
+        )
+      }
+    </div>
+    <Content />
+  </article>
+  </div>
+</Base>
+
+<style>
+  .sub-lines {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin: 0 0 10px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tech {
+    color: var(--muted);
+    font-size: 12.5px;
+    font-family: var(--mono);
+  }
+
+  .links {
+    display: flex;
+    gap: 14px;
+  }
+
+  .links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12.5px;
+    color: var(--text-2);
+  }
+
+  .links a:hover {
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+</style>

@@ -1,0 +1,41 @@
+---
+import { SITE } from '../config';
+
+const year = new Date().getFullYear();
+const range = year > SITE.since ? `${SITE.since} – ${year}` : `${SITE.since}`;
+---
+
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <span class="wordmark">{SITE.title}<span class="logo-dot" aria-hidden="true">.</span></span>
+    <span class="footer-meta">
+      <span class="earth"><i aria-hidden="true"></i>EARTH · SOL-3</span>
+      <span aria-hidden="true"> · </span>
+      © {range} {SITE.author}
+      <span aria-hidden="true"> · </span>
+      <a href="/rss.xml">RSS</a>
+      <span aria-hidden="true"> · </span>
+      <a href="https://astro.build" target="_blank" rel="noopener">Astro</a>
+    </span>
+  </div>
+</footer>
+
+<style>
+  .logo-dot {
+    color: var(--accent);
+  }
+
+  .earth {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .earth i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 32%, #8fd8cf 0%, #2f7d92 55%, #14333f 100%);
+    box-shadow: 0 0 7px rgba(105, 205, 190, 0.45);
+  }
+</style>

@@ -1,0 +1,78 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+
+const notes = await getCollection('notes', ({ data }) => !data.draft);
+
+const groups = new Map<string, typeof notes>();
+for (const n of notes) {
+  const cat = n.id.includes('/') ? n.id.split('/')[0] : '未分类';
+  if (!groups.has(cat)) groups.set(cat, []);
+  groups.get(cat)!.push(n);
+}
+
+const cats = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+
+const fmt = (d?: Date) =>
+  d ? `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}` : '';
+---
+
+<Base title="知识库" description="按主题分类的知识笔记">
+  <div class="container">
+    <h1 class="page-title">知识库</h1>
+    <p class="page-desc">
+      按主题分类的笔记。想补充内容时，往 <code>src/content/notes/</code> 对应分类文件夹里丢一个
+      Markdown 文件即可，侧边栏目录会自动生成。
+    </p>
+    {
+      cats.map((cat) => (
+        <section class="cat-sec">
+          <h2>
+            {cat}
+            <span class="count">{groups.get(cat)!.length}</span>
+          </h2>
+          <div class="note-list">
+            {groups
+              .get(cat)!
+              .sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0))
+              .map((n) => (
+                <div class="note-row">
+                  <a class="t" href={`/notes/${n.id}/`}>
+                    {n.data.title}
+                  </a>
+                  {n.data.description && <span class="desc">{n.data.description}</span>}
+                  <span class="d">{fmt(n.data.date)}</span>
+                </div>
+              ))}
+          </div>
+        </section>
+      ))
+    }
+  </div>
+</Base>
+
+<style>
+  .cat-sec {
+    margin-top: 44px;
+  }
+
+  .cat-sec h2 {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 2px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .count {
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+</style>

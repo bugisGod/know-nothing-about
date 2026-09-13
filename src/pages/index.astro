@@ -1,0 +1,356 @@
+---
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import BrainGraph from '../components/BrainGraph.astro';
+import { getCollection } from 'astro:content';
+import { SITE } from '../config';
+
+const notes = (await getCollection('notes', ({ data }) => !data.draft))
+  .sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0))
+  .slice(0, 4);
+
+const projects = (await getCollection('projects', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
+  .slice(0, 3);
+
+const catOf = (id: string) => (id.includes('/') ? id.split('/')[0] : '未分类');
+const statusKey = (s: string) => ({ 进行中: 'ongoing', 已完成: 'done', 已归档: 'archived' })[s] ?? 'done';
+
+const fmt = (d?: Date) =>
+  d ? `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}` : '';
+
+// ===== 知识图谱数据：节点 = 全部页面，边 = 共享标签 / 同分类 =====
+const allNotes = await getCollection('notes', ({ data }) => !data.draft);
+const allProjects = await getCollection('projects', ({ data }) => !data.draft);
+
+const gNodes = [
+  ...allNotes.map((n) => ({
+    id: n.id,
+    title: n.data.title,
+    url: `/notes/${n.id}/`,
+    kind: '笔记',
+    group: catOf(n.id),
+    tags: n.data.tags,
+  })),
+  ...allProjects.map((p) => ({
+    id: p.id,
+    title: p.data.title,
+    url: `/projects/${p.id}/`,
+    kind: '项目',
+    group: p.data.status,
+    tags: p.data.tags.length > 0 ? p.data.tags : p.data.tech,
+  })),
+];
+
+const edgeMap = new Map<string, number>();
+const addEdge = (a: number, b: number, w: number) => {
+  if (a === b) return;
+  const key = `${Math.min(a, b)}-${Math.max(a, b)}`;
+  edgeMap.set(key, Math.max(edgeMap.get(key) ?? 0, w));
+};
+for (let i = 0; i < gNodes.length; i++)
+  for (let j = i + 1; j < gNodes.length; j++) {
+    const shared = gNodes[i].tags.filter((t) => gNodes[j].tags.includes(t)).length;
+    if (shared > 0) addEdge(i, j, Math.min(shared, 3));
+    else if (gNodes[i].kind === '笔记' && gNodes[j].kind === '笔记' && gNodes[i].group === gNodes[j].group)
+      addEdge(i, j, 0.7);
+  }
+const gEdges = [...edgeMap.entries()].map(([key, w]) => {
+  const [a, b] = key.split('-').map(Number);
+  return [a, b, w] as [number, number, number];
+});
+
+// Hero 区闪烁星（固定种子，位置稳定）
+const rnd = (n: number) => Math.abs((Math.sin(n * 127.1) * 43758.5453) % 1);
+const twinkles = Array.from({ length: 16 }, (_, i) => ({
+  top: 4 + rnd(i + 1) * 88,
+  left: 3 + rnd(i + 31) * 94,
+  size: rnd(i + 61) > 0.75 ? 2.5 : 1.5,
+  delay: (rnd(i + 91) * 4).toFixed(2),
+  dur: (2.4 + rnd(i + 131) * 3).toFixed(2),
+}));
+---
+
+<Base>
+  <!-- 首页顶部：整块夜空（银河 + 太阳系线稿 + 星图） -->
+  <section class="night">
+    <i class="tw" style="top:6%;left:12%;animation-delay:.4s" />
+    <i class="tw" style="top:14%;left:58%;animation-delay:1.6s" />
+    <i class="tw" style="top:9%;left:82%;animation-delay:.9s" />
+    <i class="tw" style="top:26%;left:40%;animation-delay:2.2s" />
+    <i class="tw" style="top:38%;left:8%;animation-delay:1.1s" />
+    <i class="tw" style="top:44%;left:90%;animation-delay:2.8s" />
+    <i class="tw" style="top:30%;left:70%;animation-delay:3.4s" />
+    <i class="tw" style="top:4%;left:44%;animation-delay:.2s" />
+
+    <svg class="system" viewBox="0 0 400 400" aria-hidden="true">
+      <g transform="rotate(-16 200 200)">
+        <ellipse cx="200" cy="200" rx="74" ry="30" fill="none" stroke="rgba(232,230,223,0.16)" />
+        <ellipse cx="200" cy="200" rx="126" ry="56" fill="none" stroke="rgba(232,230,223,0.13)" />
+        <ellipse cx="200" cy="200" rx="182" ry="88" fill="none" stroke="rgba(232,230,223,0.1)" />
+      </g>
+      <!-- 太阳 -->
+      <circle cx="200" cy="200" r="22" fill="rgba(255,196,107,0.16)" />
+      <circle cx="200" cy="200" r="9" fill="#ffc46b" />
+      <!-- 行星 -->
+      <circle cx="262" cy="168" r="4" fill="#e8e6df" opacity="0.9" />
+      <circle cx="96" cy="246" r="3" fill="#ffc46b" opacity="0.85" />
+      <!-- 环状行星（土星式） -->
+      <g transform="rotate(-14 288 286)">
+        <circle cx="288" cy="286" r="5.5" fill="#aeb8d8" />
+        <ellipse cx="288" cy="286" rx="12" ry="4" fill="none" stroke="rgba(174,184,216,0.7)" stroke-width="1.2" />
+      </g>
+    </svg>
+
+    <div class="container">
+      <section class="hero">
+        <p class="kicker">MILKY WAY · SOL-3 — EST. {SITE.since}</p>
+        <h1>{SITE.author}</h1>
+        <p class="lede">{SITE.tagline}</p>
+        <p class="bio">{SITE.bio}</p>
+        <div class="hero-foot">
+          <div class="skills">
+            {SITE.skills.map((s) => <span>{s}</span>)}
+          </div>
+          <div class="socials">
+            {
+              SITE.socials.map((s) => (
+                <a
+                  class="social-link"
+                  href={s.url}
+                  target={s.url.startsWith('http') ? '_blank' : undefined}
+                  rel="noopener"
+                >
+                  <Icon name={s.icon} size={14} />
+                  {s.label}
+                </a>
+              ))
+            }
+          </div>
+        </div>
+      </section>
+
+      <BrainGraph nodes={gNodes} edges={gEdges} bare />
+    </div>
+  </section>
+
+  <!-- 纸面内容区 -->
+  <div class="container">
+    <section class="sec">
+      <h2>
+        <span class="sec-label"><span class="idx">01</span><span>最新笔记</span></span>
+        <a class="more" href="/notes/">全部 →</a>
+      </h2>
+      <div class="note-list">
+        {
+          notes.map((n) => (
+            <div class="note-row">
+              <span class="cat">{catOf(n.id)}</span>
+              <a class="t" href={`/notes/${n.id}/`}>
+                {n.data.title}
+              </a>
+              <span class="d">{fmt(n.data.date)}</span>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>
+        <span class="sec-label"><span class="idx">02</span><span>项目复盘</span></span>
+        <a class="more" href="/projects/">全部 →</a>
+      </h2>
+      <div class="proj-list">
+        {
+          projects.map((p, i) => (
+            <a class="proj-row" href={`/projects/${p.id}/`}>
+              <span class="num">{String(i + 1).padStart(2, '0')}</span>
+              <div class="body">
+                <div class="head">
+                  <h3>{p.data.title}</h3>
+                  <span class:list={['status', `status--${statusKey(p.data.status)}`]}>
+                    <i class="dot" />
+                    {p.data.status}
+                  </span>
+                </div>
+                <p class="desc">{p.data.description}</p>
+                <p class="meta">
+                  <span>{p.data.tech.join(' / ')}</span>
+                  {p.data.period && <span>{p.data.period}</span>}
+                  {p.data.role && <span>{p.data.role}</span>}
+                </p>
+              </div>
+              <span class="arrow" aria-hidden="true">→</span>
+            </a>
+          ))
+        }
+      </div>
+    </section>
+  </div>
+</Base>
+
+<style>
+  /* ===== 夜空区：Hero + 星图共处一块深空（星空基调的核心场景）===== */
+  .night {
+    margin-top: -40px; /* 抵消 main 顶边距，夜空直通页头 */
+    padding: 64px 0 40px;
+    background:
+      linear-gradient(115deg, transparent 26%, rgba(178, 194, 255, 0.055) 42%, rgba(224, 231, 255, 0.085) 50%, rgba(178, 194, 255, 0.055) 58%, transparent 74%),
+      radial-gradient(1.5px 1.5px at 12% 18%, rgba(255, 255, 255, 0.75), transparent 100%),
+      radial-gradient(1px 1px at 34% 8%, rgba(255, 255, 255, 0.55), transparent 100%),
+      radial-gradient(1.5px 1.5px at 67% 14%, rgba(255, 255, 255, 0.6), transparent 100%),
+      radial-gradient(1px 1px at 88% 26%, rgba(255, 255, 255, 0.5), transparent 100%),
+      radial-gradient(1px 1px at 46% 30%, rgba(255, 255, 255, 0.4), transparent 100%),
+      radial-gradient(52% 46% at 18% 30%, rgba(96, 118, 255, 0.12), transparent 70%),
+      radial-gradient(46% 42% at 80% 78%, rgba(168, 122, 255, 0.09), transparent 72%),
+      radial-gradient(120% 80% at 50% 0%, #131524 0%, #0b0c15 58%, #07080e 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* 闪烁星 */
+  .tw {
+    position: absolute;
+    width: 1.5px;
+    height: 1.5px;
+    border-radius: 50%;
+    background: #fff;
+    animation: tw 3s ease-in-out infinite alternate;
+  }
+
+  @keyframes tw {
+    from { opacity: 0.12; }
+    to { opacity: 0.85; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tw { animation: none; opacity: 0.5; }
+  }
+
+  /* 太阳系线稿装饰 */
+  .system {
+    position: absolute;
+    top: 32px;
+    right: 3%;
+    width: 320px;
+    opacity: 0.9;
+    pointer-events: none;
+  }
+
+  @media (max-width: 900px) {
+    .system { display: none; }
+  }
+
+  .night :global(.graph-frame) {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    height: 540px;
+    margin-inline: calc(50% - 50vw); /* 星空铺满整屏宽 */
+  }
+
+  .night :global(.graph-caption) {
+    max-width: 932px;
+    margin-inline: auto;
+  }
+
+  /* ===== Hero ===== */
+  .hero {
+    padding: 40px 0 8px;
+    max-width: 720px;
+  }
+
+  .kicker {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    margin: 0 0 22px;
+  }
+
+  .hero h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(46px, 7.5vw, 68px);
+    letter-spacing: 0.01em;
+    line-height: 1.15;
+    margin: 0 0 18px;
+  }
+
+  .lede {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(19px, 2.6vw, 23px);
+    letter-spacing: 0.02em;
+    color: var(--text-2);
+    margin: 0 0 20px;
+    text-wrap: balance;
+  }
+
+  .bio {
+    color: var(--muted);
+    font-size: 13.5px;
+    line-height: 2.1;
+    margin: 0;
+    max-width: 36em;
+    white-space: pre-line;
+  }
+
+  .hero-foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px 28px;
+    flex-wrap: wrap;
+    margin-top: 44px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .skills {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-2);
+  }
+
+  .skills span + span::before {
+    content: '·';
+    margin: 0 9px;
+    color: var(--border-strong);
+  }
+
+  .socials {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+  }
+
+  .social-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-2);
+    font-size: 13px;
+  }
+
+  .social-link:hover {
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 1px;
+  }
+
+  @media (max-width: 640px) {
+    .night {
+      padding-top: 40px;
+    }
+    .hero {
+      padding-top: 24px;
+    }
+    .hero-foot {
+      flex-direction: column;
+      gap: 14px;
+    }
+  }
+</style>

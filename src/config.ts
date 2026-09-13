@@ -1,0 +1,31 @@
+// ===== 全站个人信息：改这一个文件，全站生效 =====
+export const SITE = {
+  // 站点名（浏览器标签页 / 页头 Logo）
+  title: 'know nothing about',
+
+  // 你的名字：首页大标题、页脚署名
+  author: '你的名字',
+
+  // 一句话介绍（首页副标题）
+  tagline: '在这里沉淀我所知道的，和我还不知道的',
+
+  // 首页自我介绍（会按行显示）
+  bio: [
+    '开发者 / 长期学习者。',
+    '这个站点是我的个人名片，也是我的第二大脑：',
+    '存放知识笔记与项目复盘，把踩过的坑变成下次的垫脚石。',
+  ].join('\n'),
+
+  // 技能标签（首页展示）
+  skills: ['JavaScript / TypeScript', '前端 / 全栈', 'Node.js', '持续学习中'],
+
+  // 社交链接（icon 可选：github / mail / rss / link）
+  socials: [
+    { label: 'GitHub', url: 'https://github.com/yourname', icon: 'github' },
+    { label: 'Email', url: 'mailto:hello@example.com', icon: 'mail' },
+    { label: 'RSS', url: '/rss.xml', icon: 'rss' },
+  ],
+
+  // 页脚起始年份
+  since: 2026,
+};

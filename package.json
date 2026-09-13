@@ -1,0 +1,25 @@
+{
+  "name": "know-nothing-about",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && pagefind --site dist",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/rss": "^4.0.0",
+    "@astrojs/sitemap": "^3.2.0",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
+    "@fontsource/noto-serif-sc": "^5.3.0",
+    "@types/three": "^0.186.0",
+    "astro": "^5.0.0",
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "pagefind": "^1.3.0"
+  }
+}

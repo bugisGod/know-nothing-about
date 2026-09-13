@@ -1,0 +1,497 @@
+---
+// 知识图谱「夜空星图」：深空面板 + 发光星点 + 雾化纵深
+// 节点 = 页面（笔记暖白 / 项目琥珀），边 = 共享标签
+// 交互：拖拽旋转 / 滚轮缩放 / 点击进入；支持 prefers-reduced-motion
+interface GraphNode {
+  id: string;
+  title: string;
+  url: string;
+  kind: string;
+  group: string;
+  tags: string[];
+}
+
+interface Props {
+  nodes: GraphNode[];
+  /** [i, j, weight] */
+  edges: [number, number, number][];
+  /** 夜空模式：去掉面板边框与底色，融入外部深色区块 */
+  bare?: boolean;
+}
+
+const { nodes, edges, bare = false } = Astro.props;
+const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
+---
+
+<section class="sec graph-sec" id="graph">
+  <h2>
+    <span class="sec-label"><span class="idx">00</span><span>第二大脑</span></span>
+    <span class="hint">拖拽旋转 · 滚轮缩放 · 点击节点进入</span>
+  </h2>
+  <div class:list={['graph-frame', { bare }]}>
+    <div id="brain-graph" class="graph-canvas" role="img" aria-label="三维知识图谱：每个节点对应一篇文章，连线表示共享标签。下方列表提供相同的导航。"></div>
+    <div id="graph-tip" class="graph-tip" aria-hidden="true">
+      <p class="tip-title"></p>
+      <p class="tip-meta"></p>
+    </div>
+  </div>
+  <p class="graph-caption">
+    <span>FIG. 00 — 知识图谱 · {nodes.length} 节点 · {edges.length} 连接</span>
+    <span>边 = 共享标签</span>
+  </p>
+  <script type="application/json" id="graph-data" set:html={dataJson} />
+</section>
+
+<style>
+  .hint {
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    font-size: 11px;
+  }
+
+  /* 深空面板：两种主题下都是夜空底片 */
+  .graph-frame {
+    position: relative;
+    margin-top: 14px;
+    height: 500px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background:
+      radial-gradient(52% 42% at 18% 24%, rgba(96, 118, 255, 0.13), transparent 70%),
+      radial-gradient(46% 40% at 78% 72%, rgba(168, 122, 255, 0.1), transparent 72%),
+      radial-gradient(120% 90% at 50% 0%, #131524 0%, #0b0c15 58%, #07080e 100%);
+  }
+
+  .graph-canvas {
+    position: absolute;
+    inset: 0;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  /* 夜空模式：无框无底，融入外部深色区块并铺满全宽 */
+  .graph-frame.bare {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    height: 540px;
+    margin-inline: calc(50% - 50vw);
+  }
+
+  .graph-canvas.grabbing {
+    cursor: grabbing;
+  }
+
+  .graph-canvas.pointing {
+    cursor: pointer;
+  }
+
+  .graph-tip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, calc(-100% - 14px));
+    background: rgba(18, 20, 32, 0.92);
+    border: 1px solid rgba(129, 140, 190, 0.35);
+    border-radius: 8px;
+    padding: 9px 13px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    max-width: 250px;
+    text-align: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .graph-tip.show {
+    opacity: 1;
+  }
+
+  .tip-title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 15px;
+    line-height: 1.4;
+    color: #f2efe6;
+  }
+
+  .tip-meta {
+    margin: 3px 0 0;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: #8d95b8;
+  }
+
+  .graph-caption {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 12px 2px 0;
+  }
+
+  @media (max-width: 640px) {
+    .graph-frame {
+      height: 380px;
+    }
+    .hint {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  import * as THREE from 'three';
+
+  type GraphNode = {
+    id: string;
+    title: string;
+    url: string;
+    kind: string;
+    group: string;
+    tags: string[];
+  };
+
+  const mount = document.getElementById('brain-graph');
+  const dataEl = document.getElementById('graph-data');
+  const tip = document.getElementById('graph-tip') as HTMLElement;
+  const frame = mount?.parentElement as HTMLElement;
+
+  if (mount && dataEl && frame) {
+    const { nodes, edges } = JSON.parse(dataEl.textContent!) as {
+      nodes: GraphNode[];
+      edges: [number, number, number][];
+    };
+
+    // 固定种子：每次加载布局一致
+    const mulberry32 = (a: number) => () => {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const rand = mulberry32(20260912);
+
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    } catch {
+      mount.remove();
+      throw new Error('WebGL unavailable');
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    mount.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    // 雾化纵深：远处的星沉入夜空
+    scene.fog = new THREE.FogExp2(0x0a0b13, 0.05);
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+    let camZ = 11.2;
+    let camZTarget = 11.2;
+    camera.position.set(0, 0, camZ);
+
+    const group = new THREE.Group();
+    scene.add(group);
+
+    // ===== 初始位置：斐波那契球面 =====
+    const N = nodes.length;
+    const pos = new Float32Array(N * 3);
+    const vel = new Float32Array(N * 3);
+    const R0 = 2.7;
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < N; i++) {
+      const y = 1 - (i / Math.max(N - 1, 1)) * 2;
+      const r = Math.sqrt(1 - y * y);
+      const th = golden * i;
+      pos[i * 3] = Math.cos(th) * r * R0 + (rand() - 0.5) * 0.8;
+      pos[i * 3 + 1] = y * R0 + (rand() - 0.5) * 0.8;
+      pos[i * 3 + 2] = Math.sin(th) * r * R0 + (rand() - 0.5) * 0.8;
+    }
+
+    // ===== 贴图：发光星点 / 柔和圆点 / 圆环 =====
+    function glowTexture(stops: [number, string][]) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const g = c.getContext('2d')!;
+      const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+      for (const [o, col] of stops) grad.addColorStop(o, col);
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 128, 128);
+      return new THREE.CanvasTexture(c);
+    }
+    const starTex = glowTexture([
+      [0, '#ffffff'],
+      [0.18, '#ffffff'],
+      [0.32, 'rgba(255,255,255,0.5)'],
+      [0.55, 'rgba(255,255,255,0.12)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
+    const dotTex = glowTexture([
+      [0, '#ffffff'],
+      [0.5, 'rgba(255,255,255,0.6)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
+    const ringTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 96;
+      const g = c.getContext('2d')!;
+      g.strokeStyle = '#ffffff';
+      g.lineWidth = 3.5;
+      g.beginPath();
+      g.arc(48, 48, 34, 0, Math.PI * 2);
+      g.stroke();
+      return new THREE.CanvasTexture(c);
+    })();
+
+    // ===== 节点：发光星点（笔记暖白 / 项目琥珀）=====
+    const degree = new Array(N).fill(0);
+    for (const [a, b] of edges) degree[a]++, degree[b]++;
+
+    const noteMat = new THREE.SpriteMaterial({
+      map: starTex, color: 0xf3efe2, transparent: true, fog: true, depthWrite: false,
+    });
+    const projMat = new THREE.SpriteMaterial({
+      map: starTex, color: 0xffc46b, transparent: true, fog: true, depthWrite: false,
+    });
+    const sprites: THREE.Sprite[] = [];
+    const baseScale: number[] = [];
+    for (let i = 0; i < N; i++) {
+      const mat = (nodes[i].kind === '项目' ? projMat : noteMat).clone();
+      const s = (nodes[i].kind === '项目' ? 0.62 : 0.46) + Math.min(degree[i], 5) * 0.07 + rand() * 0.1;
+      const sp = new THREE.Sprite(mat);
+      sp.position.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+      sp.scale.setScalar(s);
+      baseScale.push(s);
+      group.add(sp);
+      sprites.push(sp);
+    }
+
+    // ===== 边：辉光细线 =====
+    const lineGeo = new THREE.BufferGeometry();
+    const linePos = new Float32Array(edges.length * 6);
+    const lineCol = new Float32Array(edges.length * 6);
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+    lineGeo.setAttribute('color', new THREE.BufferAttribute(lineCol, 3));
+    const lines = new THREE.LineSegments(
+      lineGeo,
+      new THREE.LineBasicMaterial({
+        vertexColors: true, transparent: true, opacity: 0.55,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
+      })
+    );
+    group.add(lines);
+
+    const dimColor = new THREE.Color(0x4a5584);
+    const hiColor = new THREE.Color(0xffc46b);
+    function syncLines() {
+      for (let e = 0; e < edges.length; e++) {
+        const [a, b] = edges[e];
+        for (let k = 0; k < 3; k++) {
+          linePos[e * 6 + k] = pos[a * 3 + k];
+          linePos[e * 6 + 3 + k] = pos[b * 3 + k];
+        }
+      }
+      lineGeo.attributes.position.needsUpdate = true;
+    }
+    function paintLines(hovered: number) {
+      let e = 0;
+      for (const [a, b] of edges) {
+        const c = hovered >= 0 && (a === hovered || b === hovered) ? hiColor : dimColor;
+        lineCol.set([c.r, c.g, c.b, c.r, c.g, c.b], e * 6);
+        e++;
+      }
+      lineGeo.attributes.color.needsUpdate = true;
+    }
+    syncLines();
+    paintLines(-1);
+
+    // ===== 悬停圆环 =====
+    const ring = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: ringTex, color: 0xffc46b, transparent: true, depthWrite: false })
+    );
+    ring.scale.setScalar(1.15);
+    ring.visible = false;
+    group.add(ring);
+
+    // ===== 远景星野（视差层）=====
+    const starField = (() => {
+      const M = 320;
+      const arr = new Float32Array(M * 3);
+      for (let i = 0; i < M; i++) {
+        const u = rand() * 2 - 1, th = rand() * Math.PI * 2, rr = 26 + rand() * 30;
+        const s = Math.sqrt(1 - u * u);
+        arr[i * 3] = Math.cos(th) * s * rr;
+        arr[i * 3 + 1] = u * rr;
+        arr[i * 3 + 2] = Math.sin(th) * s * rr;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      const pts = new THREE.Points(
+        g,
+        new THREE.PointsMaterial({
+          map: dotTex, color: 0x9aa6d8, size: 0.55, sizeAttenuation: true,
+          transparent: true, opacity: 0.55, depthWrite: false, fog: false,
+        })
+      );
+      scene.add(pts);
+      return pts;
+    })();
+
+    // ===== 力导向模拟（带边界钳制）=====
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let alpha = 1;
+    const REST = 2.6;
+    const BOUND = 3.9;
+    function tick() {
+      for (let i = 0; i < N; i++)
+        for (let j = i + 1; j < N; j++) {
+          let dx = pos[i * 3] - pos[j * 3],
+            dy = pos[i * 3 + 1] - pos[j * 3 + 1],
+            dz = pos[i * 3 + 2] - pos[j * 3 + 2];
+          let d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 < 1e-4) d2 = 1e-4;
+          const f = (12 / d2) * alpha;
+          const d = Math.sqrt(d2);
+          dx /= d; dy /= d; dz /= d;
+          vel[i * 3] += dx * f; vel[i * 3 + 1] += dy * f; vel[i * 3 + 2] += dz * f;
+          vel[j * 3] -= dx * f; vel[j * 3 + 1] -= dy * f; vel[j * 3 + 2] -= dz * f;
+        }
+      for (const [a, b, w] of edges) {
+        let dx = pos[b * 3] - pos[a * 3],
+          dy = pos[b * 3 + 1] - pos[a * 3 + 1],
+          dz = pos[b * 3 + 2] - pos[a * 3 + 2];
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-4;
+        const f = (d - REST) * 0.03 * w * alpha;
+        dx /= d; dy /= d; dz /= d;
+        vel[a * 3] += dx * f; vel[a * 3 + 1] += dy * f; vel[a * 3 + 2] += dz * f;
+        vel[b * 3] -= dx * f; vel[b * 3 + 1] -= dy * f; vel[b * 3 + 2] -= dz * f;
+      }
+      for (let i = 0; i < N; i++) {
+        const ix = i * 3, iy = i * 3 + 1, iz = i * 3 + 2;
+        vel[ix] -= pos[ix] * 0.032;
+        vel[iy] -= pos[iy] * 0.032;
+        vel[iz] -= pos[iz] * 0.032;
+        for (const idx of [ix, iy, iz]) {
+          vel[idx] *= 0.86;
+          pos[idx] += Math.max(-0.35, Math.min(0.35, vel[idx]));
+        }
+        const r = Math.sqrt(pos[ix] ** 2 + pos[iy] ** 2 + pos[iz] ** 2);
+        if (r > BOUND) {
+          const s = BOUND / r;
+          pos[ix] *= s; pos[iy] *= s; pos[iz] *= s;
+          vel[ix] *= 0.7; vel[iy] *= 0.7; vel[iz] *= 0.7;
+        }
+        sprites[i].position.set(pos[ix], pos[iy], pos[iz]);
+      }
+      alpha = Math.max(alpha * 0.9943, reduced ? 0 : 0.04);
+      syncLines();
+    }
+
+    // ===== 交互 =====
+    let rotX = 0.2, rotY = 0.5, tRotX = rotX, tRotY = rotY;
+    let dragging = false, moved = 0, lastX = 0, lastY = 0, hovered = -1;
+    const tmp = new THREE.Vector3();
+
+    function pick(cx: number, cy: number): number {
+      const rect = mount.getBoundingClientRect();
+      let best = -1, bestD = 28 * 28;
+      for (let i = 0; i < N; i++) {
+        tmp.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(group.matrixWorld).project(camera);
+        const sx = (tmp.x * 0.5 + 0.5) * rect.width + rect.left;
+        const sy = (-tmp.y * 0.5 + 0.5) * rect.height + rect.top;
+        const dx = sx - cx, dy = sy - cy, d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      return best;
+    }
+
+    function showTip(i: number) {
+      const rect = mount.getBoundingClientRect();
+      tmp.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(group.matrixWorld).project(camera);
+      const sx = (tmp.x * 0.5 + 0.5) * rect.width;
+      const sy = (-tmp.y * 0.5 + 0.5) * rect.height;
+      tip.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, calc(-100% - 12px))`;
+      (tip.querySelector('.tip-title') as HTMLElement).textContent = nodes[i].title;
+      (tip.querySelector('.tip-meta') as HTMLElement).textContent = `${nodes[i].kind} · ${nodes[i].group}`;
+      tip.classList.add('show');
+    }
+
+    mount.addEventListener('pointerdown', (e) => {
+      dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
+      mount.classList.add('grabbing');
+      mount.setPointerCapture(e.pointerId);
+    });
+    mount.addEventListener('pointermove', (e) => {
+      if (dragging) {
+        const dx = e.clientX - lastX, dy = e.clientY - lastY;
+        moved += Math.abs(dx) + Math.abs(dy);
+        tRotY += dx * 0.0052;
+        tRotX = Math.max(-1.2, Math.min(1.2, tRotX + dy * 0.0042));
+        lastX = e.clientX; lastY = e.clientY;
+      } else if (e.pointerType === 'mouse') {
+        hovered = pick(e.clientX, e.clientY);
+        mount.classList.toggle('pointing', hovered >= 0);
+        ring.visible = hovered >= 0;
+        paintLines(hovered);
+        if (hovered >= 0) showTip(hovered); else tip.classList.remove('show');
+      }
+    });
+    mount.addEventListener('pointerup', (e) => {
+      dragging = false;
+      mount.classList.remove('grabbing');
+      if (moved < 8) {
+        const i = pick(e.clientX, e.clientY);
+        if (i >= 0 && nodes[i].url) location.href = nodes[i].url;
+      }
+    });
+    mount.addEventListener('pointerleave', () => {
+      hovered = -1; ring.visible = false; tip.classList.remove('show');
+      paintLines(-1); mount.classList.remove('pointing');
+    });
+    mount.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      camZTarget = Math.max(7.2, Math.min(16, camZTarget + e.deltaY * 0.006));
+    }, { passive: false });
+
+    // ===== 尺寸 =====
+    function resize() {
+      const w = mount.clientWidth, h = mount.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    new ResizeObserver(resize).observe(mount);
+    resize();
+
+    // ===== 主循环：多轴漂移 + 呼吸，制造纵深 =====
+    if (reduced) for (let i = 0; i < 320; i++) tick();
+    const t0 = performance.now();
+    function loop() {
+      requestAnimationFrame(loop);
+      if (!reduced) tick();
+      const t = (performance.now() - t0) * 0.001;
+      if (!dragging) tRotY += 0.0018;
+      const wob = reduced ? 0 : Math.sin(t * 0.22) * 0.05; // 轻微俯仰呼吸
+      rotX += (tRotX - rotX) * 0.07;
+      rotY += (tRotY - rotY) * 0.07;
+      camZ += (camZTarget - camZ) * 0.1;
+      group.rotation.set(rotX + wob, rotY, 0);
+      camera.position.z = camZ;
+      starField.rotation.y = -rotY * 0.25; // 远景反向缓转 → 视差
+      starField.rotation.x = -rotX * 0.2;
+
+      if (ring.visible && hovered >= 0)
+        ring.position.set(pos[hovered * 3], pos[hovered * 3 + 1], pos[hovered * 3 + 2]);
+      renderer.render(scene, camera);
+    }
+    loop();
+  }
+</script>

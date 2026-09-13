@@ -1,0 +1,84 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="搜索" description="搜索知识库与项目复盘">
+  <div class="container">
+    <h1 class="page-title">搜索</h1>
+    <p class="page-desc">搜索范围：知识库笔记与项目复盘的正文。</p>
+
+    <div id="search"></div>
+
+    <div id="search-fallback" class="search-fallback" hidden>
+      搜索索引在构建时生成：<code>npm run build</code> 之后用 <code>npm run preview</code>
+      本地预览，即可使用搜索。
+    </div>
+
+    <link rel="stylesheet" href="/pagefind/pagefind-ui.css" />
+    <script
+      is:inline
+      src="/pagefind/pagefind-ui.js"
+      onerror="document.getElementById('search-fallback').hidden = false"
+    ></script>
+    <script is:inline>
+      if (window.PagefindUI) {
+        new PagefindUI({
+          element: '#search',
+          showImages: false,
+          showSubResults: true,
+          translations: {
+            placeholder: '搜索笔记与项目…',
+            clear_search: '清除',
+            zero_results: '没有找到与 “[SEARCH_TERM]” 相关的内容',
+            many_results: '共 [COUNT] 条结果',
+            one_result: '共 [COUNT] 条结果',
+            searching: '搜索中…',
+          },
+        });
+      } else {
+        document.getElementById('search-fallback').hidden = false;
+      }
+    </script>
+  </div>
+</Base>
+
+<style>
+  .search-fallback {
+    margin-top: 24px;
+    padding: 14px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--muted);
+    font-size: 13.5px;
+    background: var(--bg-inset);
+  }
+
+  #search {
+    margin-top: 4px;
+    /* 让 Pagefind UI 跟随本站纸墨主题 */
+    --pagefind-ui-font: var(--font-sans);
+    --pagefind-ui-text: var(--text);
+    --pagefind-ui-background: var(--bg);
+    --pagefind-ui-border: var(--border);
+    --pagefind-ui-border-width: 1px;
+    --pagefind-ui-border-radius: var(--radius);
+    --pagefind-ui-primary: var(--text);
+    --pagefind-ui-muted: var(--muted);
+    --pagefind-ui-tag: var(--bg-inset);
+    --pagefind-ui-highlight: var(--mark);
+  }
+
+  #search :global(.pagefind-ui__mark) {
+    background: var(--mark);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+
+  /* 覆盖 Pagefind 自带的橙色焦点框，统一为本站墨色 */
+  #search :global(.pagefind-ui__search-input:focus),
+  #search :global(.pagefind-ui__search-input:focus-visible) {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+</style>
