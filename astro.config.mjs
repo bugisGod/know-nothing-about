@@ -3,8 +3,8 @@ import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
-  // TODO: 部署前换成你自己的域名（影响 sitemap / RSS 里的链接）
-  site: 'https://example.com',
+  // 正式站点地址（影响 sitemap / RSS 里的链接）
+  site: 'https://know-nothing-about.pages.dev',
   integrations: [sitemap()],
   markdown: {
     shikiConfig: { theme: 'vesper', wrap: true },
