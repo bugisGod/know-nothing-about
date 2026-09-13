@@ -26,7 +26,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 <section class="sec graph-sec" id="graph">
   <h2>
     <span class="sec-label"><span class="idx">00</span><span>第二大脑</span></span>
-    <span class="hint">拖拽旋转 · 滚轮缩放 · 点击节点进入</span>
+    <span class="hint">拖拽旋转 · Ctrl+滚轮缩放 · 点击节点进入</span>
   </h2>
   <div class:list={['graph-frame', { bare }]}>
     <div id="brain-graph" class="graph-canvas" role="img" aria-label="三维知识图谱：每个节点对应一篇文章，连线表示共享标签。下方列表提供相同的导航。"></div>
@@ -68,7 +68,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     position: absolute;
     inset: 0;
     cursor: grab;
-    touch-action: none;
+    touch-action: pan-y; /* 手机竖向滑动交给页面滚动，横向拖拽仍可旋转 */
   }
 
   /* 夜空模式：无框无底，融入外部深色区块并铺满全宽 */
@@ -457,11 +457,13 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       paintLines(-1); mount.classList.remove('pointing');
     });
     mount.addEventListener('wheel', (e) => {
+      // 普通滚轮放行给页面滚动；Ctrl/Cmd + 滚轮才缩放
+      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       camZTarget = Math.max(7.2, Math.min(16, camZTarget + e.deltaY * 0.006));
     }, { passive: false });
 
-    // ===== 尺寸 =====
+    // ===== 尺寸与可见性 =====
     function resize() {
       const w = mount.clientWidth, h = mount.clientHeight;
       renderer.setSize(w, h);
@@ -471,11 +473,23 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     new ResizeObserver(resize).observe(mount);
     resize();
 
+    // 滚出视口或切走标签页时暂停渲染循环，滚动性能零损耗
+    let inView = true, rafId = 0;
+    new IntersectionObserver(([entry]) => {
+      inView = entry.isIntersecting;
+      if (inView && !rafId) loop();
+    }).observe(mount);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { cancelAnimationFrame(rafId); rafId = 0; }
+      else if (inView && !rafId) loop();
+    });
+
     // ===== 主循环：多轴漂移 + 呼吸，制造纵深 =====
     if (reduced) for (let i = 0; i < 320; i++) tick();
     const t0 = performance.now();
     function loop() {
-      requestAnimationFrame(loop);
+      rafId = requestAnimationFrame(loop);
+      if (!inView) { cancelAnimationFrame(rafId); rafId = 0; return; }
       if (!reduced) tick();
       const t = (performance.now() - t0) * 0.001;
       if (!dragging) tRotY += 0.0018;
@@ -492,6 +506,6 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
         ring.position.set(pos[hovered * 3], pos[hovered * 3 + 1], pos[hovered * 3 + 2]);
       renderer.render(scene, camera);
     }
-    loop();
+    if (!rafId) loop();
   }
 </script>

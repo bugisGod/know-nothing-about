@@ -36,10 +36,28 @@ html {
   scroll-padding-top: 76px;
 }
 
+html {
+  background: var(--bg);
+}
+
 body {
   margin: 0;
-  background-color: var(--bg);
-  background-attachment: fixed;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 15.5px;
+  line-height: 1.8;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 星点 + 顶部光晕：固定合成层，滚动零开销 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image:
     radial-gradient(1px 1px at 8% 22%, rgba(255, 255, 255, 0.4), transparent 100%),
     radial-gradient(1px 1px at 23% 64%, rgba(255, 255, 255, 0.28), transparent 100%),
@@ -49,12 +67,6 @@ body {
     radial-gradient(1.5px 1.5px at 91% 30%, rgba(255, 255, 255, 0.34), transparent 100%),
     radial-gradient(1100px 480px at 50% -180px, var(--wash), transparent 72%);
   background-repeat: no-repeat;
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 15.5px;
-  line-height: 1.8;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 
 /* 细颗粒纸面质感 */
