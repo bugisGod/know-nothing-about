@@ -148,9 +148,10 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
                 href={s.url}
                 target={s.url.startsWith('http') ? '_blank' : undefined}
                 rel="noopener"
+                aria-label={s.label}
+                title={s.label}
               >
-                <Icon name={s.icon} size={14} />
-                {s.label}
+                <Icon name={s.icon} size={16} />
               </a>
             ))
           }
@@ -269,18 +270,17 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
   }
 
   .social-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
+    display: inline-grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
     color: var(--text-2);
-    font-size: 13px;
   }
 
   .social-link:hover {
     color: var(--text);
-    text-decoration: underline;
-    text-underline-offset: 4px;
-    text-decoration-thickness: 1px;
+    background: var(--wash, rgba(255, 255, 255, 0.06));
   }
 
   @media (max-width: 640px) {

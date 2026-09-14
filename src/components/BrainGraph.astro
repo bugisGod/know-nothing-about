@@ -34,19 +34,6 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 <section class="graph-sec" id="graph">
   <div class:list={['graph-frame', { bare }]}>
     <div id="brain-graph" class="graph-canvas" role="img" aria-label="三维知识图谱：每个节点对应一篇文章，连线表示共享标签。下方列表提供相同的导航。"></div>
-    <div class="graph-legend" aria-hidden="true">
-      {
-        nodes
-          .filter((n) => n.anchor)
-          .map((a) => (
-            <span class="lg">
-              <i style={`background:${a.color ?? '#f3efe2'};box-shadow:0 0 7px ${a.color ?? '#f3efe2'}`} />
-              {a.title}
-              <em>{a.count}</em>
-            </span>
-          ))
-      }
-    </div>
     <div id="graph-tip" class="graph-tip" aria-hidden="true">
       <p class="tip-title"></p>
       <p class="tip-meta"></p>
@@ -54,7 +41,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     </div>
   </div>
   <p class="graph-caption">
-    <span>FIG. 00 · {nodes.length} 星 · {edges.length} 连接 · 拖拽旋转 · 点击进入</span>
+    <span>拖拽 · 点击星体探索</span>
   </p>
   <script type="application/json" id="graph-data" set:html={dataJson} />
 </section>
@@ -171,42 +158,6 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     opacity: 0.9;
     text-shadow: 0 1px 6px rgba(7, 8, 14, 0.9);
     will-change: transform;
-  }
-
-  /* 星图图例：色点 + 域名 + 数量 */
-  .graph-legend {
-    position: absolute;
-    left: 14px;
-    bottom: 12px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 16px;
-    pointer-events: none;
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    color: #a7abc2;
-    text-shadow: 0 1px 6px rgba(7, 8, 14, 0.9);
-  }
-
-  .graph-legend .lg {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    white-space: nowrap;
-  }
-
-  .graph-legend .lg i {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex: none;
-  }
-
-  .graph-legend .lg em {
-    font-style: normal;
-    color: #6f7288;
-    font-variant-numeric: tabular-nums;
   }
 
   .graph-caption {
