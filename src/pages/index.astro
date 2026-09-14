@@ -58,32 +58,15 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
   <!-- 首页顶部：整块夜空（银河 + 太阳系线稿 + 星图） -->
   <section class="night">
     <i class="tw" style="top:6%;left:12%;animation-delay:.4s" />
-    <i class="tw" style="top:14%;left:58%;animation-delay:1.6s" />
-    <i class="tw" style="top:9%;left:82%;animation-delay:.9s" />
-    <i class="tw" style="top:26%;left:40%;animation-delay:2.2s" />
-    <i class="tw" style="top:38%;left:8%;animation-delay:1.1s" />
-    <i class="tw" style="top:44%;left:90%;animation-delay:2.8s" />
-    <i class="tw" style="top:30%;left:70%;animation-delay:3.4s" />
-    <i class="tw" style="top:4%;left:44%;animation-delay:.2s" />
+    <i class="tw" style="top:14%;left:58%;animation-delay:.4s" />
+    <i class="tw" style="top:9%;left:82%;animation-delay:.4s" />
+    <i class="tw" style="top:26%;left:40%;animation-delay:.4s" />
+    <i class="tw" style="top:55%;left:8%;animation-delay:.4s" />
+    <i class="tw" style="top:68%;left:46%;animation-delay:.4s" />
+    <i class="tw" style="top:60%;left:70%;animation-delay:.4s" />
+    <i class="tw" style="top:80%;left:30%;animation-delay:.4s" />
 
-    <svg class="system" viewBox="0 0 400 400" aria-hidden="true">
-      <g transform="rotate(-16 200 200)">
-        <ellipse cx="200" cy="200" rx="74" ry="30" fill="none" stroke="rgba(232,230,223,0.16)" />
-        <ellipse cx="200" cy="200" rx="126" ry="56" fill="none" stroke="rgba(232,230,223,0.13)" />
-        <ellipse cx="200" cy="200" rx="182" ry="88" fill="none" stroke="rgba(232,230,223,0.1)" />
-      </g>
-      <!-- 太阳 -->
-      <circle cx="200" cy="200" r="22" fill="rgba(255,196,107,0.16)" />
-      <circle cx="200" cy="200" r="9" fill="#ffc46b" />
-      <!-- 行星 -->
-      <circle cx="262" cy="168" r="4" fill="#e8e6df" opacity="0.9" />
-      <circle cx="96" cy="246" r="3" fill="#ffc46b" opacity="0.85" />
-      <!-- 环状行星（土星式） -->
-      <g transform="rotate(-14 288 286)">
-        <circle cx="288" cy="286" r="5.5" fill="#aeb8d8" />
-        <ellipse cx="288" cy="286" rx="12" ry="4" fill="none" stroke="rgba(174,184,216,0.7)" stroke-width="1.2" />
-      </g>
-    </svg>
+    
 
     <div class="container">
       <section class="hero">
@@ -119,15 +102,15 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
     margin-top: -40px; /* 抵消 main 顶边距，夜空直通页头 */
     padding: 64px 0 40px;
     background:
-      linear-gradient(115deg, transparent 26%, rgba(178, 194, 255, 0.055) 42%, rgba(224, 231, 255, 0.085) 50%, rgba(178, 194, 255, 0.055) 58%, transparent 74%),
-      radial-gradient(1.5px 1.5px at 12% 18%, rgba(255, 255, 255, 0.75), transparent 100%),
-      radial-gradient(1px 1px at 34% 8%, rgba(255, 255, 255, 0.55), transparent 100%),
-      radial-gradient(1.5px 1.5px at 67% 14%, rgba(255, 255, 255, 0.6), transparent 100%),
-      radial-gradient(1px 1px at 88% 26%, rgba(255, 255, 255, 0.5), transparent 100%),
-      radial-gradient(1px 1px at 46% 30%, rgba(255, 255, 255, 0.4), transparent 100%),
-      radial-gradient(52% 46% at 18% 30%, rgba(96, 118, 255, 0.12), transparent 70%),
-      radial-gradient(46% 42% at 80% 78%, rgba(168, 122, 255, 0.09), transparent 72%),
-      radial-gradient(120% 80% at 50% 0%, #131524 0%, #0b0c15 56%, #0b0c12 88%);
+      radial-gradient(1.5px 1.5px at 12% 16%, rgba(255, 255, 255, 0.6), transparent 100%),
+      radial-gradient(1px 1px at 30% 38%, rgba(255, 255, 255, 0.4), transparent 100%),
+      radial-gradient(1px 1px at 52% 10%, rgba(255, 255, 255, 0.45), transparent 100%),
+      radial-gradient(1.5px 1.5px at 68% 52%, rgba(255, 255, 255, 0.5), transparent 100%),
+      radial-gradient(1px 1px at 84% 24%, rgba(255, 255, 255, 0.4), transparent 100%),
+      radial-gradient(1px 1px at 22% 66%, rgba(255, 255, 255, 0.3), transparent 100%),
+      radial-gradient(1.5px 1.5px at 90% 80%, rgba(255, 255, 255, 0.35), transparent 100%),
+      radial-gradient(60% 50% at 50% 0%, rgba(96, 118, 255, 0.06), transparent 70%),
+      linear-gradient(to bottom, #10121e 0%, #0c0d17 45%, #0b0c12 85%);
     position: relative;
     overflow: hidden;
   }
@@ -160,19 +143,7 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
     .tw { animation: none; opacity: 0.5; }
   }
 
-  /* 太阳系线稿装饰 */
-  .system {
-    position: absolute;
-    top: 32px;
-    right: 3%;
-    width: 320px;
-    opacity: 0.9;
-    pointer-events: none;
-  }
 
-  @media (max-width: 900px) {
-    .system { display: none; }
-  }
 
   .night :global(.graph-frame) {
     border: none;
