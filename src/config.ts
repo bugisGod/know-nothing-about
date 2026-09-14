@@ -1,7 +1,7 @@
 // ===== 全站个人信息：改这一个文件，全站生效 =====
 export const SITE = {
   // 站点名（浏览器标签页 / 页头 Logo）
-  title: 'know nothing about',
+  title: 'scio',
 
   // 你的名字：首页大标题、页脚署名
   author: '你的名字',

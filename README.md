@@ -1,4 +1,6 @@
-# know nothing about · 个人站点
+# scio · 个人站点
+
+> scio — 拉丁语「我知道」，出自 *Scio me nihil scire*（我知道我一无所知）。
 
 个人名片 + 知识库 + 项目复盘，一个纯静态站点：内容全部是 Markdown，构建产物可以部署到任何静态托管平台。
 
