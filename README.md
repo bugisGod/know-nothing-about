@@ -89,3 +89,4 @@ src/
 - 星空主题色板：`src/styles/global.css` 顶部的 `:root` 变量
 - 页头导航：`src/components/Header.astro`
 - 首页版式：`src/pages/index.astro`
+
