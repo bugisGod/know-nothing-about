@@ -7,7 +7,7 @@ export const SITE = {
   author: '你的名字',
 
   // 一句话介绍（首页副标题）
-  tagline: '在这里沉淀我所知道的，和我还不知道的',
+  tagline: 'I know that I know nothing.',
 
   // 首页自我介绍（会按行显示）
   bio: [
