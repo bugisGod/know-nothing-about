@@ -229,8 +229,14 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     scene.fog = new THREE.FogExp2(0x0a0b13, 0.05);
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
-    let camZ = 11.2;
-    let camZTarget = 11.2;
+    // 窄屏自动拉远相机，保证星系完整可见；用户手动缩放后不再干预
+    const fitZ = () => {
+      const aspect = mount.clientWidth / Math.max(mount.clientHeight, 1);
+      return aspect < 0.75 ? 14.2 : aspect < 1.1 ? 12.6 : 11.2;
+    };
+    let camZ = fitZ();
+    let camZTarget = camZ;
+    let userZoomed = false;
     camera.position.set(0, 0, camZ);
 
     const group = new THREE.Group();
@@ -658,6 +664,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       // 普通滚轮放行给页面滚动；Ctrl/Cmd + 滚轮才缩放
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
+      userZoomed = true;
       camZTarget = Math.max(7.2, Math.min(16, camZTarget + e.deltaY * 0.006));
     }, { passive: false });
 
@@ -667,6 +674,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       renderer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
+      if (!userZoomed) camZTarget = fitZ();
     }
     new ResizeObserver(resize).observe(mount);
     resize();
