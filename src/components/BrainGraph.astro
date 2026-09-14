@@ -31,11 +31,7 @@ const { nodes, edges, bare = false } = Astro.props;
 const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 ---
 
-<section class="sec graph-sec" id="graph">
-  <h2>
-    <span class="sec-label"><span class="idx">00</span><span>第二大脑</span></span>
-    <span class="hint">拖拽旋转 · Ctrl+滚轮缩放 · 点击节点进入</span>
-  </h2>
+<section class="graph-sec" id="graph">
   <div class:list={['graph-frame', { bare }]}>
     <div id="brain-graph" class="graph-canvas" role="img" aria-label="三维知识图谱：每个节点对应一篇文章，连线表示共享标签。下方列表提供相同的导航。"></div>
     <div class="graph-legend" aria-hidden="true">
@@ -58,19 +54,12 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     </div>
   </div>
   <p class="graph-caption">
-    <span>FIG. 00 — 知识图谱 · {nodes.length} 星 · {edges.length} 连接 · 星域 = 分类</span>
+    <span>FIG. 00 · {nodes.length} 星 · {edges.length} 连接 · 拖拽旋转 · 点击进入</span>
   </p>
   <script type="application/json" id="graph-data" set:html={dataJson} />
 </section>
 
 <style>
-  .hint {
-    font-weight: 400;
-    letter-spacing: 0.04em;
-    text-transform: none;
-    font-size: 11px;
-  }
-
   /* 深空面板：两种主题下都是夜空底片 */
   .graph-frame {
     position: relative;
@@ -97,8 +86,12 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     border: none;
     border-radius: 0;
     background: transparent;
-    height: 540px;
+    height: clamp(480px, 62vh, 660px);
     margin-inline: calc(50% - 50vw);
+  }
+
+  .graph-sec {
+    margin-top: 40px;
   }
 
   .graph-canvas.grabbing {
@@ -217,22 +210,18 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
   }
 
   .graph-caption {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
+    text-align: center;
     font-family: var(--mono);
     font-size: 11px;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.1em;
     color: var(--muted);
-    margin: 12px 2px 0;
+    margin: 14px 0 0;
   }
 
   @media (max-width: 640px) {
     .graph-frame {
-      height: 380px;
-    }
-    .hint {
-      display: none;
+      height: 58vh;
+      min-height: 360px;
     }
   }
 </style>

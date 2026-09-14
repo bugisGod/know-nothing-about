@@ -5,19 +5,8 @@ import BrainGraph from '../components/BrainGraph.astro';
 import { getCollection } from 'astro:content';
 import { SITE, CATEGORIES } from '../config';
 
-const notes = (await getCollection('notes', ({ data }) => !data.draft))
-  .sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0))
-  .slice(0, 3);
-
-const projects = (await getCollection('projects', ({ data }) => !data.draft))
-  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
-  .slice(0, 2);
-
 const catOf = (id: string) => (id.includes('/') ? id.split('/')[0] : '未分类');
-const statusKey = (s: string) => ({ 进行中: 'ongoing', 已完成: 'done', 已归档: 'archived' })[s] ?? 'done';
 
-const fmt = (d?: Date) =>
-  d ? `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}` : '';
 
 // ===== 知识图谱数据：锚星（分类星域）+ 成员星，边 = 归属 / 共享标签 =====
 const allNotes = await getCollection('notes', ({ data }) => !data.draft);
@@ -113,15 +102,6 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
   return [a, b, w] as [number, number, number];
 });
 
-// Hero 区闪烁星（固定种子，位置稳定）
-const rnd = (n: number) => Math.abs((Math.sin(n * 127.1) * 43758.5453) % 1);
-const twinkles = Array.from({ length: 16 }, (_, i) => ({
-  top: 4 + rnd(i + 1) * 88,
-  left: 3 + rnd(i + 31) * 94,
-  size: rnd(i + 61) > 0.75 ? 2.5 : 1.5,
-  delay: (rnd(i + 91) * 4).toFixed(2),
-  dur: (2.4 + rnd(i + 131) * 3).toFixed(2),
-}));
 ---
 
 <Base>
@@ -181,58 +161,6 @@ const twinkles = Array.from({ length: 16 }, (_, i) => ({
     </div>
   </section>
 
-  <!-- 纸面内容区 -->
-  <div class="container">
-    <section class="sec">
-      <h2>
-        <span class="sec-label"><span class="idx">01</span><span>最新笔记</span></span>
-        <a class="more" href="/notes/">全部 →</a>
-      </h2>
-      <div class="note-list">
-        {
-          notes.map((n) => (
-            <div class="note-row">
-              <span class="cat">{catOf(n.id)}</span>
-              <a class="t" href={`/notes/${n.id}/`}>
-                {n.data.title}
-              </a>
-              <span class="d">{fmt(n.data.date)}</span>
-            </div>
-          ))
-        }
-      </div>
-    </section>
-
-    <section class="sec">
-      <h2>
-        <span class="sec-label"><span class="idx">02</span><span>项目复盘</span></span>
-        <a class="more" href="/projects/">全部 →</a>
-      </h2>
-      <div class="proj-list">
-        {
-          projects.map((p, i) => (
-            <a class="proj-row" href={`/projects/${p.id}/`}>
-              <span class="num">{String(i + 1).padStart(2, '0')}</span>
-              <div class="body">
-                <div class="head">
-                  <h3>{p.data.title}</h3>
-                  <span class:list={['status', `status--${statusKey(p.data.status)}`]}>
-                    <i class="dot" />
-                    {p.data.status}
-                  </span>
-                </div>
-                <p class="desc">{p.data.description}</p>
-                <p class="meta">
-                  <span>{p.data.tech.join(' / ')}</span>
-                </p>
-              </div>
-              <span class="arrow" aria-hidden="true">→</span>
-            </a>
-          ))
-        }
-      </div>
-    </section>
-  </div>
 </Base>
 
 <style>
@@ -300,10 +228,10 @@ const twinkles = Array.from({ length: 16 }, (_, i) => ({
     margin-inline: auto;
   }
 
-  /* ===== Hero ===== */
+  /* ===== Hero：居中海报式 ===== */
   .hero {
-    padding: 40px 0 8px;
-    max-width: 720px;
+    padding: 48px 0 0;
+    text-align: center;
   }
 
   .kicker {
@@ -317,7 +245,7 @@ const twinkles = Array.from({ length: 16 }, (_, i) => ({
   .hero h1 {
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: clamp(46px, 7.5vw, 68px);
+    font-size: clamp(48px, 7.5vw, 72px);
     letter-spacing: 0.01em;
     line-height: 1.15;
     margin: 0 0 18px;
@@ -329,14 +257,15 @@ const twinkles = Array.from({ length: 16 }, (_, i) => ({
     font-size: clamp(19px, 2.6vw, 23px);
     letter-spacing: 0.02em;
     color: var(--text-2);
-    margin: 0 0 28px;
+    margin: 0 0 30px;
     text-wrap: balance;
   }
 
   .socials {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 20px;
+    justify-content: center;
+    gap: 8px 22px;
   }
 
   .social-link {
