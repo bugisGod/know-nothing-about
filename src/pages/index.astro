@@ -1,6 +1,5 @@
 ---
 import Base from '../layouts/Base.astro';
-import Icon from '../components/Icon.astro';
 import BrainGraph from '../components/BrainGraph.astro';
 import { getCollection } from 'astro:content';
 import { SITE } from '../config';
@@ -70,24 +69,8 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
 
     <div class="container">
       <section class="hero">
-        <h1>{SITE.author}<span class="hero-dot" aria-hidden="true">.</span></h1>
-        <p class="lede">{SITE.tagline}</p>
-        <div class="socials">
-          {
-            SITE.socials.map((s) => (
-              <a
-                class="social-link"
-                href={s.url}
-                target={s.url.startsWith('http') ? '_blank' : undefined}
-                rel="noopener"
-                aria-label={s.label}
-                title={s.label}
-              >
-                <Icon name={s.icon} size={16} />
-              </a>
-            ))
-          }
-        </div>
+        <h1>{SITE.tagline}</h1>
+        <p class="origin">— SCIO ME NIHIL SCIRE</p>
       </section>
 
       <BrainGraph nodes={gNodes} edges={gEdges} bare />
@@ -158,9 +141,9 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
     margin-inline: auto;
   }
 
-  /* ===== Hero：居中海报式 ===== */
+  /* ===== Hero：名言即主角 ===== */
   .hero {
-    padding: 48px 0 0;
+    padding: 88px 0 0;
     text-align: center;
   }
 
@@ -168,46 +151,20 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
     font-family: var(--font-display);
     font-style: italic;
     font-weight: 400;
-    font-size: clamp(58px, 8.5vw, 88px);
-    letter-spacing: -0.005em;
-    line-height: 1.1;
-    margin: 0 0 20px;
-  }
-
-  .hero-dot {
-    color: var(--accent);
-  }
-
-  .lede {
-    font-family: var(--font-display);
-    font-style: italic;
-    font-weight: 400;
-    font-size: clamp(19px, 2.6vw, 23px);
-    letter-spacing: 0.02em;
-    color: var(--text-2);
-    margin: 0 0 30px;
+    font-size: clamp(40px, 5.5vw, 58px);
+    line-height: 1.22;
+    margin: 0 auto 20px;
+    max-width: 18ch;
     text-wrap: balance;
-  }
-
-  .socials {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px 22px;
-  }
-
-  .social-link {
-    display: inline-grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    color: var(--text-2);
-  }
-
-  .social-link:hover {
     color: var(--text);
-    background: var(--wash, rgba(255, 255, 255, 0.06));
+  }
+
+  .origin {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    color: var(--muted);
+    margin: 0;
   }
 
   @media (max-width: 640px) {
@@ -215,7 +172,7 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
       padding-top: 40px;
     }
     .hero {
-      padding-top: 24px;
+      padding-top: 48px;
     }
   }
 </style>

@@ -1,4 +1,5 @@
 ---
+import Icon from './Icon.astro';
 import { SITE } from '../config';
 
 const year = new Date().getFullYear();
@@ -7,13 +8,40 @@ const range = year > SITE.since ? `${SITE.since} – ${year}` : `${SITE.since}`;
 
 <footer class="site-footer">
   <div class="container footer-inner">
-    <span class="wordmark">{SITE.title}<span class="logo-dot" aria-hidden="true">.</span></span>
+    {
+      SITE.socials.map((s) => (
+        <a
+          class="foot-social"
+          href={s.url}
+          target={s.url.startsWith('http') ? '_blank' : undefined}
+          rel="noopener"
+          aria-label={s.label}
+          title={s.label}
+        >
+          <Icon name={s.icon} size={15} />
+        </a>
+      ))
+    }
+    <span class="foot-sep" aria-hidden="true">·</span>
     <span class="footer-meta">© {range} {SITE.author}</span>
   </div>
 </footer>
 
 <style>
-  .logo-dot {
-    color: var(--accent);
+  .foot-social {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    color: var(--muted);
+  }
+
+  .foot-social:hover {
+    color: var(--text);
+  }
+
+  .foot-sep {
+    color: var(--muted);
   }
 </style>
