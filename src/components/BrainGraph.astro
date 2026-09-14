@@ -226,7 +226,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 
     const scene = new THREE.Scene();
     // 雾化纵深：远处的星沉入夜空
-    scene.fog = new THREE.FogExp2(0x0a0b13, 0.05);
+    scene.fog = new THREE.FogExp2(0x0b0c12, 0.05); // 与页面底色一致
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
     // 窄屏自动拉远相机，保证星系完整可见；用户手动缩放后不再干预
