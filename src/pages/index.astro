@@ -87,7 +87,7 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
 
     <div class="container">
       <section class="hero">
-        <h1>{SITE.author}</h1>
+        <h1>{SITE.author}<span class="hero-dot" aria-hidden="true">.</span></h1>
         <p class="lede">{SITE.tagline}</p>
         <div class="socials">
           {
@@ -195,15 +195,21 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
 
   .hero h1 {
     font-family: var(--font-display);
+    font-style: italic;
     font-weight: 400;
-    font-size: clamp(48px, 7.5vw, 72px);
-    letter-spacing: 0.01em;
-    line-height: 1.15;
-    margin: 0 0 18px;
+    font-size: clamp(58px, 8.5vw, 88px);
+    letter-spacing: -0.005em;
+    line-height: 1.1;
+    margin: 0 0 20px;
+  }
+
+  .hero-dot {
+    color: var(--accent);
   }
 
   .lede {
     font-family: var(--font-display);
+    font-style: italic;
     font-weight: 400;
     font-size: clamp(19px, 2.6vw, 23px);
     letter-spacing: 0.02em;
