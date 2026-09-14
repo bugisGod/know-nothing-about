@@ -7,11 +7,11 @@ import { SITE, CATEGORIES } from '../config';
 
 const notes = (await getCollection('notes', ({ data }) => !data.draft))
   .sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0))
-  .slice(0, 4);
+  .slice(0, 3);
 
 const projects = (await getCollection('projects', ({ data }) => !data.draft))
   .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
-  .slice(0, 3);
+  .slice(0, 2);
 
 const catOf = (id: string) => (id.includes('/') ? id.split('/')[0] : '未分类');
 const statusKey = (s: string) => ({ 进行中: 'ongoing', 已完成: 'done', 已归档: 'archived' })[s] ?? 'done';
@@ -160,26 +160,20 @@ const twinkles = Array.from({ length: 16 }, (_, i) => ({
         <p class="kicker">MILKY WAY · SOL-3 — EST. {SITE.since}</p>
         <h1>{SITE.author}</h1>
         <p class="lede">{SITE.tagline}</p>
-        <p class="bio">{SITE.bio}</p>
-        <div class="hero-foot">
-          <div class="skills">
-            {SITE.skills.map((s) => <span>{s}</span>)}
-          </div>
-          <div class="socials">
-            {
-              SITE.socials.map((s) => (
-                <a
-                  class="social-link"
-                  href={s.url}
-                  target={s.url.startsWith('http') ? '_blank' : undefined}
-                  rel="noopener"
-                >
-                  <Icon name={s.icon} size={14} />
-                  {s.label}
-                </a>
-              ))
-            }
-          </div>
+        <div class="socials">
+          {
+            SITE.socials.map((s) => (
+              <a
+                class="social-link"
+                href={s.url}
+                target={s.url.startsWith('http') ? '_blank' : undefined}
+                rel="noopener"
+              >
+                <Icon name={s.icon} size={14} />
+                {s.label}
+              </a>
+            ))
+          }
         </div>
       </section>
 
@@ -230,8 +224,6 @@ const twinkles = Array.from({ length: 16 }, (_, i) => ({
                 <p class="desc">{p.data.description}</p>
                 <p class="meta">
                   <span>{p.data.tech.join(' / ')}</span>
-                  {p.data.period && <span>{p.data.period}</span>}
-                  {p.data.role && <span>{p.data.role}</span>}
                 </p>
               </div>
               <span class="arrow" aria-hidden="true">→</span>
@@ -337,40 +329,8 @@ const twinkles = Array.from({ length: 16 }, (_, i) => ({
     font-size: clamp(19px, 2.6vw, 23px);
     letter-spacing: 0.02em;
     color: var(--text-2);
-    margin: 0 0 20px;
+    margin: 0 0 28px;
     text-wrap: balance;
-  }
-
-  .bio {
-    color: var(--muted);
-    font-size: 13.5px;
-    line-height: 2.1;
-    margin: 0;
-    max-width: 36em;
-    white-space: pre-line;
-  }
-
-  .hero-foot {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 14px 28px;
-    flex-wrap: wrap;
-    margin-top: 44px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border);
-  }
-
-  .skills {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--text-2);
-  }
-
-  .skills span + span::before {
-    content: '·';
-    margin: 0 9px;
-    color: var(--border-strong);
   }
 
   .socials {
@@ -400,10 +360,6 @@ const twinkles = Array.from({ length: 16 }, (_, i) => ({
     }
     .hero {
       padding-top: 24px;
-    }
-    .hero-foot {
-      flex-direction: column;
-      gap: 14px;
     }
   }
 </style>
