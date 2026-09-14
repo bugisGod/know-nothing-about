@@ -274,21 +274,36 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       sprites.push(sp);
     }
 
-    // ===== 边：柔性弧线 + 流光脉冲 =====
-    const SEG = 14; // 每条边的曲线分段
-    const lineGeo = new THREE.BufferGeometry();
-    const linePos = new Float32Array(edges.length * SEG * 2 * 3);
-    const lineCol = new Float32Array(edges.length * SEG * 2 * 3);
-    lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
-    lineGeo.setAttribute('color', new THREE.BufferAttribute(lineCol, 3));
-    const lines = new THREE.LineSegments(
-      lineGeo,
-      new THREE.LineBasicMaterial({
-        vertexColors: true, transparent: true, opacity: 0.5,
-        blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
+    // ===== 边：星尘轨迹（点连线，全图只有光点、没有笔画）=====
+    // 星尘：每条弧线按长度布点，两端渐隐、微微闪烁
+    const dotsPerEdge = new Int16Array(edges.length);
+    let totalDots = 0;
+    for (let e = 0; e < edges.length; e++) {
+      const [a, b] = edges[e];
+      const len = Math.hypot(
+        pos[b * 3] - pos[a * 3],
+        pos[b * 3 + 1] - pos[a * 3 + 1],
+        pos[b * 3 + 2] - pos[a * 3 + 2]
+      );
+      dotsPerEdge[e] = Math.max(4, Math.min(16, Math.round(len / 0.33)));
+      totalDots += dotsPerEdge[e];
+    }
+    const dotOffsets = new Int32Array(edges.length + 1);
+    for (let e = 0; e < edges.length; e++) dotOffsets[e + 1] = dotOffsets[e] + dotsPerEdge[e];
+
+    const dustGeo = new THREE.BufferGeometry();
+    const dustPos = new Float32Array(totalDots * 3);
+    const dustCol = new Float32Array(totalDots * 3);
+    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+    dustGeo.setAttribute('color', new THREE.BufferAttribute(dustCol, 3));
+    const dust = new THREE.Points(
+      dustGeo,
+      new THREE.PointsMaterial({
+        map: dotTex, size: 0.095, sizeAttenuation: true, vertexColors: true,
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
       })
     );
-    group.add(lines);
+    group.add(dust);
 
     const dimColor = new THREE.Color(0x44507e);
     const hiColor = new THREE.Color(0xffc46b);
@@ -334,35 +349,27 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       out.z = w0 * pos[a * 3 + 2] + w1 * ctrl[e * 3 + 2] + w2 * pos[b * 3 + 2];
     }
 
-    function syncCurves(t) {
+    function syncCurves(t, hovered) {
       updateCtrl(t);
-      for (let e = 0; e < edges.length; e++) {
-        for (let k = 0; k < SEG; k++) {
-          const o = (e * SEG + k) * 6;
-          bez(_p, e, k / SEG);
-          linePos[o] = _p.x; linePos[o + 1] = _p.y; linePos[o + 2] = _p.z;
-          bez(_p, e, (k + 1) / SEG);
-          linePos[o + 3] = _p.x; linePos[o + 4] = _p.y; linePos[o + 5] = _p.z;
-        }
-      }
-      lineGeo.attributes.position.needsUpdate = true;
-    }
-
-    function paintLines(hovered) {
       for (let e = 0; e < edges.length; e++) {
         const [a, b] = edges[e];
         const active = hovered >= 0 && (a === hovered || b === hovered);
-        const c = active ? hiColor : dimColor;
-        for (let k = 0; k < SEG; k++) {
-          const f = 0.6 + 0.4 * Math.sin((Math.PI * (k + 0.5)) / SEG); // 两端渐隐
-          const o = (e * SEG + k) * 6;
-          lineCol[o] = c.r * f; lineCol[o + 1] = c.g * f; lineCol[o + 2] = c.b * f;
-          lineCol[o + 3] = c.r * f; lineCol[o + 4] = c.g * f; lineCol[o + 5] = c.b * f;
+        const base = dotOffsets[e], n = dotsPerEdge[e];
+        for (let k = 0; k < n; k++) {
+          const u = (k + 0.5) / n;
+          bez(_p, e, 0.08 + 0.84 * u); // 两端留白，不顶到星星
+          const i = (base + k) * 3;
+          dustPos[i] = _p.x; dustPos[i + 1] = _p.y; dustPos[i + 2] = _p.z;
+          const endFade = Math.sin(Math.PI * u); // 两端渐隐
+          const shimmer = 0.78 + 0.22 * Math.sin(t * 1.4 + edgePhase[e] + k * 0.9);
+          const c = active ? hiColor : dimColor;
+          const f = endFade * shimmer * (active ? 1 : 0.5);
+          dustCol[i] = c.r * f; dustCol[i + 1] = c.g * f; dustCol[i + 2] = c.b * f;
         }
       }
-      lineGeo.attributes.color.needsUpdate = true;
+      dustGeo.attributes.position.needsUpdate = true;
+      dustGeo.attributes.color.needsUpdate = true;
     }
-    paintLines(-1);
 
     // ===== 流光脉冲：能量沿弧线流动 =====
     const PULSES_PER = edges.length > 120 ? 1 : 2;
@@ -484,7 +491,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
         sprites[i].position.set(pos[ix], pos[iy], pos[iz]);
       }
       alpha = Math.max(alpha * 0.9943, reduced ? 0 : 0.04);
-      syncCurves(t);
+      syncCurves(t, hovered);
     }
 
     // ===== 交互 =====
@@ -532,7 +539,6 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
         hovered = pick(e.clientX, e.clientY);
         mount.classList.toggle('pointing', hovered >= 0);
         ring.visible = hovered >= 0;
-        paintLines(hovered);
         if (hovered >= 0) showTip(hovered); else tip.classList.remove('show');
       }
     });
@@ -546,7 +552,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     });
     mount.addEventListener('pointerleave', () => {
       hovered = -1; ring.visible = false; tip.classList.remove('show');
-      paintLines(-1); mount.classList.remove('pointing');
+      mount.classList.remove('pointing');
     });
     mount.addEventListener('wheel', (e) => {
       // 普通滚轮放行给页面滚动；Ctrl/Cmd + 滚轮才缩放
