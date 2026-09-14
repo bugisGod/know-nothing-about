@@ -128,9 +128,18 @@ const gEdges = [...edgeMap.entries()].map(([key, w]) => {
       radial-gradient(1px 1px at 46% 30%, rgba(255, 255, 255, 0.4), transparent 100%),
       radial-gradient(52% 46% at 18% 30%, rgba(96, 118, 255, 0.12), transparent 70%),
       radial-gradient(46% 42% at 80% 78%, rgba(168, 122, 255, 0.09), transparent 72%),
-      radial-gradient(120% 80% at 50% 0%, #131524 0%, #0b0c15 58%, #07080e 100%);
+      radial-gradient(120% 80% at 50% 0%, #131524 0%, #0b0c15 56%, #0b0c12 88%);
     position: relative;
     overflow: hidden;
+  }
+
+  /* 夜空无缝过渡到页面底色；页脚换成夜色发丝线 */
+  :global(main.site-main) {
+    padding-bottom: 24px;
+  }
+
+  :global(.site-footer) {
+    border-top: 1px solid rgba(232, 230, 223, 0.08);
   }
 
   /* 闪烁星 */
