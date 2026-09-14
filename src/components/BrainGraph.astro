@@ -300,22 +300,27 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     const ctrl = new Float32Array(edges.length * 3); // 二次贝塞尔控制点
 
     const _d = new THREE.Vector3(), _mid = new THREE.Vector3(),
-      _axis = new THREE.Vector3(), _perp = new THREE.Vector3(), _p = new THREE.Vector3();
+      _centroid = new THREE.Vector3(), _out = new THREE.Vector3(), _p = new THREE.Vector3();
 
     function updateCtrl(t) {
+      // 全图质心：所有弧线统一向外弓 → 饱满的有机形态（不会内凹）
+      _centroid.set(0, 0, 0);
+      for (let i = 0; i < N; i++) {
+        _centroid.x += pos[i * 3]; _centroid.y += pos[i * 3 + 1]; _centroid.z += pos[i * 3 + 2];
+      }
+      _centroid.multiplyScalar(1 / Math.max(N, 1));
+
       for (let e = 0; e < edges.length; e++) {
         const [a, b] = edges[e];
-        _d.set(pos[b * 3] - pos[a * 3], pos[b * 3 + 1] - pos[a * 3 + 1], pos[b * 3 + 2] - pos[a * 3 + 2]);
         _mid.set((pos[a * 3] + pos[b * 3]) / 2, (pos[a * 3 + 1] + pos[b * 3 + 1]) / 2, (pos[a * 3 + 2] + pos[b * 3 + 2]) / 2);
-        _axis.copy(_mid).normalize();
-        _perp.copy(_d).cross(_axis);
-        if (_perp.lengthSq() < 1e-6) _perp.set(0, 1, 0).cross(_d);
-        _perp.normalize();
-        const sign = e % 2 === 0 ? 1 : -1;
-        const mag = Math.min(_d.length() * 0.16, 0.9) * sign * (1 + 0.3 * Math.sin(t * 0.35 + edgePhase[e]));
-        ctrl[e * 3] = _mid.x + _perp.x * mag;
-        ctrl[e * 3 + 1] = _mid.y + _perp.y * mag;
-        ctrl[e * 3 + 2] = _mid.z + _perp.z * mag;
+        _out.copy(_mid).sub(_centroid);
+        if (_out.lengthSq() < 1e-6) _out.set(Math.sin(e * 2.3), Math.cos(e * 1.7), 0.3);
+        _out.normalize();
+        const mag = Math.min(_d.set(pos[b * 3] - pos[a * 3], pos[b * 3 + 1] - pos[a * 3 + 1], pos[b * 3 + 2] - pos[a * 3 + 2]).length() * 0.13, 0.7)
+          * (1 + 0.2 * Math.sin(t * 0.35 + edgePhase[e]));
+        ctrl[e * 3] = _mid.x + _out.x * mag;
+        ctrl[e * 3 + 1] = _mid.y + _out.y * mag;
+        ctrl[e * 3 + 2] = _mid.z + _out.z * mag;
       }
     }
 
