@@ -3,7 +3,7 @@ import Base from '../layouts/Base.astro';
 import Icon from '../components/Icon.astro';
 import BrainGraph from '../components/BrainGraph.astro';
 import { getCollection } from 'astro:content';
-import { SITE } from '../config';
+import { SITE, CATEGORIES } from '../config';
 
 const notes = (await getCollection('notes', ({ data }) => !data.draft))
   .sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0))
@@ -28,29 +28,35 @@ const PALETTE = ['#9db4ff', '#ffd9a0', '#9fe8dd', '#c9b8ff', '#ff9d8a', '#a8c8ff
 const noteCats = [...new Set(allNotes.map((n) => catOf(n.id)))].sort();
 const catColor = new Map(noteCats.map((c, i) => [c, PALETTE[i % PALETTE.length]]));
 const AMBER = '#ffc46b';
+const catMeta = (c: string) => CATEGORIES[c] ?? { label: c, desc: '' };
+const catCount = (c: string) => allNotes.filter((n) => catOf(n.id) === c).length;
 
 const gNodes = [
   // 分类锚星（星域中心，点击跳到知识库对应分区）
   ...noteCats.map((c) => ({
     id: `cat:${c}`,
-    title: c,
+    title: catMeta(c).label,
     url: `/notes/#cat-${c}`,
     kind: '星域',
     group: c,
     tags: [],
     anchor: true,
     color: catColor.get(c),
+    desc: catMeta(c).desc,
+    count: catCount(c),
   })),
   // 项目星域锚星
   {
     id: 'cat:projects',
-    title: '项目',
+    title: catMeta('projects').label,
     url: '/projects/',
     kind: '星域',
     group: '项目',
     tags: [],
     anchor: true,
     color: AMBER,
+    desc: catMeta('projects').desc,
+    count: allProjects.length,
   },
   // 成员星
   ...allNotes.map((n) => ({
@@ -62,6 +68,7 @@ const gNodes = [
     tags: n.data.tags,
     anchor: false,
     color: catColor.get(catOf(n.id)),
+    desc: n.data.description ?? '',
   })),
   ...allProjects.map((p) => ({
     id: p.id,
@@ -72,6 +79,7 @@ const gNodes = [
     tags: p.data.tags.length > 0 ? p.data.tags : p.data.tech,
     anchor: false,
     color: AMBER,
+    desc: p.data.description,
   })),
 ];
 

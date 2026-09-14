@@ -29,3 +29,12 @@ export const SITE = {
   // 页脚起始年份
   since: 2026,
 };
+
+// 知识库分类的展示信息：文件夹名 → 中文名 + 一句话描述
+// 用于星图锚星标签、图例、知识库分区标题；没配置的分类回退显示文件夹名
+export const CATEGORIES: Record<string, { label: string; desc: string }> = {
+  frontend: { label: '前端', desc: '框架 · 工程化 · 浏览器' },
+  tools: { label: '工具', desc: '命令行与效率工具' },
+  reading: { label: '阅读', desc: '读书与方法论笔记' },
+  projects: { label: '项目', desc: '做过的东西与踩过的坑' },
+};

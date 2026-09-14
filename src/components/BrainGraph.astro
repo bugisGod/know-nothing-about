@@ -13,6 +13,10 @@ interface GraphNode {
   anchor?: boolean;
   /** 域色（恒星色温系） */
   color?: string;
+  /** 悬停信息卡里的一句话描述 */
+  desc?: string;
+  /** 星域内的文章数（仅锚星） */
+  count?: number;
 }
 
 interface Props {
@@ -34,6 +38,19 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
   </h2>
   <div class:list={['graph-frame', { bare }]}>
     <div id="brain-graph" class="graph-canvas" role="img" aria-label="三维知识图谱：每个节点对应一篇文章，连线表示共享标签。下方列表提供相同的导航。"></div>
+    <div class="graph-legend" aria-hidden="true">
+      {
+        nodes
+          .filter((n) => n.anchor)
+          .map((a) => (
+            <span class="lg">
+              <i style={`background:${a.color ?? '#f3efe2'};box-shadow:0 0 7px ${a.color ?? '#f3efe2'}`} />
+              {a.title}
+              <em>{a.count}</em>
+            </span>
+          ))
+      }
+    </div>
     <div id="graph-tip" class="graph-tip" aria-hidden="true">
       <p class="tip-title"></p>
       <p class="tip-meta"></p>
@@ -144,6 +161,42 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     will-change: transform;
   }
 
+  /* 星图图例：色点 + 域名 + 数量 */
+  .graph-legend {
+    position: absolute;
+    left: 14px;
+    bottom: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    pointer-events: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #a7abc2;
+    text-shadow: 0 1px 6px rgba(7, 8, 14, 0.9);
+  }
+
+  .graph-legend .lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+  }
+
+  .graph-legend .lg i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: none;
+  }
+
+  .graph-legend .lg em {
+    font-style: normal;
+    color: #6f7288;
+    font-variant-numeric: tabular-nums;
+  }
+
   .graph-caption {
     display: flex;
     justify-content: space-between;
@@ -177,6 +230,8 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     tags: string[];
     anchor?: boolean;
     color?: string;
+    desc?: string;
+    count?: number;
   };
 
   const mount = document.getElementById('brain-graph');
@@ -574,7 +629,11 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       const sy = (-tmp.y * 0.5 + 0.5) * rect.height;
       tip.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, calc(-100% - 12px))`;
       (tip.querySelector('.tip-title') as HTMLElement).textContent = nodes[i].title;
-      (tip.querySelector('.tip-meta') as HTMLElement).textContent = `${nodes[i].kind} · ${nodes[i].group}`;
+      const n = nodes[i];
+      const meta = n.anchor
+        ? `${n.desc || n.group} · ${n.count ?? ''} 篇`
+        : `${n.kind} · ${n.group}${n.desc ? ' — ' + n.desc : ''}`;
+      (tip.querySelector('.tip-meta') as HTMLElement).textContent = meta;
       tip.classList.add('show');
     }
 
@@ -594,9 +653,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
         hovered = pick(e.clientX, e.clientY);
         mount.classList.toggle('pointing', hovered >= 0);
         ring.visible = hovered >= 0;
-        // 锚星自带常驻标签，不再弹提示卡
-        if (hovered >= 0 && !nodes[hovered].anchor) showTip(hovered);
-        else tip.classList.remove('show');
+        if (hovered >= 0) showTip(hovered); else tip.classList.remove('show');
       }
     });
     mount.addEventListener('pointerup', (e) => {
