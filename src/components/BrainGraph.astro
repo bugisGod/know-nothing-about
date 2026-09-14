@@ -274,44 +274,131 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       sprites.push(sp);
     }
 
-    // ===== 边：辉光细线 =====
+    // ===== 边：柔性弧线 + 流光脉冲 =====
+    const SEG = 14; // 每条边的曲线分段
     const lineGeo = new THREE.BufferGeometry();
-    const linePos = new Float32Array(edges.length * 6);
-    const lineCol = new Float32Array(edges.length * 6);
+    const linePos = new Float32Array(edges.length * SEG * 2 * 3);
+    const lineCol = new Float32Array(edges.length * SEG * 2 * 3);
     lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
     lineGeo.setAttribute('color', new THREE.BufferAttribute(lineCol, 3));
     const lines = new THREE.LineSegments(
       lineGeo,
       new THREE.LineBasicMaterial({
-        vertexColors: true, transparent: true, opacity: 0.55,
+        vertexColors: true, transparent: true, opacity: 0.5,
         blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
       })
     );
     group.add(lines);
 
-    const dimColor = new THREE.Color(0x4a5584);
+    const dimColor = new THREE.Color(0x44507e);
     const hiColor = new THREE.Color(0xffc46b);
-    function syncLines() {
+    const warmColor = new THREE.Color(0xffe9c4);
+
+    // 每条边固定相位（形态稳定），弓起幅度随时间轻微呼吸
+    const edgePhase = new Float32Array(edges.length);
+    for (let e = 0; e < edges.length; e++) edgePhase[e] = rand() * Math.PI * 2;
+    const ctrl = new Float32Array(edges.length * 3); // 二次贝塞尔控制点
+
+    const _d = new THREE.Vector3(), _mid = new THREE.Vector3(),
+      _axis = new THREE.Vector3(), _perp = new THREE.Vector3(), _p = new THREE.Vector3();
+
+    function updateCtrl(t) {
       for (let e = 0; e < edges.length; e++) {
         const [a, b] = edges[e];
-        for (let k = 0; k < 3; k++) {
-          linePos[e * 6 + k] = pos[a * 3 + k];
-          linePos[e * 6 + 3 + k] = pos[b * 3 + k];
+        _d.set(pos[b * 3] - pos[a * 3], pos[b * 3 + 1] - pos[a * 3 + 1], pos[b * 3 + 2] - pos[a * 3 + 2]);
+        _mid.set((pos[a * 3] + pos[b * 3]) / 2, (pos[a * 3 + 1] + pos[b * 3 + 1]) / 2, (pos[a * 3 + 2] + pos[b * 3 + 2]) / 2);
+        _axis.copy(_mid).normalize();
+        _perp.copy(_d).cross(_axis);
+        if (_perp.lengthSq() < 1e-6) _perp.set(0, 1, 0).cross(_d);
+        _perp.normalize();
+        const sign = e % 2 === 0 ? 1 : -1;
+        const mag = Math.min(_d.length() * 0.16, 0.9) * sign * (1 + 0.3 * Math.sin(t * 0.35 + edgePhase[e]));
+        ctrl[e * 3] = _mid.x + _perp.x * mag;
+        ctrl[e * 3 + 1] = _mid.y + _perp.y * mag;
+        ctrl[e * 3 + 2] = _mid.z + _perp.z * mag;
+      }
+    }
+
+    // 二次贝塞尔取点
+    function bez(out, e, t01) {
+      const [a, b] = edges[e];
+      const u = 1 - t01;
+      const w0 = u * u, w1 = 2 * u * t01, w2 = t01 * t01;
+      out.x = w0 * pos[a * 3] + w1 * ctrl[e * 3] + w2 * pos[b * 3];
+      out.y = w0 * pos[a * 3 + 1] + w1 * ctrl[e * 3 + 1] + w2 * pos[b * 3 + 1];
+      out.z = w0 * pos[a * 3 + 2] + w1 * ctrl[e * 3 + 2] + w2 * pos[b * 3 + 2];
+    }
+
+    function syncCurves(t) {
+      updateCtrl(t);
+      for (let e = 0; e < edges.length; e++) {
+        for (let k = 0; k < SEG; k++) {
+          const o = (e * SEG + k) * 6;
+          bez(_p, e, k / SEG);
+          linePos[o] = _p.x; linePos[o + 1] = _p.y; linePos[o + 2] = _p.z;
+          bez(_p, e, (k + 1) / SEG);
+          linePos[o + 3] = _p.x; linePos[o + 4] = _p.y; linePos[o + 5] = _p.z;
         }
       }
       lineGeo.attributes.position.needsUpdate = true;
     }
-    function paintLines(hovered: number) {
-      let e = 0;
-      for (const [a, b] of edges) {
-        const c = hovered >= 0 && (a === hovered || b === hovered) ? hiColor : dimColor;
-        lineCol.set([c.r, c.g, c.b, c.r, c.g, c.b], e * 6);
-        e++;
+
+    function paintLines(hovered) {
+      for (let e = 0; e < edges.length; e++) {
+        const [a, b] = edges[e];
+        const active = hovered >= 0 && (a === hovered || b === hovered);
+        const c = active ? hiColor : dimColor;
+        for (let k = 0; k < SEG; k++) {
+          const f = 0.6 + 0.4 * Math.sin((Math.PI * (k + 0.5)) / SEG); // 两端渐隐
+          const o = (e * SEG + k) * 6;
+          lineCol[o] = c.r * f; lineCol[o + 1] = c.g * f; lineCol[o + 2] = c.b * f;
+          lineCol[o + 3] = c.r * f; lineCol[o + 4] = c.g * f; lineCol[o + 5] = c.b * f;
+        }
       }
       lineGeo.attributes.color.needsUpdate = true;
     }
-    syncLines();
     paintLines(-1);
+
+    // ===== 流光脉冲：能量沿弧线流动 =====
+    const PULSES_PER = edges.length > 120 ? 1 : 2;
+    const P = edges.length * PULSES_PER;
+    let pulses = null, pulseGeo = null, pulsePos = null, pulseCol = null;
+    let pulseEdge, pulsePhase;
+    if (P > 0) {
+      pulseGeo = new THREE.BufferGeometry();
+      pulsePos = new Float32Array(P * 3);
+      pulseCol = new Float32Array(P * 3);
+      pulseGeo.setAttribute('position', new THREE.BufferAttribute(pulsePos, 3));
+      pulseGeo.setAttribute('color', new THREE.BufferAttribute(pulseCol, 3));
+      pulses = new THREE.Points(
+        pulseGeo,
+        new THREE.PointsMaterial({
+          map: dotTex, size: 0.17, sizeAttenuation: true, vertexColors: true,
+          transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
+        })
+      );
+      group.add(pulses);
+      pulseEdge = new Int16Array(P);
+      pulsePhase = new Float32Array(P);
+      for (let p = 0; p < P; p++) {
+        pulseEdge[p] = p % edges.length;
+        pulsePhase[p] = p / P + rand() * 0.08;
+      }
+    }
+    const PULSE_SPEED = 0.1; // 每秒沿曲线前进的比例
+    function updatePulses(t, hovered) {
+      if (!pulses) return;
+      for (let p = 0; p < P; p++) {
+        const e = pulseEdge[p];
+        bez(_p, e, (t * PULSE_SPEED + pulsePhase[p]) % 1);
+        pulsePos[p * 3] = _p.x; pulsePos[p * 3 + 1] = _p.y; pulsePos[p * 3 + 2] = _p.z;
+        const active = hovered >= 0 && (edges[e][0] === hovered || edges[e][1] === hovered);
+        const c = active ? hiColor : warmColor;
+        pulseCol[p * 3] = c.r; pulseCol[p * 3 + 1] = c.g; pulseCol[p * 3 + 2] = c.b;
+      }
+      pulseGeo.attributes.position.needsUpdate = true;
+      pulseGeo.attributes.color.needsUpdate = true;
+    }
 
     // ===== 悬停圆环 =====
     const ring = new THREE.Sprite(
@@ -350,7 +437,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     let alpha = 1;
     const REST = 2.6;
     const BOUND = 3.9;
-    function tick() {
+    function tick(t) {
       for (let i = 0; i < N; i++)
         for (let j = i + 1; j < N; j++) {
           let dx = pos[i * 3] - pos[j * 3],
@@ -392,7 +479,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
         sprites[i].position.set(pos[ix], pos[iy], pos[iz]);
       }
       alpha = Math.max(alpha * 0.9943, reduced ? 0 : 0.04);
-      syncLines();
+      syncCurves(t);
     }
 
     // ===== 交互 =====
@@ -485,13 +572,13 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     });
 
     // ===== 主循环：多轴漂移 + 呼吸，制造纵深 =====
-    if (reduced) for (let i = 0; i < 320; i++) tick();
+    if (reduced) { for (let i = 0; i < 320; i++) tick(0); if (pulses) pulses.visible = false; }
     const t0 = performance.now();
     function loop() {
       rafId = requestAnimationFrame(loop);
       if (!inView) { cancelAnimationFrame(rafId); rafId = 0; return; }
-      if (!reduced) tick();
       const t = (performance.now() - t0) * 0.001;
+      if (!reduced) tick(t);
       if (!dragging) tRotY += 0.0018;
       const wob = reduced ? 0 : Math.sin(t * 0.22) * 0.05; // 轻微俯仰呼吸
       rotX += (tRotX - rotX) * 0.07;
@@ -501,6 +588,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       camera.position.z = camZ;
       starField.rotation.y = -rotY * 0.25; // 远景反向缓转 → 视差
       starField.rotation.x = -rotX * 0.2;
+      updatePulses(t, hovered);
 
       if (ring.visible && hovered >= 0)
         ring.position.set(pos[hovered * 3], pos[hovered * 3 + 1], pos[hovered * 3 + 2]);
