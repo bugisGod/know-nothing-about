@@ -54,11 +54,11 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     <div id="graph-tip" class="graph-tip" aria-hidden="true">
       <p class="tip-title"></p>
       <p class="tip-meta"></p>
+      <p class="tip-go">再点一次进入 →</p>
     </div>
   </div>
   <p class="graph-caption">
-    <span>FIG. 00 — 知识图谱 · {nodes.length} 星 · {edges.length} 连接</span>
-    <span>星域 = 分类 · 边 = 星尘 / 共享标签</span>
+    <span>FIG. 00 — 知识图谱 · {nodes.length} 星 · {edges.length} 连接 · 星域 = 分类</span>
   </p>
   <script type="application/json" id="graph-data" set:html={dataJson} />
 </section>
@@ -128,6 +128,25 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 
   .graph-tip.show {
     opacity: 1;
+  }
+
+  /* 触屏选中态：卡片可点按进入 */
+  .graph-tip.tap {
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  .tip-go {
+    display: none;
+    margin: 7px 0 0;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    color: #ffc46b;
+  }
+
+  .graph-tip.tap .tip-go {
+    display: block;
   }
 
   .tip-title {
@@ -656,17 +675,44 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
         if (hovered >= 0) showTip(hovered); else tip.classList.remove('show');
       }
     });
+    // 触屏两段式：首点选中并弹卡，再点（或点卡片）进入；鼠标保持点击直达
+    let selected = -1;
+    function clearSelection() {
+      selected = -1;
+      tip.classList.remove('show', 'tap');
+    }
     mount.addEventListener('pointerup', (e) => {
       dragging = false;
       mount.classList.remove('grabbing');
-      if (moved < 8) {
-        const i = pick(e.clientX, e.clientY);
+      if (moved >= 8) return;
+      const i = pick(e.clientX, e.clientY);
+      if (e.pointerType === 'mouse') {
         if (i >= 0 && nodes[i].url) location.href = nodes[i].url;
+        return;
+      }
+      if (i >= 0) {
+        if (i === selected) {
+          if (nodes[i].url) location.href = nodes[i].url;
+        } else {
+          selected = i;
+          hovered = i;
+          ring.visible = true;
+          showTip(i);
+          tip.classList.add('tap');
+        }
+      } else {
+        clearSelection();
+        ring.visible = false;
       }
     });
-    mount.addEventListener('pointerleave', () => {
-      hovered = -1; ring.visible = false; tip.classList.remove('show');
-      mount.classList.remove('pointing');
+    tip.addEventListener('click', () => {
+      if (selected >= 0 && nodes[selected].url) location.href = nodes[selected].url;
+    });
+    mount.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse') {
+        hovered = -1; ring.visible = false; tip.classList.remove('show');
+        mount.classList.remove('pointing');
+      }
     });
     mount.addEventListener('wheel', (e) => {
       // 普通滚轮放行给页面滚动；Ctrl/Cmd + 滚轮才缩放
