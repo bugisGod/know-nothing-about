@@ -4,7 +4,7 @@ export const SITE = {
   title: 'scio',
 
   // 作者名：首页大标题、页脚署名
-  author: 'yb',
+  author: 'scio',
 
   // 一句话介绍（首页副标题）
   tagline: 'I know that I know nothing.',
