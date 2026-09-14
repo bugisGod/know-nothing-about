@@ -26,7 +26,7 @@ const fmt = (d?: Date) =>
     </p>
     {
       cats.map((cat) => (
-        <section class="cat-sec">
+        <section class="cat-sec" id={`cat-${cat}`}>
           <h2>
             {cat}
             <span class="count">{groups.get(cat)!.length}</span>

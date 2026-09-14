@@ -9,6 +9,10 @@ interface GraphNode {
   kind: string;
   group: string;
   tags: string[];
+  /** 分类锚星（星域中心） */
+  anchor?: boolean;
+  /** 域色（恒星色温系） */
+  color?: string;
 }
 
 interface Props {
@@ -36,8 +40,8 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     </div>
   </div>
   <p class="graph-caption">
-    <span>FIG. 00 — 知识图谱 · {nodes.length} 节点 · {edges.length} 连接</span>
-    <span>边 = 共享标签</span>
+    <span>FIG. 00 — 知识图谱 · {nodes.length} 星 · {edges.length} 连接</span>
+    <span>星域 = 分类 · 边 = 星尘 / 共享标签</span>
   </p>
   <script type="application/json" id="graph-data" set:html={dataJson} />
 </section>
@@ -125,6 +129,21 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     color: #8d95b8;
   }
 
+  .graph-frame :global(.star-label) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    opacity: 0.9;
+    text-shadow: 0 1px 6px rgba(7, 8, 14, 0.9);
+    will-change: transform;
+  }
+
   .graph-caption {
     display: flex;
     justify-content: space-between;
@@ -156,6 +175,8 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     kind: string;
     group: string;
     tags: string[];
+    anchor?: boolean;
+    color?: string;
   };
 
   const mount = document.getElementById('brain-graph');
@@ -251,21 +272,34 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       return new THREE.CanvasTexture(c);
     })();
 
-    // ===== 节点：发光星点（笔记暖白 / 项目琥珀）=====
+    // ===== 节点：发光星点（分类锚星带域色，成员星染淡色）=====
     const degree = new Array(N).fill(0);
     for (const [a, b] of edges) degree[a]++, degree[b]++;
 
-    const noteMat = new THREE.SpriteMaterial({
-      map: starTex, color: 0xf3efe2, transparent: true, fog: true, depthWrite: false,
-    });
-    const projMat = new THREE.SpriteMaterial({
-      map: starTex, color: 0xffc46b, transparent: true, fog: true, depthWrite: false,
-    });
+    const white = new THREE.Color(0xf3efe2);
+    const amber = new THREE.Color(0xffc46b);
+    const nodeColor: THREE.Color[] = [];
+    for (let i = 0; i < N; i++) {
+      const n = nodes[i];
+      if (n.anchor) {
+        nodeColor.push(new THREE.Color(n.color || '#f3efe2'));
+      } else if (n.kind === '项目') {
+        nodeColor.push(amber.clone());
+      } else {
+        // 成员星：域色调淡，融入夜空
+        nodeColor.push(new THREE.Color(n.color || '#f3efe2').lerp(white, 0.55));
+      }
+    }
+
     const sprites: THREE.Sprite[] = [];
     const baseScale: number[] = [];
     for (let i = 0; i < N; i++) {
-      const mat = (nodes[i].kind === '项目' ? projMat : noteMat).clone();
-      const s = (nodes[i].kind === '项目' ? 0.62 : 0.46) + Math.min(degree[i], 5) * 0.07 + rand() * 0.1;
+      const mat = new THREE.SpriteMaterial({
+        map: starTex, color: nodeColor[i], transparent: true, fog: true, depthWrite: false,
+      });
+      const s = nodes[i].anchor
+        ? 0.78 + Math.min(degree[i], 6) * 0.045
+        : (nodes[i].kind === '项目' ? 0.62 : 0.46) + Math.min(degree[i], 5) * 0.07 + rand() * 0.1;
       const sp = new THREE.Sprite(mat);
       sp.position.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
       sp.scale.setScalar(s);
@@ -273,6 +307,18 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       group.add(sp);
       sprites.push(sp);
     }
+
+    // 锚星名字标签（HTML 覆盖层，跟随投影位置）
+    const labels: { el: HTMLDivElement; i: number }[] = [];
+    nodes.forEach((n, i) => {
+      if (!n.anchor) return;
+      const el = document.createElement('div');
+      el.className = 'star-label';
+      el.textContent = n.title;
+      if (n.color) el.style.color = n.color;
+      frame.appendChild(el);
+      labels.push({ el, i });
+    });
 
     // ===== 边：星尘轨迹（点连线，全图只有光点、没有笔画）=====
     // 星尘：每条弧线按长度布点，两端渐隐、微微闪烁
@@ -308,6 +354,14 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     const dimColor = new THREE.Color(0x44507e);
     const hiColor = new THREE.Color(0xffc46b);
     const warmColor = new THREE.Color(0xffe9c4);
+    // 每条边的基色：连到锚星的边继承域色，跨域边用暗蓝
+    const edgeBase = edges.map(([a, b]) => {
+      const src = nodes[a].anchor ? nodes[a] : nodes[b].anchor ? nodes[b] : null;
+      return src?.color
+        ? new THREE.Color(src.color).multiplyScalar(0.8)
+        : dimColor.clone();
+    });
+    const pulseBase = edgeBase.map((c) => c.clone().lerp(warmColor, 0.55));
 
     // 每条边固定相位（形态稳定），弓起幅度随时间轻微呼吸
     const edgePhase = new Float32Array(edges.length);
@@ -362,7 +416,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
           dustPos[i] = _p.x; dustPos[i + 1] = _p.y; dustPos[i + 2] = _p.z;
           const endFade = Math.sin(Math.PI * u); // 两端渐隐
           const shimmer = 0.78 + 0.22 * Math.sin(t * 1.4 + edgePhase[e] + k * 0.9);
-          const c = active ? hiColor : dimColor;
+          const c = active ? hiColor : edgeBase[e];
           const f = endFade * shimmer * (active ? 1 : 0.5);
           dustCol[i] = c.r * f; dustCol[i + 1] = c.g * f; dustCol[i + 2] = c.b * f;
         }
@@ -405,7 +459,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
         bez(_p, e, (t * PULSE_SPEED + pulsePhase[p]) % 1);
         pulsePos[p * 3] = _p.x; pulsePos[p * 3 + 1] = _p.y; pulsePos[p * 3 + 2] = _p.z;
         const active = hovered >= 0 && (edges[e][0] === hovered || edges[e][1] === hovered);
-        const c = active ? hiColor : warmColor;
+        const c = active ? hiColor : pulseBase[e];
         pulseCol[p * 3] = c.r; pulseCol[p * 3 + 1] = c.g; pulseCol[p * 3 + 2] = c.b;
       }
       pulseGeo.attributes.position.needsUpdate = true;
@@ -501,13 +555,14 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 
     function pick(cx: number, cy: number): number {
       const rect = mount.getBoundingClientRect();
-      let best = -1, bestD = 28 * 28;
+      let best = -1, bestD = Infinity;
       for (let i = 0; i < N; i++) {
+        const thresh = nodes[i].anchor ? 34 : 26; // 锚星更大，拾取半径放宽
         tmp.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(group.matrixWorld).project(camera);
         const sx = (tmp.x * 0.5 + 0.5) * rect.width + rect.left;
         const sy = (-tmp.y * 0.5 + 0.5) * rect.height + rect.top;
         const dx = sx - cx, dy = sy - cy, d = dx * dx + dy * dy;
-        if (d < bestD) { bestD = d; best = i; }
+        if (d < thresh * thresh && d < bestD) { bestD = d; best = i; }
       }
       return best;
     }
@@ -539,7 +594,9 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
         hovered = pick(e.clientX, e.clientY);
         mount.classList.toggle('pointing', hovered >= 0);
         ring.visible = hovered >= 0;
-        if (hovered >= 0) showTip(hovered); else tip.classList.remove('show');
+        // 锚星自带常驻标签，不再弹提示卡
+        if (hovered >= 0 && !nodes[hovered].anchor) showTip(hovered);
+        else tip.classList.remove('show');
       }
     });
     mount.addEventListener('pointerup', (e) => {
@@ -603,6 +660,18 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 
       if (ring.visible && hovered >= 0)
         ring.position.set(pos[hovered * 3], pos[hovered * 3 + 1], pos[hovered * 3 + 2]);
+
+      // 锚星标签跟随投影位置
+      if (labels.length) {
+        const w = mount.clientWidth, h = mount.clientHeight;
+        for (const L of labels) {
+          tmp.set(pos[L.i * 3], pos[L.i * 3 + 1], pos[L.i * 3 + 2])
+            .applyMatrix4(group.matrixWorld)
+            .project(camera);
+          L.el.style.transform = `translate(${(tmp.x * 0.5 + 0.5) * w}px, ${(-tmp.y * 0.5 + 0.5) * h}px) translate(-50%, 16px)`;
+          L.el.style.opacity = tmp.z < 1 ? '' : '0';
+        }
+      }
       renderer.render(scene, camera);
     }
     if (!rafId) loop();
