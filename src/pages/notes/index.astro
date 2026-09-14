@@ -1,6 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
 import { getCollection } from 'astro:content';
+import { CATEGORIES } from '../../config';
 
 const notes = await getCollection('notes', ({ data }) => !data.draft);
 
@@ -26,9 +27,9 @@ const fmt = (d?: Date) =>
     </p>
     {
       cats.map((cat) => (
-        <section class="cat-sec">
+        <section class="cat-sec" id={`cat-${cat}`}>
           <h2>
-            {cat}
+            {CATEGORIES[cat]?.label ?? cat}
             <span class="count">{groups.get(cat)!.length}</span>
           </h2>
           <div class="note-list">
