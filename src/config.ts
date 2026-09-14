@@ -4,7 +4,7 @@ export const SITE = {
   title: 'scio',
 
   // 你的名字：首页大标题、页脚署名
-  author: '你的名字',
+  author: 'yb',
 
   // 一句话介绍（首页副标题）
   tagline: 'I know that I know nothing.',
@@ -21,8 +21,8 @@ export const SITE = {
 
   // 社交链接（icon 可选：github / mail / rss / link）
   socials: [
-    { label: 'GitHub', url: 'https://github.com/yourname', icon: 'github' },
-    { label: 'Email', url: 'mailto:hello@example.com', icon: 'mail' },
+    { label: 'GitHub', url: 'https://github.com/bugisGod', icon: 'github' },
+    { label: 'Email', url: 'mailto:1405034491@qq.com', icon: 'mail' },
     { label: 'RSS', url: '/rss.xml', icon: 'rss' },
   ],
 
