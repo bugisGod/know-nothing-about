@@ -27,6 +27,11 @@ const pageTitle = title ? `${title} · ${SITE.title}` : SITE.title;
     <meta name="description" content={description} />
     <meta name="generator" content={Astro.generator} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <Header />
@@ -34,5 +39,25 @@ const pageTitle = title ? `${title} · ${SITE.title}` : SITE.title;
       <slot />
     </main>
     <Footer />
+    <script>
+      // 代码块一键复制
+      function initCodeCopy() {
+        document.querySelectorAll('.prose pre').forEach((pre) => {
+          if (pre.querySelector('.code-copy')) return;
+          const btn = document.createElement('button');
+          btn.className = 'code-copy';
+          btn.textContent = '复制';
+          btn.addEventListener('click', async () => {
+            await navigator.clipboard.writeText(pre.querySelector('code')?.textContent ?? pre.textContent);
+            btn.textContent = '已复制 ✓';
+            btn.classList.add('done');
+            setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('done'); }, 1600);
+          });
+          pre.appendChild(btn);
+        });
+      }
+      initCodeCopy();
+      document.addEventListener('astro:page-load', initCodeCopy);
+    </script>
   </body>
 </html>

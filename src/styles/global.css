@@ -662,3 +662,38 @@ button {
 .prose a:hover {
   text-decoration-color: var(--text);
 }
+
+/* ===== 代码块复制按钮 ===== */
+.prose pre {
+  position: relative;
+}
+
+.code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-inset);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.prose pre:hover .code-copy {
+  opacity: 1;
+}
+
+.code-copy:hover {
+  color: var(--text);
+}
+
+.code-copy.done {
+  color: var(--accent);
+  border-color: var(--accent);
+}

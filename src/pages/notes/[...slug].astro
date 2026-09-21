@@ -24,6 +24,14 @@ for (const items of groups.values()) {
 }
 const cats = [...groups.keys()].sort((a, b) => a.localeCompare(b));
 
+// 上一篇/下一篇（按日期倒序：newer 为上一篇）
+const sortedNotes = [...notes].sort(
+  (a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0)
+);
+const idx = sortedNotes.findIndex((n) => n.id === entry.id);
+const newer = idx > 0 ? sortedNotes[idx - 1] : null;
+const older = idx >= 0 && idx < sortedNotes.length - 1 ? sortedNotes[idx + 1] : null;
+
 const currentCat = catOf(entry.id);
 
 const fmt = (d?: Date) =>
@@ -56,6 +64,10 @@ const fmt = (d?: Date) =>
         <span class="tags">{entry.data.tags.map((t) => `#${t}`).join('  ')}</span>
       </div>
       <Content />
+      <nav class="pn">
+        {older ? <a class="pn-box" href={`/notes/${older.id}/`}><span>← 下一篇</span><b>{older.data.title}</b></a> : <span />}
+        {newer ? <a class="pn-box" href={`/notes/${newer.id}/`}><span>上一篇 →</span><b>{newer.data.title}</b></a> : <span />}
+      </nav>
     </article>
   </div>
   </div>
@@ -112,6 +124,51 @@ const fmt = (d?: Date) =>
 
   .tags {
     letter-spacing: 0.02em;
+  }
+
+  .pn {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 52px;
+    padding-top: 22px;
+    border-top: 1px solid var(--border);
+  }
+
+  .pn-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .pn-box:last-child {
+    text-align: right;
+    align-items: flex-end;
+  }
+
+  .pn-box span {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  .pn-box b {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 15.5px;
+    color: var(--text);
+  }
+
+  .pn-box:hover {
+    border-color: var(--border-strong);
+  }
+
+  .pn-box:hover b {
+    color: var(--accent);
   }
 
   @media (max-width: 920px) {

@@ -1,0 +1,72 @@
+---
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import { SITE } from '../config';
+---
+
+<Base title="关于" description={`关于 ${SITE.author} 与这个站点`}>
+  <div class="container">
+    <article class="prose">
+      <h1>关于</h1>
+      <p>{SITE.bio}</p>
+
+      <h2>我在用</h2>
+      <p class="skills">{SITE.skills.join(' · ')}</p>
+
+      <h2>找到我</h2>
+      <div class="socials">
+        {
+          SITE.socials.map((s) => (
+            <a
+              class="social-link"
+              href={s.url}
+              target={s.url.startsWith('http') ? '_blank' : undefined}
+              rel="noopener"
+            >
+              <Icon name={s.icon} size={14} />
+              {s.label}
+            </a>
+          ))
+        }
+      </div>
+
+      <h2>关于本站</h2>
+      <p>
+        站名 <em>scio</em> 出自拉丁语 <em>Scio me nihil scire</em>（我知道我一无所知）。
+        这里是我的第二大脑：每篇笔记是一颗星，共享的标签把它们连成星图。
+        由 <a href="https://astro.build" target="_blank" rel="noopener">Astro</a> 构建，
+        托管在自己的服务器上。
+      </p>
+    </article>
+  </div>
+</Base>
+
+<style>
+  .skills {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    color: var(--text-2);
+  }
+
+  .socials {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    margin: 4px 0;
+  }
+
+  .social-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-2);
+    font-size: 13.5px;
+  }
+
+  .social-link:hover {
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 1px;
+  }
+</style>
