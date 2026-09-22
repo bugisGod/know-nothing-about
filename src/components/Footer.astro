@@ -4,6 +4,7 @@ import { SITE } from '../config';
 
 const year = new Date().getFullYear();
 const range = year > SITE.since ? `${SITE.since} – ${year}` : `${SITE.since}`;
+const ICP = '苏ICP备2026841369678号';
 ---
 
 <footer class="site-footer">
@@ -24,6 +25,15 @@ const range = year > SITE.since ? `${SITE.since} – ${year}` : `${SITE.since}`;
     }
     <span class="foot-sep" aria-hidden="true">·</span>
     <span class="footer-meta">© {range} {SITE.author}</span>
+    <span class="foot-sep" aria-hidden="true">·</span>
+    <a
+      class="footer-meta beian"
+      href="https://beian.miit.gov.cn/"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {ICP}
+    </a>
   </div>
 </footer>
 
@@ -43,5 +53,13 @@ const range = year > SITE.since ? `${SITE.since} – ${year}` : `${SITE.since}`;
 
   .foot-sep {
     color: var(--muted);
+  }
+
+  .beian {
+    text-decoration: none;
+  }
+
+  .beian:hover {
+    color: var(--text);
   }
 </style>
