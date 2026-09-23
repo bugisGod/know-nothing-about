@@ -3,77 +3,173 @@ import Base from '../../layouts/Base.astro';
 import { getCollection } from 'astro:content';
 import { CATEGORIES } from '../../config';
 
-const notes = await getCollection('notes', ({ data }) => !data.draft);
+const notes = (await getCollection('notes', ({ data }) => !data.draft))
+  .sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0));
 
-const groups = new Map<string, typeof notes>();
-for (const n of notes) {
-  const cat = n.id.includes('/') ? n.id.split('/')[0] : '未分类';
-  if (!groups.has(cat)) groups.set(cat, []);
-  groups.get(cat)!.push(n);
-}
+const catOf = (id: string) => (id.includes('/') ? id.split('/')[0] : '未分类');
+const catLabel = (c: string) => CATEGORIES[c]?.label ?? c;
 
-const cats = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+// 每篇的筛选维度 = 标签 ∪ 分类中文名；汇总成筛选条
+const dimsOf = (n: (typeof notes)[number]) =>
+  [...new Set([...n.data.tags, catLabel(catOf(n.id))])];
+
+const tagCount = new Map<string, number>();
+for (const n of notes) for (const t of dimsOf(n)) tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
+const chips = [...tagCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'));
 
 const fmt = (d?: Date) =>
   d ? `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}` : '';
 ---
 
-<Base title="知识库" description="按主题分类的知识笔记">
+<Base title="知识库" description="按标签筛选的笔记与学习记录">
   <div class="container">
     <h1 class="page-title">知识库</h1>
-    <p class="page-desc">
-      按主题分类的笔记。想补充内容时，往 <code>src/content/notes/</code> 对应分类文件夹里丢一个
-      Markdown 文件即可，侧边栏目录会自动生成。
-    </p>
-    {
-      cats.map((cat) => (
-        <section class="cat-sec" id={`cat-${cat}`}>
-          <h2>
-            <span class="cat-label">{CATEGORIES[cat]?.label ?? cat}</span>
-            <span class="count">{groups.get(cat)!.length} 篇</span>
-          </h2>
-          <div class="note-list">
-            {groups
-              .get(cat)!
-              .sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0))
-              .map((n) => (
-                <div class="note-row">
-                  <a class="t" href={`/notes/${n.id}/`}>
-                    {n.data.title}
-                  </a>
-                  {n.data.description && <span class="desc">{n.data.description}</span>}
-                  <span class="d">{fmt(n.data.date)}</span>
-                </div>
-              ))}
-          </div>
-        </section>
-      ))
-    }
+    <p class="page-desc">点标签筛选，或直接往下翻。</p>
+
+    <div id="tag-filter" class="filter-bar" role="tablist" aria-label="按标签筛选">
+      <button class="chip active" data-tag="__all">全部 <i>{notes.length}</i></button>
+      {
+        chips.map(([t, n]) => (
+          <button class="chip" data-tag={t}>
+            {t} <i>{n}</i>
+          </button>
+        ))
+      }
+    </div>
+
+    <div id="notes-list" class="note-list">
+      {
+        notes.map((n) => {
+          const dims = dimsOf(n);
+          return (
+            <div class="note-row" data-tags={dims.join(' ')}>
+              <a class="t" href={`/notes/${n.id}/`}>
+                {n.data.title}
+              </a>
+              {n.data.description && <span class="desc">{n.data.description}</span>}
+              <span class="mini-tags" aria-hidden="true">
+                {dims.slice(0, 3).map((d) => (
+                  <i>{d}</i>
+                ))}
+              </span>
+              <span class="d">{fmt(n.data.date)}</span>
+            </div>
+          );
+        })
+      }
+    </div>
+
+    <p class="empty" id="notes-empty" hidden>这个标签下还没有文章。</p>
   </div>
 </Base>
 
+<script>
+  // 客户端标签筛选（纯静态，无框架）
+  const bar = document.getElementById('tag-filter');
+  const list = document.getElementById('notes-list');
+  const empty = document.getElementById('notes-empty');
+  if (bar && list) {
+    const rows = [...list.querySelectorAll<HTMLElement>('.note-row')];
+    const chips = [...bar.querySelectorAll<HTMLButtonElement>('.chip')];
+    bar.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('.chip');
+      if (!btn) return;
+      chips.forEach((c) => c.classList.remove('active'));
+      btn.classList.add('active');
+      const tag = btn.dataset.tag;
+      let visible = 0;
+      for (const r of rows) {
+        const show = tag === '__all' || (r.dataset.tags ?? '').split(' ').includes(tag);
+        r.style.display = show ? '' : 'none';
+        if (show) visible++;
+      }
+      if (empty) empty.hidden = visible > 0;
+    });
+  }
+</script>
+
 <style>
-  .cat-sec {
-    margin-top: 44px;
-  }
-
-  .cat-sec h2 {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin: 0 0 2px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border);
+  .filter-bar {
     display: flex;
-    align-items: baseline;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 30px;
   }
 
-  .count {
-    font-weight: 400;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0;
+  .chip {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    padding: 5px 13px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .chip i {
+    font-style: normal;
+    color: var(--muted);
+    font-size: 11px;
+    margin-left: 3px;
+  }
+
+  .chip:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+
+  .chip.active {
+    color: var(--bg);
+    background: var(--text);
+    border-color: var(--text);
+  }
+
+  .chip.active i {
+    color: var(--text);
+    opacity: 0.6;
+  }
+
+  .mini-tags {
+    display: flex;
+    gap: 6px;
+  }
+
+  .mini-tags i {
+    font-style: normal;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    white-space: nowrap;
+  }
+
+  .empty {
+    color: var(--muted);
+    font-size: 14px;
+    padding: 28px 0;
+  }
+
+  @media (max-width: 640px) {
+    .filter-bar {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      margin-bottom: 20px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .chip {
+      flex: none;
+    }
+
+    .mini-tags {
+      display: none;
+    }
   }
 </style>

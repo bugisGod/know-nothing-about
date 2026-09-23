@@ -717,3 +717,34 @@ button {
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* ===== 手机端：笔记行纵向堆叠（标题/日期/描述）===== */
+@media (max-width: 640px) {
+  .note-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    padding: 16px 0;
+  }
+
+  .note-row .d {
+    margin-left: 0;
+    font-size: 11.5px;
+  }
+
+  .note-row .desc {
+    flex: none;
+    width: 100%;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.7;
+  }
+
+  .cat-sec {
+    margin-top: 34px;
+  }
+}
