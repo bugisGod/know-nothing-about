@@ -29,8 +29,8 @@ const fmt = (d?: Date) =>
       cats.map((cat) => (
         <section class="cat-sec" id={`cat-${cat}`}>
           <h2>
-            {CATEGORIES[cat]?.label ?? cat}
-            <span class="count">{groups.get(cat)!.length}</span>
+            <span class="cat-label">{CATEGORIES[cat]?.label ?? cat}</span>
+            <span class="count">{groups.get(cat)!.length} 篇</span>
           </h2>
           <div class="note-list">
             {groups

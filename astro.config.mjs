@@ -8,5 +8,6 @@ export default defineConfig({
   integrations: [sitemap()],
   markdown: {
     shikiConfig: { theme: 'vesper', wrap: true },
+    rehypeHeadingIds: {},
   },
 });

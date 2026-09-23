@@ -7,8 +7,10 @@ export async function getStaticPaths() {
   return notes.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
 }
 
-const { entry } = Astro.props;
+const { entry, headings } = Astro.props;
 const { Content } = await render(entry);
+// 目录：只取 h2/h3，忽略代码块内的假标题
+const toc = (headings ?? []).filter((h) => h.depth === 2 || h.depth === 3);
 
 const notes = await getCollection('notes', ({ data }) => !data.draft);
 const catOf = (id: string) => (id.includes('/') ? id.split('/')[0] : '未分类');
@@ -56,6 +58,21 @@ const fmt = (d?: Date) =>
       }
     </aside>
 
+    {
+      toc.length > 1 && (
+        <aside class="toc" aria-label="本文目录">
+          <div class="toc-title">目录</div>
+          <ul>
+            {toc.map((h) => (
+              <li class:list={[`lv${h.depth}`]}>
+                <a href={`#${h.slug}`}>{h.text}</a>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      )
+    }
+
     <article class="prose" data-pagefind-body>
       <div class="crumbs"><a href="/notes/">知识库</a> / {currentCat}</div>
       <h1>{entry.data.title}</h1>
@@ -76,9 +93,66 @@ const fmt = (d?: Date) =>
 <style>
   .notes-layout {
     display: grid;
-    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
     gap: 48px;
     align-items: start;
+  }
+
+  /* 本文目录（TOC）：宽屏右侧 sticky */
+  .toc {
+    display: none;
+  }
+
+  @media (min-width: 1200px) {
+    .notes-layout {
+      grid-template-columns: 220px minmax(0, 1fr) 200px;
+      gap: 56px;
+    }
+
+    .toc {
+      display: block;
+      position: sticky;
+      top: 96px;
+      max-height: calc(100vh - 140px);
+      overflow-y: auto;
+      font-size: 12.5px;
+    }
+
+    .toc-title {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .toc ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      border-left: 1px solid var(--border);
+    }
+
+    .toc li a {
+      display: block;
+      padding: 4px 0 4px 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .toc li.lv3 a {
+      padding-left: 26px;
+    }
+
+    .toc li a:hover {
+      color: var(--text);
+    }
+
+    /* 正文阅读宽度限制：42em ≈ 38-42 个汉字 */
+    .prose {
+      max-width: 42em;
+    }
   }
 
   .sidebar {
@@ -171,10 +245,20 @@ const fmt = (d?: Date) =>
     color: var(--accent);
   }
 
+  @media (max-width: 1199px) and (min-width: 921px) {
+    .prose {
+      max-width: 42em;
+    }
+  }
+
   @media (max-width: 920px) {
     .notes-layout {
       grid-template-columns: 1fr;
       gap: 28px;
+    }
+
+    .prose {
+      max-width: none;
     }
 
     .sidebar {
