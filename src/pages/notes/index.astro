@@ -1,154 +1,303 @@
 ---
 import Base from '../../layouts/Base.astro';
+import SkyBand from '../../components/SkyBand.astro';
 import { getCollection } from 'astro:content';
 import { CATEGORIES } from '../../config';
 
 const notes = (await getCollection('notes', ({ data }) => !data.draft))
   .sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0));
 
-// 按年分组
-const groups = new Map<number, typeof notes>();
-for (const n of notes) {
-  const y = n.data.date?.getFullYear() ?? 0;
-  if (!groups.has(y)) groups.set(y, []);
-  groups.get(y)!.push(n);
-}
-const years = [...groups.keys()].sort((a, b) => b - a);
+const catOf = (id: string) => (id.includes('/') ? id.split('/')[0] : '未分类');
+const catLabel = (c: string) => CATEGORIES[c]?.label ?? c;
 
 const fmtMD = (d?: Date) =>
   d ? `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}` : '';
+
+// 专栏：同系列文章归组（featured 置顶展示）
+const FEATURED = { id: 'ai-agent-book', title: '深入理解 AI Agent' };
+const seriesNotes = notes.filter((n) => n.data.series === FEATURED.id);
+const otherNotes = notes.filter((n) => n.data.series !== FEATURED.id);
+
+// 恒星生长阶段：按文章年龄自动标注（星辰宇宙的时间观）
+function stageOf(d?: Date) {
+  if (!d) return { glyph: '✦', label: '新星', cls: 'new' };
+  const days = (Date.now() - d.getTime()) / 86400000;
+  if (days <= 45) return { glyph: '✦', label: '新星', cls: 'new' };
+  if (days <= 365) return { glyph: '✧', label: '亮星', cls: 'bright' };
+  return { glyph: '★', label: '恒星', cls: 'stable' };
+}
 ---
 
-<Base title="知识库" description="scio 的知识库">
-  <div class="wcontainer">
-    <header class="head">
-      <h1>知识库</h1>
-      <p class="sub">{notes.length} 篇 · 持续生长</p>
-    </header>
-
+<Base title="知识库" description="scio 的知识库：笔记与学习记录，持续生长">
+  <div class="container">
+    <!-- 专栏特色卡：深入理解 AI Agent -->
     {
-      years.map((y) => (
-        <section class="year-group">
-          <h2>{y}</h2>
-          <div class="entries">
-            {groups.get(y)!.map((n) => (
-              <a class="row" href={`/notes/${n.id}/`}>
-                <span class="t">{n.data.title}</span>
-                {n.data.tags.length > 0 && (
-                  <span class="tags">{n.data.tags.map((t) => `#${t}`).join(' ')}</span>
-                )}
-                <span class="d">{fmtMD(n.data.date)}</span>
-              </a>
-            ))}
+      seriesNotes.length > 0 && (
+        <section class="column-card" aria-label={`专栏：${FEATURED.title}`}>
+          <header class="cc-head">
+            <div class="cc-title-wrap">
+              <span class="cc-kicker">✦ 专栏</span>
+              <h2 class="cc-title">{FEATURED.title}</h2>
+            </div>
+            <span class="cc-count">{seriesNotes.length} 篇 · 进行中</span>
+          </header>
+          <div class="cc-list">
+            {
+              seriesNotes.map((n) => (
+                <a class="cc-row" href={`/notes/${n.id}/`}>
+                  <span class="cc-t">{n.data.title}</span>
+                  <span class="cc-d">{fmtMD(n.data.date)}</span>
+                </a>
+              ))
+            }
           </div>
         </section>
-      ))
+      )
     }
+
+    <!-- 全部笔记：卡片网格 -->
+    <section class="sec">
+      <h2 class="sec-h">全部笔记</h2>
+      <div class="card-grid">
+        {
+          otherNotes.map((n) => {
+            const st = stageOf(n.data.date);
+            return (
+              <a class="card note-card" href={`/notes/${n.id}/`}>
+                <span class={`stage ${st.cls}`} aria-hidden="true">
+                  {st.glyph} {st.label}
+                </span>
+                <h3 class="t">{n.data.title}</h3>
+                {n.data.description && <p class="desc">{n.data.description}</p>}
+                <div class="meta">
+                  <span class="tags">{n.data.tags.map((t) => `#${t}`).join('  ')}</span>
+                  <span class="d">{catLabel(catOf(n.id))} · {fmtMD(n.data.date)}</span>
+                </div>
+              </a>
+            );
+          })
+        }
+      </div>
+    </section>
   </div>
 </Base>
 
 <style>
-  .wcontainer {
+  .container {
     max-width: 1080px;
     margin-inline: auto;
     padding-inline: 24px;
   }
 
-  .head {
-    margin: 12px 0 24px;
+  .sec-h {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 40px 0 18px;
   }
 
-  .head h1 {
+  /* ===== 专栏特色卡 ===== */
+  .column-card {
+    margin: 40px 0 12px;
+    padding: 28px 32px 14px;
+    border: 1px solid rgba(232, 230, 223, 0.1);
+    border-radius: 16px;
+    background:
+      radial-gradient(120% 100% at 0% 0%, rgba(96, 118, 255, 0.07), transparent 55%),
+      color-mix(in oklab, #12141d 86%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .cc-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+
+  .cc-kicker {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  .cc-title {
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: clamp(34px, 4.5vw, 44px);
+    font-size: 25px;
     letter-spacing: 0.01em;
-    margin: 0 0 8px;
-  }
-
-  .sub {
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: 0.14em;
-    color: var(--muted);
+    color: var(--text);
     margin: 0;
   }
 
-  .year-group {
-    margin-top: 34px;
-  }
-
-  .year-group h2 {
+  .cc-count {
     font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 400;
-    letter-spacing: 0.3em;
-    color: var(--accent);
-    margin: 0 0 4px;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
   }
 
-  .row {
+  .cc-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cc-row {
     display: flex;
     align-items: baseline;
-    gap: 14px;
-    padding: 13px 0;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 13px 2px;
     border-bottom: 1px solid var(--border);
   }
 
-  .t {
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 18.5px;
-    letter-spacing: 0.01em;
+  .cc-row:last-child {
+    border-bottom: none;
+  }
+
+  .cc-t {
+    font-family: var(--font-sans);
+    font-weight: 550;
+    font-size: 15.5px;
     color: var(--text);
-    line-height: 1.5;
-    min-width: 0;
+    line-height: 1.6;
   }
 
-  .row:hover .t {
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 6px;
-    text-decoration-color: var(--accent);
+  .cc-row:hover .cc-t {
+    color: var(--accent);
   }
 
-  .tags {
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.03em;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .d {
+  .cc-d {
     font-family: var(--mono);
     font-size: 12px;
     color: var(--muted);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
-    margin-left: auto;
+  }
+
+  /* ===== 全部笔记：卡片网格 ===== */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+  }
+
+  .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 24px 26px;
+    border: 1px solid rgba(232, 230, 223, 0.09);
+    border-radius: 16px;
+    background:
+      radial-gradient(120% 90% at 20% 0%, rgba(96, 118, 255, 0.05), transparent 60%),
+      color-mix(in oklab, #12141d 86%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: border-color 0.2s ease, transform 0.25s ease;
+  }
+
+  .card:hover {
+    border-color: rgba(232, 230, 223, 0.22);
+    transform: translateY(-3px);
+  }
+
+  .stage {
+    position: absolute;
+    top: 16px;
+    right: 18px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+
+  .stage.new {
+    color: var(--accent);
+  }
+
+  .t {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 20px;
+    letter-spacing: 0.01em;
+    line-height: 1.5;
+    color: var(--text);
+    margin: 0;
+    padding-right: 56px;
+  }
+
+  .card:hover .t {
+    color: var(--accent);
+  }
+
+  .desc {
+    margin: 0;
+    color: var(--text-2);
+    font-size: 13.5px;
+    line-height: 1.8;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: auto;
+    padding-top: 6px;
+  }
+
+  .tags {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .d {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
 
   @media (max-width: 640px) {
-    .head {
-      margin-top: 4px;
+    .column-card {
+      padding: 22px 20px 8px;
     }
 
-    .row {
-      gap: 10px;
-      padding: 12px 0;
+    .cc-title {
+      font-size: 21px;
+    }
+
+    .card {
+      padding: 20px;
     }
 
     .t {
-      font-size: 17px;
+      font-size: 18px;
+      padding-right: 0;
     }
 
-    .tags {
-      display: none;
+    .stage {
+      position: static;
+      order: -1;
     }
   }
 </style>

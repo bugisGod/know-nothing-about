@@ -9,6 +9,8 @@ const notes = defineCollection({
     description: z.string().optional(),
     date: z.coerce.date().optional(),
     tags: z.array(z.string()).default([]),
+    // 专栏：同系列文章归组（如书名），详情页显示归属与序号
+    series: z.string().optional(),
     draft: z.boolean().default(false),
   }),
 });

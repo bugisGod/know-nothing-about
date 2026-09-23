@@ -30,6 +30,11 @@ export const SITE = {
   since: 2026,
 };
 
+// 专栏：series slug → 展示名
+export const SERIES: Record<string, { title: string }> = {
+  'ai-agent-book': { title: '深入理解 AI Agent' },
+};
+
 // 知识库分类的展示信息：文件夹名 → 中文名 + 一句话描述
 // 用于星图锚星标签、图例、知识库分区标题；没配置的分类回退显示文件夹名
 export const CATEGORIES: Record<string, { label: string; desc: string }> = {

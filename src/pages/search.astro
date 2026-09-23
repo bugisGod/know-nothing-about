@@ -1,11 +1,16 @@
 ---
 import Base from '../layouts/Base.astro';
+import SkyBand from '../components/SkyBand.astro';
 ---
 
 <Base title="搜索" description="搜索知识库与项目复盘">
+  <SkyBand compact>
+    <div class="container">
+      <h1 class="page-title">搜索</h1>
+      <p class="page-desc">搜索范围：知识库笔记与项目复盘的正文。</p>
+    </div>
+  </SkyBand>
   <div class="container">
-    <h1 class="page-title">搜索</h1>
-    <p class="page-desc">搜索范围：知识库笔记与项目复盘的正文。</p>
 
     <div id="search"></div>
 

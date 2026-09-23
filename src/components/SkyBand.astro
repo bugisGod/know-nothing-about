@@ -1,0 +1,38 @@
+---
+// 夜空页眉带：子页面统一「入主题」——渐变 + 星点 + 星云光晕
+// 用法：<SkyBand><h1 class="page-title">…</h1><p class="page-desc">…</p></SkyBand>
+interface Props {
+  /** 是否更矮的紧凑版（如搜索页） */
+  compact?: boolean;
+}
+
+const { compact = false } = Astro.props;
+---
+
+<div class:list={['sky-band', { compact }]}>
+  <div class="container">
+    <slot />
+  </div>
+</div>
+
+<style>
+  .sky-band {
+    margin-top: -40px; /* 抵消 main 顶边距，夜空直通页头 */
+    padding: 56px 0 40px;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(1.5px 1.5px at 12% 22%, rgba(255, 255, 255, 0.65), transparent 100%),
+      radial-gradient(1px 1px at 34% 12%, rgba(255, 255, 255, 0.5), transparent 100%),
+      radial-gradient(1.5px 1.5px at 58% 30%, rgba(255, 255, 255, 0.55), transparent 100%),
+      radial-gradient(1px 1px at 76% 16%, rgba(255, 255, 255, 0.45), transparent 100%),
+      radial-gradient(1px 1px at 90% 40%, rgba(255, 255, 255, 0.4), transparent 100%),
+      radial-gradient(52% 60% at 16% 20%, rgba(96, 118, 255, 0.09), transparent 70%),
+      radial-gradient(44% 52% at 84% 30%, rgba(168, 122, 255, 0.07), transparent 72%),
+      linear-gradient(to bottom, #12141f 0%, #0d0e18 62%, var(--bg) 100%);
+  }
+
+  .sky-band :global(.container) {
+    position: relative;
+  }
+</style>

@@ -1,8 +1,9 @@
 ---
-title: 第一章 × ZCode 源码对照精读
+title: 把书读进源码：ZCode 六站对照精读
 description: 六个站点实地课：把书里的概念逐一落到 ZCode 的真实代码上
 date: 2026-09-21
-tags: [AI, 阅读笔记, ZCode]
+tags: [AI, ZCode]
+series: ai-agent-book
 ---
 
 > 对照对象：`F:\Projects\ZCode`（github.com/zai-org/ZCode 开源仓库，本地已可构建运行）

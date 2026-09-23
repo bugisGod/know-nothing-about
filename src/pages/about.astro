@@ -1,13 +1,18 @@
 ---
 import Base from '../layouts/Base.astro';
+import SkyBand from '../components/SkyBand.astro';
 import Icon from '../components/Icon.astro';
 import { SITE } from '../config';
 ---
 
 <Base title="关于" description={`关于 ${SITE.author} 与这个站点`}>
+  <SkyBand>
+    <div class="container">
+      <h1>关于</h1>
+    </div>
+  </SkyBand>
   <div class="container">
     <article class="prose">
-      <h1>关于</h1>
       <p>{SITE.bio}</p>
 
       <h2>我在用</h2>

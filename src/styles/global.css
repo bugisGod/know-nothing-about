@@ -65,6 +65,10 @@ body::before {
     radial-gradient(1px 1px at 57% 12%, rgba(255, 255, 255, 0.3), transparent 100%),
     radial-gradient(1px 1px at 74% 48%, rgba(255, 255, 255, 0.26), transparent 100%),
     radial-gradient(1.5px 1.5px at 91% 30%, rgba(255, 255, 255, 0.34), transparent 100%),
+    radial-gradient(1px 1px at 15% 82%, rgba(255, 255, 255, 0.22), transparent 100%),
+    radial-gradient(1px 1px at 62% 74%, rgba(255, 255, 255, 0.2), transparent 100%),
+    radial-gradient(45% 32% at 82% 12%, rgba(96, 118, 255, 0.05), transparent 70%),
+    radial-gradient(38% 30% at 12% 60%, rgba(129, 111, 255, 0.04), transparent 72%),
     radial-gradient(1100px 480px at 50% -180px, var(--wash), transparent 72%);
   background-repeat: no-repeat;
 }
@@ -118,9 +122,14 @@ button {
 }
 
 .container {
-  max-width: 980px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 0 24px;
+}
+
+/* 三栏文档页（笔记详情）专用宽容器 */
+.container.wide {
+  max-width: 1280px;
 }
 
 .site-main {
@@ -232,11 +241,22 @@ button {
 .page-title {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(32px, 4.5vw, 42px);
+  font-size: clamp(36px, 4.5vw, 44px);
   letter-spacing: 0.01em;
   line-height: 1.25;
-  margin: 14px 0 12px;
+  margin: 10px 0 12px;
   text-wrap: balance;
+}
+
+/* 页眉带内标题：琥珀星标点缀 */
+.sky-band .page-title::before,
+.sky-band h1:not(.page-title)::before {
+  content: '✦ ';
+  color: var(--accent);
+  font-size: 0.55em;
+  vertical-align: 0.35em;
+  letter-spacing: 0;
+  margin-right: 2px;
 }
 
 .page-desc {
@@ -685,6 +705,12 @@ button {
   color: var(--muted);
   background: none;
   padding: 0;
+}
+
+/* ===== 书籍配图：暗色适配（白底线稿反色融入夜色）===== */
+.prose img {
+  filter: invert(0.92) hue-rotate(180deg);
+  border: 1px solid var(--border);
 }
 
 /* ===== 代码块复制按钮 ===== */

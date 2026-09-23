@@ -1,5 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
+import SkyBand from '../../components/SkyBand.astro';
+import { SERIES } from '../../config';
 import { getCollection, render } from 'astro:content';
 
 export async function getStaticPaths() {
@@ -36,11 +38,27 @@ const older = idx >= 0 && idx < sortedNotes.length - 1 ? sortedNotes[idx + 1] : 
 
 const currentCat = catOf(entry.id);
 
+// 专栏：同 series 的文章按日期排序，标注归属与序号
+const seriesName = entry.data.series;
+const seriesMates = seriesName
+  ? [...notes].filter((n) => n.data.series === seriesName)
+      .sort((a, b) => (a.data.date?.getTime() ?? 0) - (b.data.date?.getTime() ?? 0))
+  : [];
+const seriesIdx = seriesMates.findIndex((n) => n.id === entry.id);
+
 const fmt = (d?: Date) =>
   d ? `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}` : '';
 ---
 
 <Base title={entry.data.title} description={entry.data.description ?? entry.data.title}>
+  <SkyBand>
+    <div class="crumbs"><a href="/notes/">知识库</a> / <span class="cur-cat">{currentCat}</span></div>
+    <h1>{entry.data.title}</h1>
+    <div class="page-meta">
+      <span>更新于 {fmt(entry.data.date)}</span>
+      <span class="tags-inline">{entry.data.tags.map((t) => `#${t}`).join('  ')}</span>
+    </div>
+  </SkyBand>
   <div class="ncontainer">
   <div class="notes-layout">
     <aside class="sidebar" aria-label="知识库目录">
@@ -60,12 +78,9 @@ const fmt = (d?: Date) =>
 
 
     <article class="prose" data-pagefind-body>
-      <div class="crumbs"><a href="/notes/">知识库</a> / {currentCat}</div>
-      <h1>{entry.data.title}</h1>
-      <div class="page-meta">
-        {entry.data.date && <span>更新于 {fmt(entry.data.date)}</span>}
-        <span class="tags">{entry.data.tags.map((t) => `#${t}`).join('  ')}</span>
-      </div>
+      {seriesName && (
+        <div class="series-badge">专栏 · {SERIES[seriesName]?.title ?? seriesName} · {String(seriesIdx + 1).padStart(2, '0')}/{String(seriesMates.length).padStart(2, '0')}</div>
+      )}
       <Content />
       <nav class="pn">
         {older ? <a class="pn-box" href={`/notes/${older.id}/`}><span>← 下一篇</span><b>{older.data.title}</b></a> : <span />}
@@ -198,9 +213,9 @@ const fmt = (d?: Date) =>
   }
 
   .sidebar a.current {
-    color: var(--text);
+    color: var(--accent);
     font-weight: 500;
-    border-left-color: var(--text);
+    border-left-color: var(--accent);
   }
 
   .tags {

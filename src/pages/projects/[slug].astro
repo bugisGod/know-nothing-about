@@ -1,5 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
+import SkyBand from '../../components/SkyBand.astro';
 import Icon from '../../components/Icon.astro';
 import { getCollection, render } from 'astro:content';
 
@@ -17,10 +18,14 @@ const fmt = (date: Date) =>
 ---
 
 <Base title={d.title} description={d.description}>
+  <SkyBand>
+    <div class="container">
+      <div class="crumbs"><a href="/projects/">项目复盘</a> / {d.status}</div>
+      <h1>{d.title}</h1>
+    </div>
+  </SkyBand>
   <div class="container">
   <article class="prose" data-pagefind-body>
-    <div class="crumbs"><a href="/projects/">项目复盘</a> / {d.status}</div>
-    <h1>{d.title}</h1>
     <div class="page-meta">
       {d.period && <span>{d.period}</span>}
       {d.role && <span>{d.role}</span>}
