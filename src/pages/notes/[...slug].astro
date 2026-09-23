@@ -7,8 +7,8 @@ export async function getStaticPaths() {
   return notes.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
 }
 
-const { entry, headings } = Astro.props;
-const { Content } = await render(entry);
+const { entry } = Astro.props;
+const { Content, headings } = await render(entry);
 // 目录：只取 h2/h3，忽略代码块内的假标题
 const toc = (headings ?? []).filter((h) => h.depth === 2 || h.depth === 3);
 
@@ -41,7 +41,7 @@ const fmt = (d?: Date) =>
 ---
 
 <Base title={entry.data.title} description={entry.data.description ?? entry.data.title}>
-  <div class="container">
+  <div class="ncontainer">
   <div class="notes-layout">
     <aside class="sidebar" aria-label="知识库目录">
       {
@@ -58,20 +58,6 @@ const fmt = (d?: Date) =>
       }
     </aside>
 
-    {
-      toc.length > 1 && (
-        <aside class="toc" aria-label="本文目录">
-          <div class="toc-title">目录</div>
-          <ul>
-            {toc.map((h) => (
-              <li class:list={[`lv${h.depth}`]}>
-                <a href={`#${h.slug}`}>{h.text}</a>
-              </li>
-            ))}
-          </ul>
-        </aside>
-      )
-    }
 
     <article class="prose" data-pagefind-body>
       <div class="crumbs"><a href="/notes/">知识库</a> / {currentCat}</div>
@@ -86,15 +72,36 @@ const fmt = (d?: Date) =>
         {newer ? <a class="pn-box" href={`/notes/${newer.id}/`}><span>上一篇 →</span><b>{newer.data.title}</b></a> : <span />}
       </nav>
     </article>
+
+    {
+      toc.length > 1 && (
+        <aside class="toc" aria-label="本文目录">
+          <div class="toc-title">目录</div>
+          <ul>
+            {toc.map((h) => (
+              <li class:list={[`lv${h.depth}`]}>
+                <a href={`#${h.slug}`}>{h.text}</a>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      )
+    }
   </div>
   </div>
 </Base>
 
 <style>
+  .ncontainer {
+    max-width: 1280px;
+    margin-inline: auto;
+    padding-inline: 24px;
+  }
+
   .notes-layout {
     display: grid;
-    grid-template-columns: 220px minmax(0, 1fr);
-    gap: 48px;
+    grid-template-columns: 220px minmax(0, 1fr) 200px;
+    gap: 56px;
     align-items: start;
   }
 

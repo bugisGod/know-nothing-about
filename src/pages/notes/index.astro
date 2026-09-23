@@ -20,7 +20,7 @@ const fmtMD = (d?: Date) =>
 ---
 
 <Base title="知识库" description="scio 的知识库">
-  <div class="container">
+  <div class="wcontainer">
     <header class="head">
       <h1>知识库</h1>
       <p class="sub">{notes.length} 篇 · 持续生长</p>
@@ -48,6 +48,12 @@ const fmtMD = (d?: Date) =>
 </Base>
 
 <style>
+  .wcontainer {
+    max-width: 1080px;
+    margin-inline: auto;
+    padding-inline: 24px;
+  }
+
   .head {
     margin: 12px 0 24px;
   }
