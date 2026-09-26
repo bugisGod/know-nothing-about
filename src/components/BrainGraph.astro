@@ -209,6 +209,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     opacity: 0.9;
     text-shadow: 0 1px 6px rgba(7, 8, 14, 0.9);
     will-change: transform;
+    transition: opacity 0.45s ease; /* 转入背面淡出、漂回正面淡入 */
   }
 
   .graph-caption {
@@ -437,8 +438,9 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       sprites.push(sp);
     }
 
-    // 锚星名字标签（HTML 覆盖层，跟随投影位置）
-    const labels: { el: HTMLDivElement; i: number }[] = [];
+    // 锚星名字标签（HTML 覆盖层，跟随投影位置）；w 供标签避让算屏宽
+    const _lv = new THREE.Vector3();
+    const labels: { el: HTMLDivElement; i: number; w: number }[] = [];
     nodes.forEach((n, i) => {
       if (!n.anchor) return;
       const el = document.createElement('div');
@@ -446,7 +448,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       el.textContent = n.title;
       if (n.color) el.style.color = n.color;
       frame.appendChild(el);
-      labels.push({ el, i });
+      labels.push({ el, i, w: el.offsetWidth });
     });
 
     // ===== 边：星尘轨迹（点连线，全图只有光点、没有笔画）=====
@@ -785,16 +787,30 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       if (ring.visible && hovered >= 0)
         ring.position.set(pos[hovered * 3], pos[hovered * 3 + 1], pos[hovered * 3 + 2]);
 
-      // 锚星标签跟随投影位置
+      // 锚星标签：只亮视深最靠前的 K 个（2 颗→1、6 颗→2、封顶 4），
+      // 星空缓转时排名自然轮换 → 「漂到正面才显示」；再叠屏幕避让，锚星再多不叠罗汉
       if (labels.length) {
         const w = mount.clientWidth, h = mount.clientHeight;
-        for (const L of labels) {
+        const K = Math.min(4, Math.max(1, Math.round(labels.length / 3)));
+        const order = labels
+          .map((L) => {
+            _lv.set(pos[L.i * 3], pos[L.i * 3 + 1], pos[L.i * 3 + 2]).applyMatrix4(group.matrixWorld);
+            return { L, z: _lv.z };
+          })
+          .sort((a, b) => b.z - a.z);
+        const taken: { x: number; y: number; w: number }[] = [];
+        order.forEach(({ L, z }, rank) => {
           tmp.set(pos[L.i * 3], pos[L.i * 3 + 1], pos[L.i * 3 + 2])
             .applyMatrix4(group.matrixWorld)
             .project(camera);
-          L.el.style.transform = `translate(${(tmp.x * 0.5 + 0.5) * w}px, ${(-tmp.y * 0.5 + 0.5) * h}px) translate(-50%, 16px)`;
-          L.el.style.opacity = tmp.z < 1 ? '' : '0';
-        }
+          const x = (tmp.x * 0.5 + 0.5) * w;
+          const y = (-tmp.y * 0.5 + 0.5) * h;
+          const lit = rank < K && z > -1 && tmp.z < 1;
+          const busy = lit && taken.some((r) => Math.abs(x - r.x) < (r.w + L.w) / 2 + 10 && Math.abs(y - r.y) < 18);
+          if (lit && !busy) taken.push({ x, y, w: L.w });
+          L.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, 16px)`;
+          L.el.style.opacity = !lit || busy ? '0' : '';
+        });
       }
       renderer.render(scene, camera);
     }
