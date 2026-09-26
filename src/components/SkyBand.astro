@@ -1,55 +1,47 @@
----
-// 夜空页眉带：子页面统一「入主题」——渐变 + 星点 + 星云光晕
-// 用法：<SkyBand><h1 class="page-title">…</h1><p class="page-desc">…</p></SkyBand>
-// wide：内容容器放宽到 1280（三栏详情页用，保证页眉与正文一条中轴线）
+﻿---
 interface Props {
-  /** 是否更矮的紧凑版（如搜索页） */
   compact?: boolean;
-  /** 容器放宽到 1280（与正文 .container.wide 对齐） */
-  wide?: boolean;
+  reading?: boolean;
 }
-
-const { compact = false, wide = false } = Astro.props;
+const { compact = false, reading = false } = Astro.props;
 ---
 
-<div class:list={['sky-band', { compact }]}>
-  <div class:list={['container', { wide }]}>
+<header class:list={["sky-band", { compact, reading }]}>
+  <div class="container">
     <slot />
   </div>
-</div>
-
+</header>
 <style>
   .sky-band {
-    margin-top: -40px; /* 抵消 main 顶边距，夜空直通页头 */
-    padding: 56px 0 46px;
-    position: relative;
-    overflow: hidden;
-    background:
-      /* 标题区暗晕：文字沉进净空的黑暗里，轮值背景的光轨不再贴脸穿过标题 */
-      radial-gradient(52% 110% at 50% 46%, rgba(9, 10, 17, 0.42), rgba(9, 10, 17, 0.16) 56%, transparent 78%),
-      radial-gradient(1.5px 1.5px at 12% 22%, rgba(255, 255, 255, 0.65), transparent 100%),
-      radial-gradient(1px 1px at 34% 12%, rgba(255, 255, 255, 0.5), transparent 100%),
-      radial-gradient(1.5px 1.5px at 58% 30%, rgba(255, 255, 255, 0.55), transparent 100%),
-      radial-gradient(1px 1px at 76% 16%, rgba(255, 255, 255, 0.45), transparent 100%),
-      radial-gradient(1px 1px at 90% 40%, rgba(255, 255, 255, 0.4), transparent 100%),
-      radial-gradient(52% 60% at 16% 20%, rgba(96, 118, 255, 0.09), transparent 70%),
-      radial-gradient(44% 52% at 84% 30%, rgba(168, 122, 255, 0.07), transparent 72%),
-      /* 半透明夜色：全局星空（含星座）从页头后透出，整页连续 */
-      linear-gradient(to bottom, rgba(18, 20, 31, 0.78) 0%, rgba(13, 14, 24, 0.5) 55%, rgba(11, 12, 18, 0.12) 100%);
+    padding: 68px 0 42px;
   }
-
-  .sky-band :global(.container) {
-    position: relative;
+  .sky-band.compact {
+    padding-top: 48px;
   }
-
-  /* 垂直节奏统一：带内最后元素下边距清零，与正文间距只由 padding-bottom 决定 */
-  .sky-band :global(.container > :last-child) {
+  .sky-band.reading .container {
+    max-width: 1040px;
+  }
+  .sky-band :global(h1) {
+    max-width: 740px;
+    font-family: var(--font-display);
+    font-size: clamp(30px, 3.4vw, 44px);
+    font-weight: 400;
+    line-height: 1.4;
+    margin: 14px 0 18px;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .sky-band :global(.page-desc) {
     margin-bottom: 0;
   }
-
-  @media (max-width: 640px) {
-    .sky-band {
-      padding: 30px 0 26px;
+  @media (max-width: 760px) {
+    .sky-band,
+    .sky-band.compact {
+      padding: 32px 0 24px;
+    }
+    .sky-band :global(h1) {
+      font-size: 28px;
+      text-wrap: initial;
     }
   }
 </style>

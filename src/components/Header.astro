@@ -1,34 +1,119 @@
----
-import { SITE } from '../config';
-
+﻿---
+import { SITE } from "../config";
 const nav = [
-  { href: '/notes/', label: '知识库' },
-  { href: '/projects/', label: '项目' },
-  { href: '/about/', label: '关于' },
-  { href: '/search/', label: '搜索' },
+  { href: "/notes/", label: "知识库" },
+  { href: "/projects/", label: "项目" },
+  { href: "/about/", label: "关于" },
+  { href: "/search/", label: "搜索" },
 ];
-
-const path = Astro.url.pathname;
-const isActive = (href: string) => path.startsWith(href);
+const isActive = (href: string) => Astro.url.pathname.startsWith(href);
 ---
 
 <header class="site-header">
   <div class="container header-inner">
-    <a class="logo" href="/">{SITE.title}<span class="logo-dot" aria-hidden="true">.</span></a>
-    <nav>
-      {
-        nav.map((item) => (
-          <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined} class:list={[{ active: isActive(item.href) }]}>
+    <a class="logo" href="/" aria-label="scio 首页">
+      {SITE.title}
+      <span class="logo-dot" aria-hidden="true">
+        .
+      </span>
+    </a>
+    <nav class="desktop-nav" aria-label="主导航">
+      {nav.map((item) => (
+        <a
+          href={item.href}
+          aria-current={isActive(item.href) ? "page" : undefined}
+          class:list={[{ active: isActive(item.href) }]}
+        >
+          {item.label}
+        </a>
+      ))}
+    </nav>
+    <details class="mobile-menu">
+      <summary aria-label="打开导航菜单">
+        <span></span>
+        <span></span>
+      </summary>
+      <nav aria-label="手机导航">
+        {nav.map((item) => (
+          <a
+            href={item.href}
+            aria-current={isActive(item.href) ? "page" : undefined}
+          >
             {item.label}
           </a>
-        ))
-      }
-    </nav>
+        ))}
+      </nav>
+    </details>
   </div>
 </header>
-
 <style>
-  .logo-dot {
+  .mobile-menu {
+    display: none;
+    position: relative;
+    margin-left: auto;
+  }
+  summary {
+    list-style: none;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary span {
+    width: 18px;
+    height: 1px;
+    background: var(--text-2);
+  }
+  .mobile-menu nav {
+    position: absolute;
+    right: 0;
+    top: 52px;
+    width: 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 0;
+    padding: 12px;
+    background: #101620;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 20px 40px #0005;
+  }
+  .mobile-menu nav a {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+  .mobile-menu nav a[aria-current] {
     color: var(--accent);
   }
+  @media (max-width: 560px) {
+    .desktop-nav {
+      display: none;
+    }
+    .mobile-menu {
+      display: block;
+    }
+  }
 </style>
+<script>
+  const menu = document.querySelector<HTMLDetailsElement>(".mobile-menu");
+  if (menu) {
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && menu.open) {
+        menu.open = false;
+        menu.querySelector("summary")?.focus();
+      }
+    });
+    document.addEventListener("click", (e) => {
+      if (e.target instanceof Node && !menu.contains(e.target))
+        menu.open = false;
+    });
+  }
+</script>

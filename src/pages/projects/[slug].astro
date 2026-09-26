@@ -1,38 +1,44 @@
----
-import Base from '../../layouts/Base.astro';
-import SkyBand from '../../components/SkyBand.astro';
-import Icon from '../../components/Icon.astro';
-import { getCollection, render } from 'astro:content';
+﻿---
+import Base from "../../layouts/Base.astro";
+import SkyBand from "../../components/SkyBand.astro";
+import Icon from "../../components/Icon.astro";
+import ArticleToc from "../../components/ArticleToc.astro";
+import { getCollection, render } from "astro:content";
 
 export async function getStaticPaths() {
-  const projects = await getCollection('projects', ({ data }) => !data.draft);
-  return projects.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+  const projects = await getCollection("projects", ({ data }) => !data.draft);
+  return projects.map((entry) => ({
+    params: { slug: entry.id },
+    props: { entry },
+  }));
 }
 
 const { entry } = Astro.props;
-const { Content } = await render(entry);
+const { Content, headings } = await render(entry);
 const d = entry.data;
 
 const fmt = (date: Date) =>
-  `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+  `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 ---
 
 <Base title={d.title} description={d.description}>
-  <SkyBand>
-      <div class="crumbs"><a href="/projects/">项目复盘</a> / {d.status}</div>
-      <h1>{d.title}</h1>
-  </SkyBand>
-  <div class="container">
-  <article class="prose" data-pagefind-body>
-    <div class="page-meta">
-      {d.period && <span>{d.period}</span>}
-      {d.role && <span>{d.role}</span>}
-      <span>更新于 {fmt(d.date)}</span>
+  <SkyBand reading>
+    <div class="crumbs">
+      <a href="/projects/">项目复盘</a> / {d.status}
     </div>
-    <div class="sub-lines">
-      <span class="tech">{d.tech.join(' / ')}</span>
-      {
-        (d.link || d.repo) && (
+    <h1>{d.title}</h1>
+  </SkyBand>
+  <div class="container reading-container article-layout">
+    <ArticleToc headings={headings} />
+    <article class="prose" data-pagefind-body>
+      <div class="page-meta">
+        {d.period && <span>{d.period}</span>}
+        {d.role && <span>{d.role}</span>}
+        <span>更新于 {fmt(d.date)}</span>
+      </div>
+      <div class="sub-lines">
+        <span class="tech">{d.tech.join(" / ")}</span>
+        {(d.link || d.repo) && (
           <span class="links">
             {d.link && (
               <a href={d.link} target="_blank" rel="noopener">
@@ -45,11 +51,10 @@ const fmt = (date: Date) =>
               </a>
             )}
           </span>
-        )
-      }
-    </div>
-    <Content />
-  </article>
+        )}
+      </div>
+      <Content />
+    </article>
   </div>
 </Base>
 

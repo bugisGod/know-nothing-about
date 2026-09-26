@@ -1,346 +1,279 @@
----
-import Base from '../../layouts/Base.astro';
-import SkyBand from '../../components/SkyBand.astro';
-import { getCollection } from 'astro:content';
-import { CATEGORIES } from '../../config';
-
-const notes = (await getCollection('notes', ({ data }) => !data.draft))
-  .sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0));
-
-const catOf = (id: string) => (id.includes('/') ? id.split('/')[0] : '未分类');
-const catLabel = (c: string) => CATEGORIES[c]?.label ?? c;
-
-const fmtMD = (d?: Date) =>
-  d ? `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}` : '';
-
-// 专栏：同系列文章归组（featured 置顶展示）
-const FEATURED = { id: 'ai-agent-book', title: '深入理解 AI Agent' };
-const seriesNotes = notes.filter((n) => n.data.series === FEATURED.id);
-const otherNotes = notes.filter((n) => n.data.series !== FEATURED.id);
-
-// 恒星生长阶段：按文章年龄自动标注（星辰宇宙的时间观）
-function stageOf(d?: Date) {
-  if (!d) return { glyph: '✦', label: '新星', cls: 'new' };
-  const days = (Date.now() - d.getTime()) / 86400000;
-  if (days <= 45) return { glyph: '✦', label: '新星', cls: 'new' };
-  if (days <= 365) return { glyph: '✧', label: '亮星', cls: 'bright' };
-  return { glyph: '★', label: '恒星', cls: 'stable' };
-}
+﻿---
+import Base from "../../layouts/Base.astro";
+import SkyBand from "../../components/SkyBand.astro";
+import { CATEGORIES, SERIES } from "../../config";
+import { getCollection } from "astro:content";
+const notes = (await getCollection("notes", ({ data }) => !data.draft)).sort(
+  (a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0),
+);
+const catOf = (id: string) => id.split("/")[0];
+const cats = [...new Set(notes.map((n) => catOf(n.id)))].sort();
+const series = Object.entries(SERIES)
+  .map(([id, s]) => ({
+    ...s,
+    id,
+    entries: notes.filter((n) => n.data.series === id),
+  }))
+  .filter((s) => s.entries.length);
+const fmt = (date?: Date) =>
+  date?.toISOString().slice(0, 10).replaceAll("-", ".") ?? "";
 ---
 
-<Base title="知识库" description="scio 的知识库：笔记与学习记录，持续生长">
+<Base title="知识库" description="笔记与学习记录">
   <SkyBand>
-    <header class="head">
-      <h1>知识库</h1>
-      <p class="sub">{notes.length} 篇 · 持续生长</p>
-    </header>
+    <h1>知识库</h1>
   </SkyBand>
-
-  <div class="container">
-    <!-- 专栏特色卡：深入理解 AI Agent -->
-    {
-      seriesNotes.length > 0 && (
-        <section class="column-card" aria-label={`专栏：${FEATURED.title}`}>
-          <header class="cc-head">
-            <div class="cc-title-wrap">
-              <span class="cc-kicker">✦ 专栏</span>
-              <h2 class="cc-title">{FEATURED.title}</h2>
-            </div>
-            <span class="cc-count">{seriesNotes.length} 篇 · 进行中</span>
-          </header>
-          <div class="cc-list">
-            {
-              seriesNotes.map((n) => (
-                <a class="cc-row" href={`/notes/${n.id}/`}>
-                  <span class="cc-t">{n.data.title}</span>
-                  <span class="cc-d">{fmtMD(n.data.date)}</span>
+  <div class="container library">
+    {series.length > 0 && (
+      <section class="series-list" aria-label="专栏">
+        {series.map((s) => (
+          <details class="series">
+            <summary>
+              <span>
+                <small>专栏</small>
+                <strong>{s.title}</strong>
+              </span>
+              <span class="series-count">
+                {s.entries.length} 篇 <span aria-hidden="true">＋</span>
+              </span>
+            </summary>
+            <div class="series-entries">
+              {s.entries.map((n) => (
+                <a href={`/notes/${n.id}/`}>
+                  {n.data.title}
+                  <span aria-hidden="true">↗</span>
                 </a>
-              ))
-            }
-          </div>
-        </section>
-      )
-    }
-
-    <!-- 全部笔记：卡片网格 -->
-    <section class="sec">
-      <h2 class="sec-h">全部笔记</h2>
-      <div class="card-grid">
-        {
-          otherNotes.map((n) => {
-            const st = stageOf(n.data.date);
-            const cc = CATEGORIES[catOf(n.id)]?.color;
-            return (
-              <a class="card note-card" href={`/notes/${n.id}/`}>
-                <span class={`stage ${st.cls}`} aria-hidden="true">
-                  {st.glyph} {st.label}
-                </span>
-                <h3 class="t">{n.data.title}</h3>
-                {n.data.description && <p class="desc">{n.data.description}</p>}
-                <div class="meta">
-                  <span class="tags">{n.data.tags.map((t) => `#${t}`).join('  ')}</span>
-                  <span class="d">
-                    <i class="cdot" style={`--c:${cc ?? '#d9a920'}`} aria-hidden="true" />
-                    {catLabel(catOf(n.id))} · {fmtMD(n.data.date)}
-                  </span>
-                </div>
-              </a>
-            );
-          })
-        }
-      </div>
-    </section>
+              ))}
+            </div>
+          </details>
+        ))}
+      </section>
+    )}
+    <nav class="filters" aria-label="笔记分类">
+      <a href="/notes/" data-category="" aria-current="true">
+        全部 <small>{notes.length}</small>
+      </a>
+      {cats.map((cat) => (
+        <a href={`?category=${encodeURIComponent(cat)}`} data-category={cat}>
+          {CATEGORIES[cat]?.label ?? cat}
+          <small>{notes.filter((n) => catOf(n.id) === cat).length}</small>
+        </a>
+      ))}
+    </nav>
+    <div class="library-list">
+      {notes.map((n) => (
+        <article class="library-entry" data-note-category={catOf(n.id)}>
+          <a href={`/notes/${n.id}/`}>
+            <div class="entry-top">
+              <span class="entry-category">
+                {CATEGORIES[catOf(n.id)]?.label ?? catOf(n.id)}
+              </span>
+              <time datetime={n.data.date?.toISOString()}>
+                {fmt(n.data.date)}
+              </time>
+            </div>
+            <h2>{n.data.title}</h2>
+            {n.data.description && <p>{n.data.description}</p>}
+            <div class="entry-bottom">
+              <span>{n.data.tags.slice(0, 3).join(" / ")}</span>
+              <span aria-hidden="true">↗</span>
+            </div>
+          </a>
+        </article>
+      ))}
+    </div>
+    {notes.length === 0 && <p class="empty">暂无笔记</p>}
   </div>
 </Base>
-
 <style>
-  /* 内容轴收紧：列表页与标题共用 880px 一条中轴，行不再横铺整屏 */
-  .container {
-    max-width: 880px;
+  .library {
+    max-width: 1120px;
   }
-
-  :global(.sky-band .container) {
-    max-width: 880px;
-  }
-
-  /* 统一垂直节奏：主间距一律 30px */
-  .sec {
-    margin-top: 30px;
-  }
-
-  .sec-h {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 400;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin: 0 0 12px;
-  }
-
-  /* ===== 专栏特色卡 ===== */
-  .column-card {
-    margin: 0;
-    padding: 22px 26px 16px;
-    border: 1px solid rgba(232, 230, 223, 0.14);
-    border-radius: 13px;
-    /* 实底深空色：卡片「浮」在星空上，而不是融进去（磨砂已去） */
-    background:
-      radial-gradient(120% 100% at 0% 0%, rgba(96, 118, 255, 0.07), transparent 55%),
-      #12141d;
-  }
-
-  .cc-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
+  .series-list {
+    margin-bottom: 44px;
+    display: grid;
     gap: 16px;
-    margin-bottom: 8px;
   }
-
-  .cc-kicker {
+  .series {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: linear-gradient(120deg, #19243655, transparent);
+  }
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 24px 28px;
+    cursor: pointer;
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary small {
     display: block;
-    font-family: var(--mono);
     font-size: 10px;
-    letter-spacing: 0.2em;
+    font-weight: 400;
     color: var(--accent);
-    margin-bottom: 4px;
+    margin-bottom: 8px;
+    letter-spacing: 0.15em;
   }
-
-  .cc-title {
-    font-family: var(--font-sans);
-    font-weight: 650;
-    font-size: 20px;
-    letter-spacing: 0.01em;
-    color: var(--text);
-    margin: 0;
+  summary strong {
+    font: 400 24px var(--font-display);
   }
-
-  .cc-count {
-    font-family: var(--mono);
-    font-size: 12px;
+  .series-count {
+    flex-shrink: 0;
+    font-size: 11px;
     color: var(--muted);
-    white-space: nowrap;
   }
-
-  .cc-list {
-    display: flex;
-    flex-direction: column;
+  .series-count span {
+    margin-left: 16px;
   }
-
-  .cc-row {
+  .series-entries {
+    padding: 0 28px 16px;
+  }
+  .series-entries a {
     display: flex;
-    align-items: baseline;
     justify-content: space-between;
     gap: 16px;
-    padding: 10px 2px;
+    padding: 14px 0;
+    font-size: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .series-entries a:hover {
+    color: var(--accent);
+  }
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--border);
   }
-
-  .cc-row:last-child {
-    border-bottom: none;
-  }
-
-  .cc-t {
-    font-family: var(--font-sans);
-    font-weight: 550;
-    font-size: 15px;
-    color: var(--text);
-    line-height: 1.55;
-  }
-
-  .cc-row:hover .cc-t {
-    color: var(--accent);
-  }
-
-  .cc-d {
-    font-family: var(--mono);
-    font-size: 12px;
+  .filters a {
+    font-size: 13px;
     color: var(--muted);
-    white-space: nowrap;
-    font-variant-numeric: tabular-nums;
+    padding: 10px 0;
   }
-
-  /* ===== 全部笔记：卡片网格 ===== */
-  .card-grid {
+  .filters a[aria-current] {
+    color: var(--text);
+  }
+  .filters small {
+    font: 10px var(--mono);
+    margin-left: 8px;
+    color: var(--muted);
+  }
+  .library-list {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 56px;
   }
-
-  .card {
-    position: relative;
+  .library-entry {
+    min-width: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .library-entry a {
     display: flex;
     flex-direction: column;
-    gap: 9px;
-    padding: 19px 21px;
-    border: 1px solid rgba(232, 230, 223, 0.14);
-    border-radius: 13px;
-    /* 实底深空色 + 亮 1px 边：卡片浮在星空上 */
-    background:
-      radial-gradient(120% 90% at 20% 0%, rgba(96, 118, 255, 0.05), transparent 60%),
-      #12141d;
-    transition: border-color 0.2s ease, transform 0.25s ease;
+    height: 100%;
+    padding: 28px 0;
   }
-
-  .card:hover {
-    border-color: rgba(232, 230, 223, 0.22);
-    transform: translateY(-3px);
-  }
-
-  .stage {
-    position: absolute;
-    top: 13px;
-    right: 15px;
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    color: var(--muted);
-  }
-
-  .stage.new {
-    color: var(--accent);
-  }
-
-  .t {
-    font-family: var(--font-sans);
-    font-weight: 650;
-    font-size: 17.5px;
-    letter-spacing: 0.01em;
-    line-height: 1.5;
-    color: var(--text);
-    margin: 0;
-    padding-right: 52px;
-  }
-
-  .card:hover .t {
-    color: var(--accent);
-  }
-
-  .desc {
-    margin: 0;
-    max-width: 62ch;
-    color: var(--text-2);
-    font-size: 13px;
-    line-height: 1.7;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-  }
-
-  .meta {
+  .entry-top,
+  .entry-bottom {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 10px;
-    margin-top: auto;
-    padding-top: 4px;
-  }
-
-  .tags {
-    font-family: var(--mono);
+    gap: 12px;
     font-size: 11px;
     color: var(--muted);
+  }
+  time {
+    font: 10px var(--mono);
+    white-space: nowrap;
+  }
+  h2 {
+    font: 400 22px/1.5 var(--font-display);
+    margin: 14px 0 10px;
+  }
+  .library-entry p {
+    font-size: 14px;
+    color: var(--text-2);
+    margin: 0 0 20px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
-
-  .d {
-    font-family: var(--mono);
-    font-size: 11px;
+  .entry-bottom {
+    margin-top: auto;
+    font-size: 10px;
+  }
+  .library-entry a:hover h2 {
+    color: var(--accent);
+  }
+  .empty {
     color: var(--muted);
-    white-space: nowrap;
-    font-variant-numeric: tabular-nums;
+    padding: 40px 0;
   }
-
-  /* 分类恒星色温点：学习=蓝白 / 前端=暖白，色彩从一颗小星开始 */
-  .cdot {
-    display: inline-block;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--c);
-    box-shadow: 0 0 6px var(--c);
-    margin-right: 7px;
-    vertical-align: 1px;
-    opacity: 0.85;
-  }
-
-  @media (max-width: 640px) {
-    .column-card {
-      padding: 16px 15px 12px;
+  @media (max-width: 760px) {
+    .library-list {
+      grid-template-columns: minmax(0, 1fr);
     }
-
-    .cc-title {
-      font-size: 18px;
+    summary {
+      padding: 20px;
+      gap: 12px;
     }
-
-    .cc-row {
-      padding: 9px 2px;
+    summary strong {
+      font-size: 21px;
     }
-
-    .cc-t {
-      font-size: 14.5px;
+    .series-count span {
+      margin-left: 4px;
     }
-
-    .sec {
-      margin-top: 22px;
+    .series-entries {
+      padding-inline: 20px;
     }
-
-    .card {
-      padding: 15px 16px;
-      gap: 8px;
+    .series-list {
+      margin-bottom: 28px;
     }
-
-    .t {
-      font-size: 16.5px;
-      padding-right: 48px;
+    h2 {
+      font-size: 21px;
     }
-
-    .desc {
-      font-size: 12.5px;
+    .library-entry a {
+      padding: 24px 0;
     }
   }
 </style>
+<script>
+  const filters = [
+    ...document.querySelectorAll<HTMLAnchorElement>("[data-category]"),
+  ];
+  const entries = [
+    ...document.querySelectorAll<HTMLElement>("[data-note-category]"),
+  ];
+  function filter() {
+    const requested = new URL(location.href).searchParams.get("category") ?? "";
+    const category = filters.some((a) => a.dataset.category === requested)
+      ? requested
+      : "";
+    entries.forEach(
+      (entry) =>
+        (entry.hidden = !!category && entry.dataset.noteCategory !== category),
+    );
+    filters.forEach((a) => {
+      if (a.dataset.category === category)
+        a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+  filters.forEach((a) =>
+    a.addEventListener("click", (e) => {
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      history.pushState(null, "", a.href);
+      filter();
+    }),
+  );
+  window.addEventListener("popstate", filter);
+  filter();
+</script>

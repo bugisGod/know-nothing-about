@@ -91,3 +91,11 @@ src/
 - 首页版式：`src/pages/index.astro`
 
 
+
+## 星空与阅读布局
+
+- `src/components/StarMap.astro`：首页按分类聚合星域，每组最多 3 个；点击显示最近 5 篇，完整内容通过分类页或列表进入。星群线稿仅表示主题入口，不表示逐篇文章之间的引用关系。
+- `src/components/StarField.astro`：固定种子的装饰星野，与内容数量无关；阅读页淡化中心背景，减少动态干扰。
+- `src/components/ArticleToc.astro`：宽屏右侧目录，窄屏折叠目录。笔记与项目详情共用阅读宽度。
+- 知识库支持 `?category=分类名`，可直接分享分类地址；原有 Markdown 路径不变。
+- 首页仅保留原有名言，不添加装饰性标语。减少动态效果的系统设置会关闭星尘动画。

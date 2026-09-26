@@ -1,0 +1,452 @@
+﻿---
+interface Entry {
+  title: string;
+  url: string;
+}
+interface Domain {
+  id: string;
+  title: string;
+  url: string;
+  entries: Entry[];
+}
+interface Props {
+  domains: Domain[];
+}
+const { domains } = Astro.props;
+// Bound visual density independently of article count; positions are stable.
+const pageSize = 3;
+const slots = [
+  [28, 22],
+  [76, 36],
+  [49, 72],
+];
+const motifs = [
+  [
+    [18, 32],
+    [41, 20],
+    [63, 42],
+    [49, 68],
+    [77, 76],
+  ],
+  [
+    [19, 67],
+    [30, 36],
+    [57, 23],
+    [76, 46],
+    [60, 74],
+  ],
+  [
+    [16, 46],
+    [38, 22],
+    [68, 36],
+    [79, 70],
+    [45, 80],
+  ],
+];
+---
+
+<section class="star-map" data-page-size={pageSize} aria-label="按星域浏览内容">
+  <div class="map-surface" id="domain-map">
+    {domains.map((domain, i) => {
+      const slot = slots[i % pageSize];
+      const motif = motifs[i % motifs.length];
+      return (
+        <a
+          class:list={["constellation", { warm: domain.id === "projects" }]}
+          href={domain.url}
+          data-domain={i}
+          style={`--x:${slot[0]}%;--y:${slot[1]}%`}
+          hidden={i >= pageSize}
+          aria-label={`${domain.title}，${domain.entries.length} 篇`}
+        >
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <polyline points={motif.map((p) => p.join(",")).join(" ")} />
+            {motif.map(([x, y], j) => (
+              <g>
+                <circle class="halo" cx={x} cy={y} r={j === 1 ? 6 : 3.5} />
+                <circle
+                  class:list={["star", { primary: j === 1 }]}
+                  cx={x}
+                  cy={y}
+                  r={j === 1 ? 1.8 : 1}
+                />
+              </g>
+            ))}
+          </svg>
+          <span class="domain-name">
+            {domain.title}
+            <small>{domain.entries.length}</small>
+          </span>
+        </a>
+      );
+    })}
+    {domains.length === 0 && (
+      <a class="empty-map" href="/notes/">
+        知识库 ↗
+      </a>
+    )}
+  </div>
+  <div class="map-toolbar">
+    <div class="map-switch" role="group" aria-label="浏览方式">
+      <button type="button" data-view="map" aria-pressed="true">
+        星图
+      </button>
+      <span aria-hidden="true">/</span>
+      <button type="button" data-view="list" aria-pressed="false">
+        列表
+      </button>
+    </div>
+    {domains.length > pageSize && (
+      <div class="map-pagination" aria-label="星域分页">
+        <button type="button" data-step="-1" aria-label="上一组星域" disabled>
+          ←
+        </button>
+        <span class="map-page" aria-live="polite">
+          1 / {Math.ceil(domains.length / pageSize)}
+        </span>
+        <button type="button" data-step="1" aria-label="下一组星域">
+          →
+        </button>
+      </div>
+    )}
+  </div>
+  <div class="domain-list" hidden>
+    {domains.map((domain) => (
+      <a href={domain.url}>
+        <span>{domain.title}</span>
+        <span>
+          {domain.entries.length} <span aria-hidden="true">↗</span>
+        </span>
+      </a>
+    ))}
+  </div>
+  <section class="domain-panel" hidden aria-label="星域内容">
+    <div class="panel-heading">
+      <h2 tabindex="-1"></h2>
+      <button type="button" class="close-panel" aria-label="关闭星域">
+        ×
+      </button>
+    </div>
+    <ul></ul>
+    <a class="domain-more">
+      全部 <span aria-hidden="true">↗</span>
+    </a>
+  </section>
+  <script
+    type="application/json"
+    id="domains-data"
+    set:html={JSON.stringify(
+      domains.map((d) => ({
+        ...d,
+        count: d.entries.length,
+        entries: d.entries.slice(0, 5),
+      })),
+    ).replace(/</g, "\u003c")}
+  />
+</section>
+<noscript>
+  <div class="container">
+    {domains.map((d) => (
+      <p>
+        <a href={d.url}>
+          {d.title} · {d.entries.length}
+        </a>
+      </p>
+    ))}
+  </div>
+</noscript>
+<style>
+  .star-map {
+    position: relative;
+    min-width: 0;
+  }
+  .map-surface {
+    position: relative;
+    height: 420px;
+  }
+  .constellation {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: 152px;
+    height: 146px;
+    transform: translate(-50%, -50%);
+    color: #c7d3e6;
+    border-radius: 50%;
+  }
+  svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  polyline {
+    fill: none;
+    stroke: #8093b5;
+    stroke-width: 0.45;
+    opacity: 0.32;
+    transition: opacity 0.3s;
+  }
+  .star {
+    fill: #e8edf2;
+  }
+  .primary {
+    fill: #fff3d9;
+  }
+  .halo {
+    fill: #b9cceb;
+    opacity: 0.15;
+    filter: blur(2px);
+  }
+  .warm .primary {
+    fill: var(--accent);
+  }
+  .warm .halo {
+    fill: var(--accent);
+  }
+  .domain-name {
+    position: absolute;
+    top: 90%;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+  }
+  small {
+    color: var(--muted);
+    font: 9px var(--mono);
+    margin-left: 8px;
+  }
+  .constellation:hover polyline,
+  .constellation:focus-visible polyline {
+    opacity: 0.85;
+  }
+  .constellation:hover .domain-name,
+  .constellation[aria-expanded="true"] .domain-name {
+    color: var(--accent);
+  }
+  .map-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 24px;
+    padding: 12px 20px;
+  }
+  .map-switch,
+  .map-pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  button {
+    background: none;
+    border: 0;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+    min-height: 44px;
+    min-width: 36px;
+    padding: 8px;
+  }
+  button:hover,
+  button[aria-pressed="true"] {
+    color: var(--text);
+  }
+  button[aria-pressed="true"] {
+    text-decoration: underline;
+    text-underline-offset: 6px;
+  }
+  button:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  .domain-panel {
+    position: absolute;
+    inset: 40px 12px auto;
+    z-index: 3;
+    max-height: 400px;
+    overflow: auto;
+    padding: 24px;
+    background: rgba(12, 17, 27, 0.97);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    box-shadow: 0 24px 80px #0006;
+  }
+  .panel-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .panel-heading h2 {
+    margin: 0;
+    font: 400 22px var(--font-display);
+  }
+  .close-panel {
+    font-size: 24px;
+  }
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 20px;
+  }
+  .domain-panel :global(li a) {
+    display: block;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .domain-panel :global(li a:hover),
+  .domain-more:hover {
+    color: var(--accent);
+  }
+  .domain-more {
+    font-size: 12px;
+    color: var(--text-2);
+  }
+  .domain-list {
+    min-height: 420px;
+    padding: 30px 24px;
+  }
+  .domain-list a {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .domain-list a span:last-child {
+    color: var(--muted);
+    font: 12px var(--mono);
+  }
+  .empty-map {
+    position: absolute;
+    inset: 50% auto auto 40%;
+    font-size: 13px;
+  }
+  [hidden] {
+    display: none !important;
+  }
+  @media (max-width: 760px) {
+    .map-surface {
+      height: 330px;
+    }
+    .constellation {
+      width: 112px;
+      height: 108px;
+    }
+    .domain-name {
+      font-size: 11px;
+    }
+    .map-toolbar {
+      padding: 0;
+    }
+    .domain-panel {
+      inset: 8px 0 auto;
+      max-height: 320px;
+      padding: 18px;
+    }
+    .domain-list {
+      min-height: 330px;
+      padding: 16px 12px;
+    }
+  }
+</style>
+<script>
+  type Domain = {
+    title: string;
+    url: string;
+    count: number;
+    entries: { title: string; url: string }[];
+  };
+  const root = document.querySelector<HTMLElement>(".star-map");
+  if (root) {
+    const domains: Domain[] = JSON.parse(
+      document.getElementById("domains-data")!.textContent!,
+    );
+    const surface = root.querySelector<HTMLElement>(".map-surface")!;
+    const list = root.querySelector<HTMLElement>(".domain-list")!;
+    const panel = root.querySelector<HTMLElement>(".domain-panel")!;
+    const heading = panel.querySelector<HTMLHeadingElement>("h2")!;
+    const nodes = [
+      ...root.querySelectorAll<HTMLAnchorElement>("[data-domain]"),
+    ];
+    let selected: HTMLAnchorElement | null = null;
+    function close(restore = true) {
+      panel.hidden = true;
+      selected?.setAttribute("aria-expanded", "false");
+      if (restore) selected?.focus();
+    }
+    nodes.forEach((node) => {
+      node.setAttribute("aria-expanded", "false");
+      node.addEventListener("click", (e) => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        close(false);
+        selected = node;
+        const d = domains[Number(node.dataset.domain)];
+        heading.textContent = d.title;
+        const ul = panel.querySelector("ul")!;
+        ul.replaceChildren();
+        for (const entry of d.entries) {
+          const li = document.createElement("li");
+          const a = document.createElement("a");
+          a.href = entry.url;
+          a.textContent = entry.title;
+          li.append(a);
+          ul.append(li);
+        }
+        const more = panel.querySelector<HTMLAnchorElement>(".domain-more")!;
+        more.href = d.url;
+        more.textContent = `全部 ${d.count} 篇 ↗`;
+        panel.hidden = false;
+        node.setAttribute("aria-expanded", "true");
+        heading.focus();
+      });
+    });
+    panel.querySelector("button")!.addEventListener("click", () => close());
+    root.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !panel.hidden) close();
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) =>
+      button.addEventListener("click", () => {
+        close(false);
+        const map = button.dataset.view === "map";
+        surface.hidden = !map;
+        list.hidden = map;
+        root
+          .querySelectorAll("[data-view]")
+          .forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+        const pagination = root.querySelector<HTMLElement>(".map-pagination");
+        if (pagination) pagination.hidden = !map;
+      }),
+    );
+    const pageSize = Number(root.dataset.pageSize);
+    let page = 0;
+    const pages = Math.ceil(nodes.length / pageSize);
+    root.querySelectorAll<HTMLButtonElement>("[data-step]").forEach((button) =>
+      button.addEventListener("click", () => {
+        close(false);
+        page = Math.max(
+          0,
+          Math.min(pages - 1, page + Number(button.dataset.step)),
+        );
+        nodes.forEach(
+          (node, i) => (node.hidden = Math.floor(i / pageSize) !== page),
+        );
+        root.querySelector(".map-page")!.textContent = `${page + 1} / ${pages}`;
+        root
+          .querySelectorAll<HTMLButtonElement>("[data-step]")
+          .forEach(
+            (b) =>
+              (b.disabled =
+                Number(b.dataset.step) < 0 ? page === 0 : page === pages - 1),
+          );
+      }),
+    );
+  }
+</script>

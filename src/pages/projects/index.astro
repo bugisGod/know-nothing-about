@@ -1,46 +1,50 @@
----
-import Base from '../../layouts/Base.astro';
-import SkyBand from '../../components/SkyBand.astro';
-import { getCollection } from 'astro:content';
+﻿---
+import Base from "../../layouts/Base.astro";
+import SkyBand from "../../components/SkyBand.astro";
+import { getCollection } from "astro:content";
 
-const projects = (await getCollection('projects', ({ data }) => !data.draft)).sort(
-  (a, b) => b.data.date.getTime() - a.data.date.getTime()
-);
+const projects = (
+  await getCollection("projects", ({ data }) => !data.draft)
+).sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 
 const statusKey = (s: string) =>
-  ({ 进行中: 'ongoing', 已完成: 'done', 已归档: 'archived' })[s] ?? 'done';
+  ({ 进行中: "ongoing", 已完成: "done", 已归档: "archived" })[s] ?? "done";
 ---
 
 <Base title="项目复盘" description="做过的项目、踩过的坑与沉淀的经验">
   <SkyBand>
-      <h1 class="page-title">项目复盘</h1>
-      <p class="page-desc">每个项目一份复盘：背景与目标、方案、踩坑记录、经验沉淀。</p>
+    <h1 class="page-title">项目复盘</h1>
+    <p class="page-desc">
+      每个项目一份复盘：背景与目标、方案、踩坑记录、经验沉淀。
+    </p>
   </SkyBand>
   <div class="container">
     <div class="proj-list">
-    {
-      projects.map((p, i) => (
+      {projects.map((p, i) => (
         <a class="proj-row" href={`/projects/${p.id}/`}>
-          <span class="num">{String(i + 1).padStart(2, '0')}</span>
+          <span class="num">{String(i + 1).padStart(2, "0")}</span>
           <div class="body">
             <div class="head">
               <h3>{p.data.title}</h3>
-              <span class:list={['status', `status--${statusKey(p.data.status)}`]}>
+              <span
+                class:list={["status", `status--${statusKey(p.data.status)}`]}
+              >
                 <i class="dot" />
                 {p.data.status}
               </span>
             </div>
             <p class="desc">{p.data.description}</p>
             <p class="meta">
-              <span>{p.data.tech.join(' / ')}</span>
+              <span>{p.data.tech.join(" / ")}</span>
               {p.data.period && <span>{p.data.period}</span>}
               {p.data.role && <span>{p.data.role}</span>}
             </p>
           </div>
-          <span class="arrow" aria-hidden="true">→</span>
+          <span class="arrow" aria-hidden="true">
+            →
+          </span>
         </a>
-      ))
-    }
+      ))}
     </div>
   </div>
 </Base>
