@@ -73,18 +73,22 @@ const minutes = Math.max(1, Math.round(cjkCount / 380 + latinWords / 500));
   <div class="container wide">
   <div class="notes-layout">
     <aside class="sidebar" aria-label="知识库目录">
-      {
-        [...cats].map((cat) => (
-          <div class="cat-group">
-            <div class="cat">{catLabel(cat)}</div>
-            {groups.get(cat)!.map((n) => (
-              <a href={`/notes/${n.id}/`} class:list={[{ current: n.id === entry.id }]} title={n.data.title}>
-                {n.data.title}
-              </a>
-            ))}
-          </div>
-        ))
-      }
+      <!-- 手机端折叠成「所有文章」条并排到文末；桌面端 summary 隐藏、树常开 -->
+      <details class="sb-all" open>
+        <summary>所有文章</summary>
+        {
+          [...cats].map((cat) => (
+            <div class="cat-group">
+              <div class="cat">{catLabel(cat)}</div>
+              {groups.get(cat)!.map((n) => (
+                <a href={`/notes/${n.id}/`} class:list={[{ current: n.id === entry.id }]} title={n.data.title}>
+                  {n.data.title}
+                </a>
+              ))}
+            </div>
+          ))
+        }
+      </details>
     </aside>
 
 
@@ -139,6 +143,19 @@ const minutes = Math.max(1, Math.round(cjkCount / 380 + latinWords / 500));
       { rootMargin: '-76px 0px -68% 0px', threshold: 0 }
     );
     for (const h of byHeading.keys()) spy.observe(h);
+  }
+</script>
+
+<script>
+  // 手机端：所有文章树默认收起（桌面端常开，summary 不显示）
+  const sbAll = document.querySelector<HTMLDetailsElement>('details.sb-all');
+  if (sbAll) {
+    const mq = window.matchMedia('(max-width: 920px)');
+    const collapse = (e: MediaQueryList | MediaQueryListEvent) => {
+      if (e.matches) sbAll.removeAttribute('open');
+    };
+    if (mq.matches) sbAll.removeAttribute('open');
+    mq.addEventListener('change', collapse);
   }
 </script>
 
@@ -260,7 +277,7 @@ const minutes = Math.max(1, Math.round(cjkCount / 380 + latinWords / 500));
 
   .pn {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 12px;
     margin-top: 52px;
     padding-top: 22px;
@@ -309,19 +326,64 @@ const minutes = Math.max(1, Math.round(cjkCount / 380 + latinWords / 500));
     }
   }
 
+  /* 所有文章折叠条：桌面端隐藏 summary，树常开 */
+  .sb-all summary {
+    display: none;
+  }
+
   @media (max-width: 920px) {
     .notes-layout {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       gap: 28px;
     }
 
+    /* 正文提到第一位，所有文章树排在文末（文章再多也不挡阅读） */
     .prose {
+      order: 1;
       max-width: none;
     }
 
     .sidebar {
+      order: 2;
       position: static;
       max-height: none;
+      min-width: 0;
+    }
+
+    .sb-all summary {
+      display: block;
+      cursor: pointer;
+      padding: 11px 2px;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--muted);
+      list-style: none;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sb-all summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .sb-all summary::after {
+      content: '+';
+      float: right;
+      color: var(--accent);
+    }
+
+    .sb-all[open] summary::after {
+      content: '−';
+    }
+
+    .sb-all[open] summary {
+      margin-bottom: 4px;
+    }
+
+    /* 首个分类标题贴近折叠条 */
+    .sb-all .cat-group:first-child .cat {
+      margin-top: 10px;
     }
   }
 </style>

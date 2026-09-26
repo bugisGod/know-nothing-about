@@ -25,9 +25,15 @@ interface Props {
   edges: [number, number, number][];
   /** 夜空模式：去掉面板边框与底色，融入外部深色区块 */
   bare?: boolean;
+  /** 整个星系在竖直方向的偏移（负值 = 下沉），hero 文字悬浮时给上方让出净空 */
+  offsetY?: number;
+  /** 图下方的说明文字（默认「拖拽 · 点击星体探索」） */
+  caption?: string;
+  /** 说明文字下的第二行小字提示 */
+  captionHint?: string;
 }
 
-const { nodes, edges, bare = false } = Astro.props;
+const { nodes, edges, bare = false, offsetY = 0, caption, captionHint } = Astro.props;
 const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 ---
 
@@ -41,7 +47,8 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     </div>
   </div>
   <p class="graph-caption">
-    <span>拖拽 · 点击星体探索</span>
+    <span class="cap-main">{caption ?? '拖拽 · 点击星体探索'}</span>
+    {captionHint && <span class="cap-sub">{captionHint}</span>}
   </p>
   <details class="graph-list">
     <summary>文章索引</summary>
@@ -213,6 +220,19 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     margin: 14px 0 0;
   }
 
+  .cap-main {
+    color: rgba(232, 230, 223, 0.6);
+    letter-spacing: 0.2em;
+  }
+
+  .cap-sub {
+    display: block;
+    margin-top: 7px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    opacity: 0.72;
+  }
+
   @media (max-width: 640px) {
     .graph-frame {
       height: 58vh;
@@ -259,6 +279,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     color?: string;
     desc?: string;
     count?: number;
+    parent?: number;
   };
 
   const tip = document.getElementById('graph-tip') as HTMLElement;
@@ -290,8 +311,8 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    // 雾化纵深：远处的星沉入夜空
-    scene.fog = new THREE.FogExp2(0x0b0c12, 0.05); // 与页面底色一致
+    // 雾化纵深：远处的星沉入夜空（密度偏高 → 深邃感）
+    scene.fog = new THREE.FogExp2(0x0b0c12, 0.062); // 与页面底色一致
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
     // 窄屏自动拉远相机，保证星系完整可见；用户手动缩放后不再干预
@@ -305,21 +326,44 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     camera.position.set(0, 0, camZ);
 
     const group = new THREE.Group();
+    group.position.y = 0.55; // 星群整体上移，拉近与 hero 文字的距离
     scene.add(group);
 
-    // ===== 初始位置：斐波那契球面 =====
+    // ===== 初始位置：锚星布在球面（彼此远离），成员星落在锚星近旁 =====
     const N = nodes.length;
     const pos = new Float32Array(N * 3);
     const vel = new Float32Array(N * 3);
     const R0 = 2.7;
     const golden = Math.PI * (3 - Math.sqrt(5));
+    const anchorIdx = nodes.map((n, i) => (n.anchor ? i : -1)).filter((i) => i >= 0);
+    anchorIdx.forEach((ai, k) => {
+      const M = Math.max(anchorIdx.length, 1);
+      const y = M === 1 ? 0.2 : 1 - (k / (M - 1)) * 1.6;
+      const r = Math.sqrt(Math.max(1 - y * y, 0));
+      const th = golden * k * 2;
+      pos[ai * 3] = Math.cos(th) * r * R0;
+      pos[ai * 3 + 1] = y * R0;
+      pos[ai * 3 + 2] = Math.sin(th) * r * R0;
+    });
+    let fib = 0;
     for (let i = 0; i < N; i++) {
-      const y = 1 - (i / Math.max(N - 1, 1)) * 2;
-      const r = Math.sqrt(1 - y * y);
-      const th = golden * i;
-      pos[i * 3] = Math.cos(th) * r * R0 + (rand() - 0.5) * 0.8;
-      pos[i * 3 + 1] = y * R0 + (rand() - 0.5) * 0.8;
-      pos[i * 3 + 2] = Math.sin(th) * r * R0 + (rand() - 0.5) * 0.8;
+      if (nodes[i].anchor) continue;
+      const p = nodes[i].parent;
+      if (p !== undefined && p >= 0) {
+        // 成员星：锚星近旁成团
+        pos[i * 3] = pos[p * 3] + (rand() - 0.5) * 1.7;
+        pos[i * 3 + 1] = pos[p * 3 + 1] + (rand() - 0.5) * 1.7;
+        pos[i * 3 + 2] = pos[p * 3 + 2] + (rand() - 0.5) * 1.7;
+      } else {
+        // 游离星（如项目）：球面散布
+        const y = 1 - (fib / Math.max(N - 1, 1)) * 2;
+        const r = Math.sqrt(1 - y * y);
+        const th = golden * fib * 3;
+        fib++;
+        pos[i * 3] = Math.cos(th) * r * R0 + (rand() - 0.5) * 0.8;
+        pos[i * 3 + 1] = y * R0 + (rand() - 0.5) * 0.8;
+        pos[i * 3 + 2] = Math.sin(th) * r * R0 + (rand() - 0.5) * 0.8;
+      }
     }
 
     // ===== 贴图：发光星点 / 柔和圆点 / 圆环 =====
@@ -335,9 +379,9 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     }
     const starTex = glowTexture([
       [0, '#ffffff'],
-      [0.18, '#ffffff'],
-      [0.32, 'rgba(255,255,255,0.5)'],
-      [0.55, 'rgba(255,255,255,0.12)'],
+      [0.12, '#ffffff'],
+      [0.2, 'rgba(255,255,255,0.65)'],
+      [0.38, 'rgba(255,255,255,0.12)'],
       [1, 'rgba(255,255,255,0)'],
     ]);
     const dotTex = glowTexture([
@@ -383,8 +427,8 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
         map: starTex, color: nodeColor[i], transparent: true, fog: true, depthWrite: false,
       });
       const s = nodes[i].anchor
-        ? 0.78 + Math.min(degree[i], 6) * 0.045
-        : (nodes[i].kind === '项目' ? 0.62 : 0.46) + Math.min(degree[i], 5) * 0.07 + rand() * 0.1;
+        ? 0.5 + Math.min(degree[i], 6) * 0.04
+        : (nodes[i].kind === '项目' ? 0.4 : 0.3) + Math.min(degree[i], 5) * 0.045 + rand() * 0.06;
       const sp = new THREE.Sprite(mat);
       sp.position.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
       sp.scale.setScalar(s);
@@ -436,17 +480,15 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     );
     group.add(dust);
 
-    const dimColor = new THREE.Color(0x44507e);
+    const dimColor = new THREE.Color(0x39446e);
     const hiColor = new THREE.Color(0xffc46b);
-    const warmColor = new THREE.Color(0xffe9c4);
-    // 每条边的基色：连到锚星的边继承域色，跨域边用暗蓝
+    // 每条边的基色：连到锚星的边继承域色（压暗避免光污染），跨域边用暗蓝
     const edgeBase = edges.map(([a, b]) => {
       const src = nodes[a].anchor ? nodes[a] : nodes[b].anchor ? nodes[b] : null;
       return src?.color
-        ? new THREE.Color(src.color).multiplyScalar(0.8)
+        ? new THREE.Color(src.color).multiplyScalar(0.55)
         : dimColor.clone();
     });
-    const pulseBase = edgeBase.map((c) => c.clone().lerp(warmColor, 0.55));
 
     // 每条边固定相位（形态稳定），弓起幅度随时间轻微呼吸
     const edgePhase = new Float32Array(edges.length);
@@ -500,55 +542,14 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
           const i = (base + k) * 3;
           dustPos[i] = _p.x; dustPos[i + 1] = _p.y; dustPos[i + 2] = _p.z;
           const endFade = Math.sin(Math.PI * u); // 两端渐隐
-          const shimmer = 0.78 + 0.22 * Math.sin(t * 1.4 + edgePhase[e] + k * 0.9);
+          const shimmer = 0.9 + 0.1 * Math.sin(t * 1.4 + edgePhase[e] + k * 0.9);
           const c = active ? hiColor : edgeBase[e];
-          const f = endFade * shimmer * (active ? 1 : 0.5);
+          const f = endFade * shimmer * (active ? 1 : 0.38);
           dustCol[i] = c.r * f; dustCol[i + 1] = c.g * f; dustCol[i + 2] = c.b * f;
         }
       }
       dustGeo.attributes.position.needsUpdate = true;
       dustGeo.attributes.color.needsUpdate = true;
-    }
-
-    // ===== 流光脉冲：能量沿弧线流动 =====
-    const PULSES_PER = edges.length > 120 ? 1 : 2;
-    const P = edges.length * PULSES_PER;
-    let pulses = null, pulseGeo = null, pulsePos = null, pulseCol = null;
-    let pulseEdge, pulsePhase;
-    if (P > 0) {
-      pulseGeo = new THREE.BufferGeometry();
-      pulsePos = new Float32Array(P * 3);
-      pulseCol = new Float32Array(P * 3);
-      pulseGeo.setAttribute('position', new THREE.BufferAttribute(pulsePos, 3));
-      pulseGeo.setAttribute('color', new THREE.BufferAttribute(pulseCol, 3));
-      pulses = new THREE.Points(
-        pulseGeo,
-        new THREE.PointsMaterial({
-          map: dotTex, size: 0.17, sizeAttenuation: true, vertexColors: true,
-          transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
-        })
-      );
-      group.add(pulses);
-      pulseEdge = new Int16Array(P);
-      pulsePhase = new Float32Array(P);
-      for (let p = 0; p < P; p++) {
-        pulseEdge[p] = p % edges.length;
-        pulsePhase[p] = p / P + rand() * 0.08;
-      }
-    }
-    const PULSE_SPEED = 0.1; // 每秒沿曲线前进的比例
-    function updatePulses(t, hovered) {
-      if (!pulses) return;
-      for (let p = 0; p < P; p++) {
-        const e = pulseEdge[p];
-        bez(_p, e, (t * PULSE_SPEED + pulsePhase[p]) % 1);
-        pulsePos[p * 3] = _p.x; pulsePos[p * 3 + 1] = _p.y; pulsePos[p * 3 + 2] = _p.z;
-        const active = hovered >= 0 && (edges[e][0] === hovered || edges[e][1] === hovered);
-        const c = active ? hiColor : pulseBase[e];
-        pulseCol[p * 3] = c.r; pulseCol[p * 3 + 1] = c.g; pulseCol[p * 3 + 2] = c.b;
-      }
-      pulseGeo.attributes.position.needsUpdate = true;
-      pulseGeo.attributes.color.needsUpdate = true;
     }
 
     // ===== 悬停圆环 =====
@@ -559,9 +560,10 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     ring.visible = false;
     group.add(ring);
 
-    // ===== 远景星野（视差层）=====
+    // ===== 远景星野（视差层）：多而细、暗而不喧，只作纵深 =====
+    // 「余下皆是未知」：已知星被大片无名暗星包围，越密越显已知之少
     const starField = (() => {
-      const M = 320;
+      const M = 700;
       const arr = new Float32Array(M * 3);
       for (let i = 0; i < M; i++) {
         const u = rand() * 2 - 1, th = rand() * Math.PI * 2, rr = 26 + rand() * 30;
@@ -575,8 +577,8 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       const pts = new THREE.Points(
         g,
         new THREE.PointsMaterial({
-          map: dotTex, color: 0x9aa6d8, size: 0.55, sizeAttenuation: true,
-          transparent: true, opacity: 0.55, depthWrite: false, fog: false,
+          map: dotTex, color: 0x9aa6d8, size: 0.38, sizeAttenuation: true,
+          transparent: true, opacity: 0.3, depthWrite: false, fog: false,
         })
       );
       scene.add(pts);
@@ -586,8 +588,14 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     // ===== 力导向模拟（带边界钳制）=====
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let alpha = 1;
-    const REST = 2.6;
     const BOUND = 3.9;
+    // 每条边的自然长度与劲度：归属边（连着锚星）短而强 → 成员凝聚成团；标签边松而弱
+    const isAnchorEdge = (e: number) => {
+      const [a, b] = edges[e];
+      return !!(nodes[a].anchor || nodes[b].anchor);
+    };
+    const restOf = (e: number) => (isAnchorEdge(e) ? 1.5 : 2.2);
+    const stiffOf = (e: number) => (isAnchorEdge(e) ? 0.055 : 0.03);
     function tick(t) {
       for (let i = 0; i < N; i++)
         for (let j = i + 1; j < N; j++) {
@@ -602,12 +610,13 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
           vel[i * 3] += dx * f; vel[i * 3 + 1] += dy * f; vel[i * 3 + 2] += dz * f;
           vel[j * 3] -= dx * f; vel[j * 3 + 1] -= dy * f; vel[j * 3 + 2] -= dz * f;
         }
-      for (const [a, b, w] of edges) {
+      for (let e = 0; e < edges.length; e++) {
+        const [a, b, w] = edges[e];
         let dx = pos[b * 3] - pos[a * 3],
           dy = pos[b * 3 + 1] - pos[a * 3 + 1],
           dz = pos[b * 3 + 2] - pos[a * 3 + 2];
         const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-4;
-        const f = (d - REST) * 0.03 * w * alpha;
+        const f = (d - restOf(e)) * stiffOf(e) * w * alpha;
         dx /= d; dy /= d; dz /= d;
         vel[a * 3] += dx * f; vel[a * 3 + 1] += dy * f; vel[a * 3 + 2] += dz * f;
         vel[b * 3] -= dx * f; vel[b * 3 + 1] -= dy * f; vel[b * 3 + 2] -= dz * f;
@@ -756,7 +765,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     });
 
     // ===== 主循环：多轴漂移 + 呼吸，制造纵深 =====
-    if (reduced) { for (let i = 0; i < 320; i++) tick(0); if (pulses) pulses.visible = false; }
+    if (reduced) { for (let i = 0; i < 320; i++) tick(0); }
     const t0 = performance.now();
     function loop() {
       rafId = requestAnimationFrame(loop);
@@ -772,7 +781,6 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       camera.position.z = camZ;
       starField.rotation.y = -rotY * 0.25; // 远景反向缓转 → 视差
       starField.rotation.x = -rotX * 0.2;
-      updatePulses(t, hovered);
 
       if (ring.visible && hovered >= 0)
         ring.position.set(pos[hovered * 3], pos[hovered * 3 + 1], pos[hovered * 3 + 2]);

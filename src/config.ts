@@ -27,14 +27,14 @@ export const SITE = {
   since: 2026,
 };
 
-// 专栏：series slug → 展示名
-export const SERIES: Record<string, { title: string }> = {
-  'ai-agent-book': { title: '深入理解 AI Agent' },
+// 专栏：series slug → 展示名 + 域色（恒星色温系，星图锚星用）
+export const SERIES: Record<string, { title: string; color?: string }> = {
+  'ai-agent-book': { title: '深入理解 AI Agent', color: '#9db8ff' },
 };
 
-// 知识库分类的展示信息：文件夹名 → 中文名 + 一句话描述
+// 知识库分类的展示信息：文件夹名 → 中文名 + 一句话描述 + 域色
 // 用于星图锚星标签、图例、知识库分区标题；没配置的分类回退显示文件夹名
-export const CATEGORIES: Record<string, { label: string; desc: string }> = {
-  study: { label: '学习笔记', desc: '读书 · 源码 · 实践对照' },
-  frontend: { label: '前端', desc: '框架 · 工程化 · 浏览器' },
+export const CATEGORIES: Record<string, { label: string; desc: string; color?: string }> = {
+  study: { label: '学习笔记', desc: '读书 · 源码 · 实践对照', color: '#9db8ff' },
+  frontend: { label: '前端', desc: '框架 · 工程化 · 浏览器', color: '#ffe3b3' },
 };

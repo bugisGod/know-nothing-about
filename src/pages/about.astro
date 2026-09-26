@@ -52,6 +52,11 @@ import { SITE } from '../config';
 </Base>
 
 <style>
+  /* 阅读行宽上限：CJK 一行 40 字上下，长文不散 */
+  .prose {
+    max-width: 42em;
+  }
+
   .quote-from {
     font-family: var(--mono);
     font-size: 12.5px;

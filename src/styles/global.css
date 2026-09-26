@@ -60,26 +60,29 @@ body::before {
   z-index: -1;
   pointer-events: none;
   /* 程序化深空星野：斜向银河带 + 三层景深 + 星座主角（.shots/gen-sky.py 生成） */
-  background-image: url('/images/deep-sky.webp');
+  /* 首层暗角：星野四缘沉入黑，页面有了「深处」的纵深 */
+  background-image:
+    radial-gradient(125% 95% at 50% 32%, transparent 40%, rgba(2, 3, 7, 0.52) 100%),
+    var(--sky-img, url('/images/deep-sky.webp'));
   background-size: cover;
   background-position: var(--sky-x, 50%) center; /* 对准星座中心，窄屏裁切不失星座 */
   background-repeat: no-repeat;
 }
 
 /* 星座变体：每日按「日期 + 路径」轮换，同一天同一页固定（脚本在 Base.astro） */
-body[data-sky='home']::before { background-image: url('/images/deep-sky-home.webp'); --sky-x: 50%; }
-body[data-sky='0']::before { background-image: url('/images/deep-sky-0.webp'); --sky-x: 77%; }
-body[data-sky='1']::before { background-image: url('/images/deep-sky-1.webp'); --sky-x: 25%; }
-body[data-sky='2']::before { background-image: url('/images/deep-sky-2.webp'); --sky-x: 18%; }
-body[data-sky='3']::before { background-image: url('/images/deep-sky-3.webp'); --sky-x: 76%; }
-body[data-sky='4']::before { background-image: url('/images/deep-sky-4.webp'); --sky-x: 20%; }
-body[data-sky='5']::before { background-image: url('/images/deep-sky-5.webp'); --sky-x: 77%; }
-body[data-sky='6']::before { background-image: url('/images/deep-sky-6.webp'); --sky-x: 76%; }
-body[data-sky='7']::before { background-image: url('/images/deep-sky-7.webp'); --sky-x: 23%; }
-body[data-sky='8']::before { background-image: url('/images/deep-sky-8.webp'); --sky-x: 84%; }
-body[data-sky='9']::before { background-image: url('/images/deep-sky-9.webp'); --sky-x: 27%; }
-body[data-sky='10']::before { background-image: url('/images/deep-sky-10.webp'); --sky-x: 74%; }
-body[data-sky='11']::before { background-image: url('/images/deep-sky-11.webp'); --sky-x: 23%; }
+body[data-sky='home']::before { --sky-img: url('/images/deep-sky-home.webp'); --sky-x: 50%; }
+body[data-sky='0']::before { --sky-img: url('/images/deep-sky-0.webp'); --sky-x: 77%; }
+body[data-sky='1']::before { --sky-img: url('/images/deep-sky-1.webp'); --sky-x: 25%; }
+body[data-sky='2']::before { --sky-img: url('/images/deep-sky-2.webp'); --sky-x: 18%; }
+body[data-sky='3']::before { --sky-img: url('/images/deep-sky-3.webp'); --sky-x: 76%; }
+body[data-sky='4']::before { --sky-img: url('/images/deep-sky-4.webp'); --sky-x: 20%; }
+body[data-sky='5']::before { --sky-img: url('/images/deep-sky-5.webp'); --sky-x: 77%; }
+body[data-sky='6']::before { --sky-img: url('/images/deep-sky-6.webp'); --sky-x: 76%; }
+body[data-sky='7']::before { --sky-img: url('/images/deep-sky-7.webp'); --sky-x: 23%; }
+body[data-sky='8']::before { --sky-img: url('/images/deep-sky-8.webp'); --sky-x: 84%; }
+body[data-sky='9']::before { --sky-img: url('/images/deep-sky-9.webp'); --sky-x: 27%; }
+body[data-sky='10']::before { --sky-img: url('/images/deep-sky-10.webp'); --sky-x: 74%; }
+body[data-sky='11']::before { --sky-img: url('/images/deep-sky-11.webp'); --sky-x: 23%; }
 
 /* 细颗粒纸面质感 */
 body::after {
@@ -258,11 +261,22 @@ button {
   text-wrap: balance;
 }
 
-/* 页眉带内标题：末尾琥珀句点，呼应 logo「scio.」 */
+/* 页眉带内标题：末尾琥珀句点，呼应 logo「scio.」（紧贴，避免像手滑空格） */
+.sky-band h1 {
+  text-shadow: 0 0 30px rgba(255, 243, 209, 0.07);
+}
+
 .sky-band h1::after {
   content: '.';
-  margin-left: 6px;
+  margin-left: 2px;
   color: var(--accent);
+}
+
+/* 手机端标题折行后句点会孤悬行尾，直接隐藏 */
+@media (max-width: 640px) {
+  .sky-band h1::after {
+    content: none;
+  }
 }
 
 /* 页眉带副题：等宽小字（N 篇 · 持续生长 等） */
@@ -340,6 +354,7 @@ button {
   background: var(--bg-inset);
   padding: 2px 6px;
   border-radius: 6px;
+  overflow-wrap: anywhere; /* 长路径（无断点字符）允许任意处折行，防撑破移动端版面 */
 }
 
 /* ===== 项目条目（整行可点）===== */
@@ -535,12 +550,41 @@ button {
 .prose h2 {
   font-size: 19px;
   font-weight: 650;
-  padding-bottom: 0.4em;
-  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.55em;
+  position: relative;
   letter-spacing: -0.01em;
   line-height: 1.45;
   margin: 2.6em 0 0.75em;
   text-wrap: balance;
+}
+
+/* 星轨分隔线：两端渐隐的细线，中央一颗小星 */
+.prose h2::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(232, 230, 223, 0.2) 16%,
+    rgba(232, 230, 223, 0.2) 84%,
+    transparent
+  );
+}
+
+.prose h2::before {
+  content: '';
+  position: absolute;
+  left: calc(50% - 2px);
+  bottom: -2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(232, 230, 223, 0.6);
+  box-shadow: 0 0 7px rgba(232, 230, 223, 0.45);
 }
 
 .prose h3 {

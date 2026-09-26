@@ -71,6 +71,7 @@ function stageOf(d?: Date) {
         {
           otherNotes.map((n) => {
             const st = stageOf(n.data.date);
+            const cc = CATEGORIES[catOf(n.id)]?.color;
             return (
               <a class="card note-card" href={`/notes/${n.id}/`}>
                 <span class={`stage ${st.cls}`} aria-hidden="true">
@@ -80,7 +81,10 @@ function stageOf(d?: Date) {
                 {n.data.description && <p class="desc">{n.data.description}</p>}
                 <div class="meta">
                   <span class="tags">{n.data.tags.map((t) => `#${t}`).join('  ')}</span>
-                  <span class="d">{catLabel(catOf(n.id))} · {fmtMD(n.data.date)}</span>
+                  <span class="d">
+                    <i class="cdot" style={`--c:${cc ?? '#d9a920'}`} aria-hidden="true" />
+                    {catLabel(catOf(n.id))} · {fmtMD(n.data.date)}
+                  </span>
                 </div>
               </a>
             );
@@ -92,6 +96,15 @@ function stageOf(d?: Date) {
 </Base>
 
 <style>
+  /* 内容轴收紧：列表页与标题共用 880px 一条中轴，行不再横铺整屏 */
+  .container {
+    max-width: 880px;
+  }
+
+  :global(.sky-band .container) {
+    max-width: 880px;
+  }
+
   /* 统一垂直节奏：主间距一律 30px */
   .sec {
     margin-top: 30px;
@@ -111,13 +124,12 @@ function stageOf(d?: Date) {
   .column-card {
     margin: 0;
     padding: 22px 26px 16px;
-    border: 1px solid rgba(232, 230, 223, 0.1);
+    border: 1px solid rgba(232, 230, 223, 0.14);
     border-radius: 13px;
+    /* 实底深空色：卡片「浮」在星空上，而不是融进去（磨砂已去） */
     background:
       radial-gradient(120% 100% at 0% 0%, rgba(96, 118, 255, 0.07), transparent 55%),
-      color-mix(in oklab, #12141d 86%, transparent);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+      #12141d;
   }
 
   .cc-head {
@@ -204,13 +216,12 @@ function stageOf(d?: Date) {
     flex-direction: column;
     gap: 9px;
     padding: 19px 21px;
-    border: 1px solid rgba(232, 230, 223, 0.09);
+    border: 1px solid rgba(232, 230, 223, 0.14);
     border-radius: 13px;
+    /* 实底深空色 + 亮 1px 边：卡片浮在星空上 */
     background:
       radial-gradient(120% 90% at 20% 0%, rgba(96, 118, 255, 0.05), transparent 60%),
-      color-mix(in oklab, #12141d 86%, transparent);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+      #12141d;
     transition: border-color 0.2s ease, transform 0.25s ease;
   }
 
@@ -284,6 +295,19 @@ function stageOf(d?: Date) {
     color: var(--muted);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* 分类恒星色温点：学习=蓝白 / 前端=暖白，色彩从一颗小星开始 */
+  .cdot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--c);
+    box-shadow: 0 0 6px var(--c);
+    margin-right: 7px;
+    vertical-align: 1px;
+    opacity: 0.85;
   }
 
   @media (max-width: 640px) {
