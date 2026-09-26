@@ -1,0 +1,38 @@
+---
+// Seeded decorative sky, independent of content count and without a render loop.
+let seed = 7391;
+const random = () => {
+  seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+  return seed / 4294967296;
+};
+const stars = Array.from({ length: 340 }, () => ({
+  x: random() * 1440,
+  y: random() * 1000,
+  r: 0.25 + random() * 0.7,
+  o: 0.12 + random() * 0.48,
+}));
+const dust = Array.from({ length: 500 }, () => {
+  const x = random() * 1440;
+  return {
+    x,
+    y: 780 - x * 0.5 + (random() + random() + random() - 1.5) * 160,
+    r: 0.2 + random() * 0.45,
+    o: 0.03 + random() * 0.16,
+  };
+});
+---
+
+<div class="sky-background" aria-hidden="true">
+  <svg viewBox="0 0 1440 1000" preserveAspectRatio="xMidYMid slice">
+    <g class="distant-stars">
+      {stars.map((s) => (
+        <circle cx={s.x} cy={s.y} r={s.r} opacity={s.o} />
+      ))}
+    </g>
+    <g class="galactic-dust">
+      {dust.map((s) => (
+        <circle cx={s.x} cy={s.y} r={s.r} opacity={s.o} />
+      ))}
+    </g>
+  </svg>
+</div>

@@ -8,10 +8,10 @@ const facts = SITE.bio.split('\n');
 ---
 
 <Base title="关于" description={`关于 ${SITE.author} 与这个站点`}>
-  <SkyBand>
+  <SkyBand reading>
     <h1>关于</h1>
   </SkyBand>
-  <div class="container">
+  <div class="container reading-container about-body">
 
     <!-- 名片：这个人是谁（头像 + 签名 + 社交入口） -->
     <section class="idcard" aria-label="个人信息">
@@ -79,7 +79,7 @@ const facts = SITE.bio.split('\n');
         <p class="ety-zh">我知道我一无所知。</p>
       </div>
       <p>
-        这里是我的第二大脑：每篇笔记是一颗星，共享的标签把它们连成星图。
+        这里是我的第二大脑：笔记按主题汇入星图，在探索中慢慢连成自己的知识脉络。
         由 <a href="https://astro.build" target="_blank" rel="noopener">Astro</a> 构建，
         托管在自己的服务器上。
       </p>
@@ -88,6 +88,7 @@ const facts = SITE.bio.split('\n');
 </Base>
 
 <style>
+  .about-body > * { max-width: 720px; }
   /* ===== 名片 ===== */
   .idcard {
     display: flex;

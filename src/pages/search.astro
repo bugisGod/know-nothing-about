@@ -1,19 +1,19 @@
----
-import Base from '../layouts/Base.astro';
-import SkyBand from '../components/SkyBand.astro';
+﻿---
+import Base from "../layouts/Base.astro";
+import SkyBand from "../components/SkyBand.astro";
 ---
 
 <Base title="搜索" description="搜索知识库与项目复盘">
   <SkyBand compact>
-      <h1 class="page-title">搜索</h1>
-      <p class="page-desc">搜索范围：知识库笔记与项目复盘的正文。中文分词有限，建议使用简短关键词。</p>
+    <h1 class="page-title">搜索</h1>
+    <p class="page-desc">搜索范围：知识库笔记与项目复盘的正文。中文分词有限，建议使用简短关键词。</p>
   </SkyBand>
   <div class="container">
-
     <div id="search"></div>
 
     <div id="search-fallback" class="search-fallback" hidden>
-      搜索索引在构建时生成：<code>npm run build</code> 之后用 <code>npm run preview</code>
+      搜索索引在构建时生成：<code>npm run build</code> 之后用{" "}
+      <code>npm run preview</code>
       本地预览，即可使用搜索。
     </div>
 
@@ -26,20 +26,20 @@ import SkyBand from '../components/SkyBand.astro';
     <script is:inline>
       if (window.PagefindUI) {
         new PagefindUI({
-          element: '#search',
+          element: "#search",
           showImages: false,
           showSubResults: true,
           translations: {
-            placeholder: '搜索笔记与项目…',
-            clear_search: '清除',
-            zero_results: '没有找到与 “[SEARCH_TERM]” 相关的内容',
-            many_results: '共 [COUNT] 条结果',
-            one_result: '共 [COUNT] 条结果',
-            searching: '搜索中…',
+            placeholder: "搜索笔记与项目…",
+            clear_search: "清除",
+            zero_results: "没有找到与 “[SEARCH_TERM]” 相关的内容",
+            many_results: "共 [COUNT] 条结果",
+            one_result: "共 [COUNT] 条结果",
+            searching: "搜索中…",
           },
         });
       } else {
-        document.getElementById('search-fallback').hidden = false;
+        document.getElementById("search-fallback").hidden = false;
       }
     </script>
   </div>

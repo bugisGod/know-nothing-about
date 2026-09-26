@@ -1,30 +1,31 @@
-/* ============================================================
+﻿/* ============================================================
    设计令牌：星空 · 唯一主题
    全站以深空夜色为主色调：暖白文字、琥珀点缀、发丝边线
    ============================================================ */
 :root {
   color-scheme: dark;
-  --bg: #0b0c12;
-  --bg-inset: #161824;
-  --card: #12141d;
-  --header-bg: rgba(11, 12, 18, 0.8);
+  --bg: #090d15;
+  --bg-inset: #111925;
+  --card: #101722;
+  --header-bg: rgba(9, 13, 21, 0.86);
   --text: #e8e6df;
   --text-2: #a7a9b8;
-  --muted: #6f7288;
-  --border: #232536;
+  --muted: #8992a6;
+  --border: #222b3a;
   --border-strong: #3a3d55;
-  --accent: #d9a920;
+  --accent: #d9b879;
   --mark: rgba(217, 169, 32, 0.35);
   --wash: rgba(130, 145, 255, 0.06);
   --grain-opacity: 0.045;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   --radius: 10px;
-  --sticky-top: 76px;
-  --font-display: 'Instrument Serif', 'Noto Serif SC', 'Songti SC', Georgia, serif;
+  --font-display:
+    "Instrument Serif", "Noto Serif SC", "Songti SC", Georgia, serif;
   --font-sans:
-    'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Arial, sans-serif;
-  --mono: ui-monospace, 'Cascadia Code', Consolas, 'JetBrains Mono', monospace;
+    "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC",
+    "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", Consolas, "JetBrains Mono", monospace;
 }
 
 /* ===== 基础 ===== */
@@ -34,7 +35,7 @@
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: var(--sticky-top);
+  scroll-padding-top: 76px;
 }
 
 html {
@@ -46,53 +47,10 @@ body {
   background: transparent;
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 15.5px;
+  font-size: 16px;
   line-height: 1.8;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-}
-
-/* 星点 + 顶部光晕：固定合成层，滚动零开销 */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  /* 程序化深空星野：斜向银河带 + 三层景深 + 星座主角（.shots/gen-sky.py 生成） */
-  /* 首层暗角：星野四缘沉入黑，页面有了「深处」的纵深 */
-  background-image:
-    radial-gradient(125% 95% at 50% 32%, transparent 40%, rgba(2, 3, 7, 0.52) 100%),
-    var(--sky-img, url('/images/deep-sky.webp'));
-  background-size: cover;
-  background-position: var(--sky-x, 50%) center; /* 对准星座中心，窄屏裁切不失星座 */
-  background-repeat: no-repeat;
-}
-
-/* 星座变体：每日按「日期 + 路径」轮换，同一天同一页固定（脚本在 Base.astro） */
-body[data-sky='home']::before { --sky-img: url('/images/deep-sky-home.webp'); --sky-x: 50%; }
-body[data-sky='0']::before { --sky-img: url('/images/deep-sky-0.webp'); --sky-x: 77%; }
-body[data-sky='1']::before { --sky-img: url('/images/deep-sky-1.webp'); --sky-x: 25%; }
-body[data-sky='2']::before { --sky-img: url('/images/deep-sky-2.webp'); --sky-x: 18%; }
-body[data-sky='3']::before { --sky-img: url('/images/deep-sky-3.webp'); --sky-x: 76%; }
-body[data-sky='4']::before { --sky-img: url('/images/deep-sky-4.webp'); --sky-x: 20%; }
-body[data-sky='5']::before { --sky-img: url('/images/deep-sky-5.webp'); --sky-x: 77%; }
-body[data-sky='6']::before { --sky-img: url('/images/deep-sky-6.webp'); --sky-x: 76%; }
-body[data-sky='7']::before { --sky-img: url('/images/deep-sky-7.webp'); --sky-x: 23%; }
-body[data-sky='8']::before { --sky-img: url('/images/deep-sky-8.webp'); --sky-x: 84%; }
-body[data-sky='9']::before { --sky-img: url('/images/deep-sky-9.webp'); --sky-x: 27%; }
-body[data-sky='10']::before { --sky-img: url('/images/deep-sky-10.webp'); --sky-x: 74%; }
-body[data-sky='11']::before { --sky-img: url('/images/deep-sky-11.webp'); --sky-x: 23%; }
-
-/* 细颗粒纸面质感 */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  opacity: var(--grain-opacity);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
 }
 
 a {
@@ -144,7 +102,7 @@ button {
 }
 
 .site-main {
-  padding-top: 40px;
+  padding-top: 0;
   padding-bottom: 88px;
   min-height: calc(100vh - 240px);
 }
@@ -164,14 +122,14 @@ button {
   display: flex;
   align-items: center;
   gap: 24px;
-  height: 58px;
+  height: 72px;
 }
 
 .logo {
   font-family: var(--font-display);
   font-style: italic;
   font-weight: 400;
-  font-size: 18px;
+  font-size: 26px;
   letter-spacing: 0.01em;
   color: var(--text);
   white-space: nowrap;
@@ -249,9 +207,7 @@ button {
 }
 
 /* ===== 页面标题 / 小节 ===== */
-/* SkyBand 内所有 h1 统一衬线大标题（此前部分页漏加 .page-title 落成默认黑体） */
-.page-title,
-.sky-band h1 {
+.page-title {
   font-family: var(--font-display);
   font-weight: 400;
   font-size: clamp(36px, 4.5vw, 44px);
@@ -259,49 +215,6 @@ button {
   line-height: 1.25;
   margin: 10px 0 12px;
   text-wrap: balance;
-}
-
-/* 页眉带内标题：末尾琥珀句点，呼应 logo「scio.」（紧贴，避免像手滑空格） */
-.sky-band h1 {
-  text-shadow: 0 0 30px rgba(255, 243, 209, 0.07);
-}
-
-.sky-band h1::after {
-  content: '.';
-  margin-left: 2px;
-  color: var(--accent);
-}
-
-/* 手机端标题折行后句点会孤悬行尾，直接隐藏 */
-@media (max-width: 640px) {
-  .sky-band h1::after {
-    content: none;
-  }
-}
-
-/* 页眉带副题：等宽小字（N 篇 · 持续生长 等） */
-.sky-band .sub {
-  font-family: var(--mono);
-  font-size: 12.5px;
-  letter-spacing: 0.16em;
-  color: var(--muted);
-  margin: 2px 0 0;
-}
-
-/* 手机端页眉带收紧：标题换无衬线加实（宋体大字在手机屏发虚），间距压缩 */
-@media (max-width: 640px) {
-  .page-title,
-  .sky-band h1 {
-    font-family: var(--font-sans);
-    font-size: 28px;
-    font-weight: 650;
-    letter-spacing: 0.02em;
-    margin: 4px 0 8px;
-  }
-  .sky-band .sub {
-    font-size: 12px;
-    letter-spacing: 0.1em;
-  }
 }
 
 .page-desc {
@@ -335,6 +248,27 @@ button {
   gap: 12px;
 }
 
+.sec > h2 .sec-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.sec > h2 .idx {
+  font-family: var(--mono);
+  font-weight: 400;
+  color: var(--border-strong);
+  letter-spacing: 0.06em;
+}
+
+.sec > h2 .sec-label::after {
+  content: "✦";
+  margin-left: 10px;
+  font-size: 9px;
+  color: var(--accent);
+  opacity: 0.75;
+}
+
 .sec .more {
   font-size: 12px;
   letter-spacing: 0.02em;
@@ -354,7 +288,66 @@ button {
   background: var(--bg-inset);
   padding: 2px 6px;
   border-radius: 6px;
-  overflow-wrap: anywhere; /* 长路径（无断点字符）允许任意处折行，防撑破移动端版面 */
+}
+
+/* ===== 笔记行 ===== */
+.note-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.note-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 18px 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.note-list .note-row:last-child {
+  border-bottom: none;
+}
+
+.note-row .cat {
+  flex: none;
+  width: 84px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.note-row .t {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17.5px;
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+}
+
+.note-row .t:hover {
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-thickness: 1px;
+}
+
+.note-row .desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.note-row .d {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ===== 项目条目（整行可点）===== */
@@ -533,8 +526,8 @@ button {
 
 /* ===== 正文排版 ===== */
 .prose {
-  font-size: 15.5px;
-  line-height: 1.95;
+  font-size: 16px;
+  line-height: 1.9;
 }
 
 .prose h1 {
@@ -550,45 +543,16 @@ button {
 .prose h2 {
   font-size: 19px;
   font-weight: 650;
-  padding-bottom: 0.55em;
-  position: relative;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid var(--border);
   letter-spacing: -0.01em;
   line-height: 1.45;
   margin: 2.6em 0 0.75em;
   text-wrap: balance;
 }
 
-/* 星轨分隔线：两端渐隐的细线，中央一颗小星 */
-.prose h2::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(232, 230, 223, 0.2) 16%,
-    rgba(232, 230, 223, 0.2) 84%,
-    transparent
-  );
-}
-
-.prose h2::before {
-  content: '';
-  position: absolute;
-  left: calc(50% - 2px);
-  bottom: -2px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: rgba(232, 230, 223, 0.6);
-  box-shadow: 0 0 7px rgba(232, 230, 223, 0.45);
-}
-
 .prose h3 {
-  font-size: 15.5px;
+  font-size: 16px;
   font-weight: 600;
   margin: 2em 0 0.6em;
 }
@@ -639,7 +603,7 @@ button {
   width: 100%;
   margin: 1.4em 0;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   font-size: 14px;
 }
 
@@ -702,7 +666,7 @@ button {
 }
 
 /* ===== 书籍配图：暗色适配（白底线稿反色融入夜色）===== */
-.prose img[src*='/images/ai-book/'] {
+.prose img[src^="/images/ai-book/"] {
   filter: invert(0.92) hue-rotate(180deg);
   border: 1px solid var(--border);
 }
@@ -726,7 +690,9 @@ button {
   letter-spacing: 0.05em;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease;
 }
 
 .prose pre:hover .code-copy {
@@ -770,5 +736,245 @@ button {
 
   .cat-sec {
     margin-top: 34px;
+  }
+}
+
+/* Deep sky outside the reading surface. Decorative layers never cover text. */
+body {
+  position: relative;
+  isolation: isolate;
+}
+.sky-background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 82% 8%, #23344b24, transparent 55%);
+}
+.sky-background svg {
+  width: 100%;
+  height: 100%;
+  fill: #cbd9ed;
+  opacity: 0.45;
+  mask-image: linear-gradient(
+    90deg,
+    #000,
+    transparent 25%,
+    transparent 75%,
+    #000
+  );
+}
+.is-home .sky-background {
+  background:
+    radial-gradient(ellipse at 65% 35%, #2d456226, transparent 58%),
+    linear-gradient(145deg, transparent 36%, #263a5214 47%, transparent 57%);
+}
+.is-home .sky-background svg {
+  opacity: 0.9;
+  mask-image: linear-gradient(#000 65%, transparent);
+}
+.is-home .galactic-dust {
+  animation: sky-breathe 14s ease-in-out infinite alternate;
+}
+@keyframes sky-breathe {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.is-home .site-main {
+  padding-bottom: 0;
+}
+.site-header {
+  border-bottom-color: rgba(137, 146, 166, 0.1);
+}
+.logo {
+  font-size: 28px;
+}
+.site-footer {
+  border-top-color: rgba(137, 146, 166, 0.13);
+  padding: 26px 0 32px;
+}
+.footer-meta {
+  font-size: 11px;
+}
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.section-heading h2 {
+  font-size: 14px;
+  font-weight: 400;
+  margin: 0;
+}
+.section-heading > a {
+  font-size: 12px;
+  color: var(--muted);
+}
+.section-heading > a:hover {
+  color: var(--text);
+}
+.prose {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.prose h2 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 21px;
+  border-bottom: 0;
+  margin-top: 2.3em;
+}
+.prose h3 {
+  font-size: 18px;
+}
+.prose blockquote {
+  border-left: 1px solid var(--border-strong);
+  font-size: 15px;
+}
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.prose th {
+  white-space: nowrap;
+}
+.prose td {
+  min-width: 90px;
+}
+.prose pre {
+  background: #0e1520 !important;
+}
+.prose pre:focus-within .code-copy {
+  opacity: 1;
+}
+.prose .series-badge {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+.reading-container {
+  max-width: 1040px;
+}
+.reading-container > .prose {
+  max-width: 720px;
+}
+.proj-row .head {
+  flex-wrap: wrap;
+}
+.proj-row .body {
+  min-width: 0;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 760px) {
+  .container {
+    padding-inline: 22px;
+  }
+  .header-inner {
+    height: 62px;
+  }
+  .site-main {
+    padding-bottom: 48px;
+  }
+  .prose {
+    font-size: 16px;
+    line-height: 1.85;
+  }
+  .prose h2 {
+    font-size: 21px;
+  }
+  .prose pre {
+    font-size: 12px;
+    padding: 36px 14px 14px;
+  }
+  .code-copy {
+    opacity: 1;
+    min-height: 30px;
+  }
+  .prose th,
+  .prose td {
+    padding: 9px;
+  }
+  .sky-background svg {
+    opacity: 0.25;
+  }
+  .page-meta {
+    font-size: 11px;
+    gap: 8px 14px;
+  }
+  .footer-inner {
+    gap: 8px 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .is-home .galactic-dust {
+    animation: none;
+  }
+}
+.article-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 720px) 200px;
+  gap: 64px;
+  align-items: start;
+}
+.article-layout > article {
+  grid-row: 1;
+  grid-column: 1;
+}
+.article-pagination {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 56px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.article-pagination a {
+  text-decoration: none;
+}
+.article-pagination span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.article-pagination b {
+  font-size: 14px;
+  font-weight: 400;
+}
+.article-pagination a:hover b {
+  color: var(--accent);
+}
+@media (max-width: 1000px) {
+  .reading-container {
+    max-width: 768px;
+  }
+  .article-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-width: 768px;
+  }
+  .article-layout > * {
+    width: 100%;
+  }
+  .sky-band.reading .container {
+    max-width: 768px !important;
+  }
+}
+@media (max-width: 560px) {
+  .article-pagination {
+    grid-template-columns: 1fr;
+    gap: 20px;
   }
 }

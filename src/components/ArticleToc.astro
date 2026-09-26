@@ -1,0 +1,116 @@
+---
+interface Props {
+  headings: { depth: number; slug: string; text: string }[];
+}
+const { headings } = Astro.props;
+const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+---
+
+{toc.length > 1 && (
+  <>
+    <details class="mobile-toc">
+      <summary>本文目录</summary>
+      <nav aria-label="本文目录">
+        {toc.map((h) => (
+          <a class:list={[{ sub: h.depth === 3 }]} href={`#${h.slug}`}>
+            {h.text}
+          </a>
+        ))}
+      </nav>
+    </details>
+    <aside class="article-toc">
+      <nav aria-label="本文目录">
+        <p>本文目录</p>
+        {toc.map((h) => (
+          <a class:list={[{ sub: h.depth === 3 }]} href={`#${h.slug}`}>
+            {h.text}
+          </a>
+        ))}
+      </nav>
+    </aside>
+  </>
+)}
+<style>
+  .article-toc {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: 104px;
+    max-height: calc(100svh - 140px);
+    overflow: auto;
+    font-size: 12px;
+  }
+  p {
+    margin: 0 0 16px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  a {
+    display: block;
+    border-left: 1px solid var(--border);
+    padding: 6px 0 6px 16px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  a.sub {
+    padding-left: 28px;
+    font-size: 11px;
+  }
+  a:hover {
+    color: var(--text);
+  }
+  a[aria-current] {
+    color: var(--text);
+    border-left-color: var(--accent);
+  }
+  .mobile-toc {
+    display: none;
+  }
+  @media (max-width: 1000px) {
+    .article-toc {
+      display: none;
+    }
+    .mobile-toc {
+      display: block;
+      margin-bottom: 24px;
+      border-block: 1px solid var(--border);
+      font-size: 13px;
+    }
+    summary {
+      padding: 12px 0;
+      cursor: pointer;
+      color: var(--text-2);
+    }
+    .mobile-toc nav {
+      padding: 0 0 16px;
+    }
+    a {
+      padding-block: 9px;
+    }
+  }
+</style>
+<script>
+  const links = [
+    ...document.querySelectorAll<HTMLAnchorElement>(".article-toc a"),
+  ];
+  const targets = links
+    .map((a) => document.getElementById(decodeURIComponent(a.hash.slice(1))))
+    .filter((el): el is HTMLElement => !!el);
+  if (targets.length) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (!visible.length) return;
+        links.forEach((a) => {
+          if (decodeURIComponent(a.hash.slice(1)) === visible[0].target.id)
+            a.setAttribute("aria-current", "location");
+          else a.removeAttribute("aria-current");
+        });
+      },
+      { rootMargin: "-90px 0px -60% 0px" },
+    );
+    targets.forEach((el) => observer.observe(el));
+  }
+</script>
