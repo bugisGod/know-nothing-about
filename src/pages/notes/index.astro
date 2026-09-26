@@ -29,6 +29,15 @@ function stageOf(d?: Date) {
 ---
 
 <Base title="知识库" description="scio 的知识库：笔记与学习记录，持续生长">
+  <SkyBand>
+    <div class="container">
+      <header class="head">
+        <h1>知识库</h1>
+        <p class="sub">{notes.length} 篇 · 持续生长</p>
+      </header>
+    </div>
+  </SkyBand>
+
   <div class="container">
     <!-- 专栏特色卡：深入理解 AI Agent -->
     {
@@ -83,28 +92,27 @@ function stageOf(d?: Date) {
 </Base>
 
 <style>
-  .container {
-    max-width: 1080px;
-    margin-inline: auto;
-    padding-inline: 24px;
+  /* 统一垂直节奏：主间距一律 30px */
+  .sec {
+    margin-top: 30px;
   }
 
   .sec-h {
     font-family: var(--mono);
     font-size: 11px;
     font-weight: 400;
-    letter-spacing: 0.22em;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--muted);
-    margin: 40px 0 18px;
+    margin: 0 0 12px;
   }
 
   /* ===== 专栏特色卡 ===== */
   .column-card {
-    margin: 40px 0 12px;
-    padding: 28px 32px 14px;
+    margin: 0;
+    padding: 22px 26px 16px;
     border: 1px solid rgba(232, 230, 223, 0.1);
-    border-radius: 16px;
+    border-radius: 13px;
     background:
       radial-gradient(120% 100% at 0% 0%, rgba(96, 118, 255, 0.07), transparent 55%),
       color-mix(in oklab, #12141d 86%, transparent);
@@ -117,22 +125,22 @@ function stageOf(d?: Date) {
     align-items: baseline;
     justify-content: space-between;
     gap: 16px;
-    margin-bottom: 14px;
+    margin-bottom: 8px;
   }
 
   .cc-kicker {
     display: block;
     font-family: var(--mono);
-    font-size: 10.5px;
-    letter-spacing: 0.3em;
+    font-size: 10px;
+    letter-spacing: 0.2em;
     color: var(--accent);
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
 
   .cc-title {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: 25px;
+    font-family: var(--font-sans);
+    font-weight: 650;
+    font-size: 20px;
     letter-spacing: 0.01em;
     color: var(--text);
     margin: 0;
@@ -155,7 +163,7 @@ function stageOf(d?: Date) {
     align-items: baseline;
     justify-content: space-between;
     gap: 16px;
-    padding: 13px 2px;
+    padding: 10px 2px;
     border-bottom: 1px solid var(--border);
   }
 
@@ -166,9 +174,9 @@ function stageOf(d?: Date) {
   .cc-t {
     font-family: var(--font-sans);
     font-weight: 550;
-    font-size: 15.5px;
+    font-size: 15px;
     color: var(--text);
-    line-height: 1.6;
+    line-height: 1.55;
   }
 
   .cc-row:hover .cc-t {
@@ -186,18 +194,18 @@ function stageOf(d?: Date) {
   /* ===== 全部笔记：卡片网格 ===== */
   .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+    gap: 16px;
   }
 
   .card {
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 24px 26px;
+    gap: 9px;
+    padding: 19px 21px;
     border: 1px solid rgba(232, 230, 223, 0.09);
-    border-radius: 16px;
+    border-radius: 13px;
     background:
       radial-gradient(120% 90% at 20% 0%, rgba(96, 118, 255, 0.05), transparent 60%),
       color-mix(in oklab, #12141d 86%, transparent);
@@ -213,10 +221,10 @@ function stageOf(d?: Date) {
 
   .stage {
     position: absolute;
-    top: 16px;
-    right: 18px;
+    top: 13px;
+    right: 15px;
     font-family: var(--mono);
-    font-size: 10.5px;
+    font-size: 10px;
     letter-spacing: 0.12em;
     color: var(--muted);
   }
@@ -226,14 +234,14 @@ function stageOf(d?: Date) {
   }
 
   .t {
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 20px;
+    font-family: var(--font-sans);
+    font-weight: 650;
+    font-size: 17.5px;
     letter-spacing: 0.01em;
     line-height: 1.5;
     color: var(--text);
     margin: 0;
-    padding-right: 56px;
+    padding-right: 52px;
   }
 
   .card:hover .t {
@@ -242,9 +250,10 @@ function stageOf(d?: Date) {
 
   .desc {
     margin: 0;
+    max-width: 62ch;
     color: var(--text-2);
-    font-size: 13.5px;
-    line-height: 1.8;
+    font-size: 13px;
+    line-height: 1.7;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -255,9 +264,9 @@ function stageOf(d?: Date) {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
     margin-top: auto;
-    padding-top: 6px;
+    padding-top: 4px;
   }
 
   .tags {
@@ -271,7 +280,7 @@ function stageOf(d?: Date) {
 
   .d {
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 11px;
     color: var(--muted);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
@@ -279,25 +288,37 @@ function stageOf(d?: Date) {
 
   @media (max-width: 640px) {
     .column-card {
-      padding: 22px 20px 8px;
+      padding: 16px 15px 12px;
     }
 
     .cc-title {
-      font-size: 21px;
+      font-size: 18px;
+    }
+
+    .cc-row {
+      padding: 9px 2px;
+    }
+
+    .cc-t {
+      font-size: 14.5px;
+    }
+
+    .sec {
+      margin-top: 22px;
     }
 
     .card {
-      padding: 20px;
+      padding: 15px 16px;
+      gap: 8px;
     }
 
     .t {
-      font-size: 18px;
-      padding-right: 0;
+      font-size: 16.5px;
+      padding-right: 48px;
     }
 
-    .stage {
-      position: static;
-      order: -1;
+    .desc {
+      font-size: 12.5px;
     }
   }
 </style>

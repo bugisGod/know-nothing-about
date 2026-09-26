@@ -9,15 +9,12 @@ export const SITE = {
   // 一句话介绍（首页副标题）
   tagline: 'I know that I know nothing.',
 
-  // 首页自我介绍（会按行显示）
+  // 关于页自我介绍
   bio: [
     '开发者 / 长期学习者。',
-    '这个站点是我的个人名片，也是我的第二大脑：',
-    '存放知识笔记与项目复盘，把踩过的坑变成下次的垫脚石。',
+    '毕业于西安石油大学，五年工作经验的菜鸟程序员：用 Python 写过后端，现在搞编译相关的工作。',
+    '热爱 vibe coding，喜欢搞一些奇奇怪怪但不太有用的东西。',
   ].join('\n'),
-
-  // 技能标签（首页展示）
-  skills: ['JavaScript / TypeScript', '前端 / 全栈', 'Node.js', '持续学习中'],
 
   // 社交链接（icon 可选：github / mail / rss / link）
   socials: [
@@ -40,7 +37,4 @@ export const SERIES: Record<string, { title: string }> = {
 export const CATEGORIES: Record<string, { label: string; desc: string }> = {
   study: { label: '学习笔记', desc: '读书 · 源码 · 实践对照' },
   frontend: { label: '前端', desc: '框架 · 工程化 · 浏览器' },
-  tools: { label: '工具', desc: '命令行与效率工具' },
-  reading: { label: '阅读', desc: '读书与方法论笔记' },
-  projects: { label: '项目', desc: '做过的东西与踩过的坑' },
 };

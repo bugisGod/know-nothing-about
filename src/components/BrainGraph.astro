@@ -43,6 +43,14 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
   <p class="graph-caption">
     <span>拖拽 · 点击星体探索</span>
   </p>
+  <details class="graph-list">
+    <summary>文章索引</summary>
+    <ul>
+      {nodes.filter((n) => !n.anchor).map((n) => (
+        <li><a href={n.url}>{n.title}</a></li>
+      ))}
+    </ul>
+  </details>
   <script type="application/json" id="graph-data" set:html={dataJson} />
 </section>
 
@@ -79,6 +87,42 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 
   .graph-sec {
     margin-top: 40px;
+  }
+
+  .graph-list {
+    max-width: 720px;
+    margin: 10px auto 0;
+    font-size: 13px;
+  }
+
+  .graph-list summary {
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    text-align: center;
+    list-style: none;
+  }
+
+  .graph-list summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .graph-list ul {
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+    columns: 2;
+  }
+
+  .graph-list a {
+    color: var(--text-2);
+    line-height: 1.9;
+  }
+
+  .graph-list a:hover {
+    color: var(--accent);
   }
 
   .graph-canvas.grabbing {
@@ -178,7 +222,31 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 </style>
 
 <script>
-  import * as THREE from 'three';
+  // 懒加载：图进入视口（含 300px 预加载余量）才拉取 three.js；
+  // prefers-reduced-motion 直接渲染静态一帧，跳过动画
+  const bootEl = document.getElementById('brain-graph');
+  const bootData = document.getElementById('graph-data');
+  if (bootEl && bootData && bootEl.parentElement) {
+    const boot = () =>
+      init(bootEl as HTMLElement, bootData, bootEl.parentElement as HTMLElement).catch(() => {});
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      boot();
+    } else {
+      const spy = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((e) => e.isIntersecting)) {
+            spy.disconnect();
+            boot();
+          }
+        },
+        { rootMargin: '300px' }
+      );
+      spy.observe(bootEl);
+    }
+  }
+
+  async function init(mount: HTMLElement, dataEl: HTMLElement, frame: HTMLElement) {
+  const THREE = await import('three');
 
   type GraphNode = {
     id: string;
@@ -193,10 +261,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     count?: number;
   };
 
-  const mount = document.getElementById('brain-graph');
-  const dataEl = document.getElementById('graph-data');
   const tip = document.getElementById('graph-tip') as HTMLElement;
-  const frame = mount?.parentElement as HTMLElement;
 
   if (mount && dataEl && frame) {
     const { nodes, edges } = JSON.parse(dataEl.textContent!) as {
@@ -726,5 +791,6 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       renderer.render(scene, camera);
     }
     if (!rafId) loop();
+  }
   }
 </script>

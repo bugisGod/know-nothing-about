@@ -1,16 +1,19 @@
 ---
 // 夜空页眉带：子页面统一「入主题」——渐变 + 星点 + 星云光晕
 // 用法：<SkyBand><h1 class="page-title">…</h1><p class="page-desc">…</p></SkyBand>
+// wide：内容容器放宽到 1280（三栏详情页用，保证页眉与正文一条中轴线）
 interface Props {
   /** 是否更矮的紧凑版（如搜索页） */
   compact?: boolean;
+  /** 容器放宽到 1280（与正文 .container.wide 对齐） */
+  wide?: boolean;
 }
 
-const { compact = false } = Astro.props;
+const { compact = false, wide = false } = Astro.props;
 ---
 
 <div class:list={['sky-band', { compact }]}>
-  <div class="container">
+  <div class:list={['container', { wide }]}>
     <slot />
   </div>
 </div>
@@ -18,7 +21,7 @@ const { compact = false } = Astro.props;
 <style>
   .sky-band {
     margin-top: -40px; /* 抵消 main 顶边距，夜空直通页头 */
-    padding: 56px 0 40px;
+    padding: 56px 0 46px;
     position: relative;
     overflow: hidden;
     background:
@@ -29,10 +32,22 @@ const { compact = false } = Astro.props;
       radial-gradient(1px 1px at 90% 40%, rgba(255, 255, 255, 0.4), transparent 100%),
       radial-gradient(52% 60% at 16% 20%, rgba(96, 118, 255, 0.09), transparent 70%),
       radial-gradient(44% 52% at 84% 30%, rgba(168, 122, 255, 0.07), transparent 72%),
-      linear-gradient(to bottom, #12141f 0%, #0d0e18 62%, var(--bg) 100%);
+      /* 半透明夜色：全局星空（含星座）从页头后透出，整页连续 */
+      linear-gradient(to bottom, rgba(18, 20, 31, 0.78) 0%, rgba(13, 14, 24, 0.5) 55%, rgba(11, 12, 18, 0.12) 100%);
   }
 
   .sky-band :global(.container) {
     position: relative;
+  }
+
+  /* 垂直节奏统一：带内最后元素下边距清零，与正文间距只由 padding-bottom 决定 */
+  .sky-band :global(.container > :last-child) {
+    margin-bottom: 0;
+  }
+
+  @media (max-width: 640px) {
+    .sky-band {
+      padding: 30px 0 26px;
+    }
   }
 </style>

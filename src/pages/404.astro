@@ -1,21 +1,24 @@
 ---
 import Base from '../layouts/Base.astro';
+import SkyBand from '../components/SkyBand.astro';
 ---
 
 <Base title="404">
-  <div class="container">
-    <div class="notfound">
-      <p class="code">404</p>
-      <p class="hint">这个页面还不存在——也许正是该写篇笔记的时候。</p>
-      <a href="/">← 回到首页</a>
+  <SkyBand compact>
+    <div class="container">
+      <div class="notfound">
+        <p class="code">404</p>
+        <p class="hint">这个页面还不存在——也许正是该写篇笔记的时候。</p>
+        <a href="/">← 回到首页</a>
+      </div>
     </div>
-  </div>
+  </SkyBand>
 </Base>
 
 <style>
   .notfound {
     text-align: center;
-    padding: 120px 0;
+    padding: 34px 0 10px;
   }
 
   .code {
@@ -23,7 +26,7 @@ import Base from '../layouts/Base.astro';
     font-size: 96px;
     line-height: 1;
     letter-spacing: 0.04em;
-    color: var(--border-strong);
+    color: var(--muted);
     margin: 0 0 20px;
   }
 

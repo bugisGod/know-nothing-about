@@ -16,6 +16,7 @@ interface Props {
 
 const { title, description = '个人名片 · 知识库 · 项目复盘' } = Astro.props;
 const pageTitle = title ? `${title} · ${SITE.title}` : SITE.title;
+const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : Astro.url.pathname;
 ---
 
 <!doctype html>
@@ -27,13 +28,42 @@ const pageTitle = title ? `${title} · ${SITE.title}` : SITE.title;
     <meta name="description" content={description} />
     <meta name="generator" content={Astro.generator} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonical} />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/og.png" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL('/og.png', Astro.site ?? 'https://nihilscire.com').href} />
     <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
+    <script is:inline>
+      // 星空轮换：每日把 12 个星座洗成一个排列，各页面取不同槽位
+      // → 主页面显式占槽（0-4，恒不重复），详情页哈希兜底；同日同页固定，隔天全站换血
+      (() => {
+        let seed = new Date().getDate() * 2654435761 >>> 0;
+        const deck = [...Array(12).keys()];
+        for (let i = 11; i > 0; i--) {
+          seed = (seed * 1664525 + 1013904223) >>> 0;
+          const j = seed % (i + 1);
+          [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        const FIXED = { '/': 0, '/notes/': 1, '/projects/': 2, '/about/': 3, '/search/': 4 };
+        const p = location.pathname;
+        if (p === '/') {
+          // 首页专用素版银河：无星座无星芒，安静退后，主角让给 3D 星图
+          document.body.dataset.sky = 'home';
+          return;
+        }
+        let slot = FIXED[p];
+        if (slot === undefined) {
+          let h = 2166136261;
+          for (const c of p) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+          slot = h % 12;
+        }
+        document.body.dataset.sky = String(deck[slot]);
+      })();
+    </script>
     <Header />
     <main class="site-main">
       <slot />
