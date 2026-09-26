@@ -40,9 +40,8 @@ const facts = SITE.bio.split('\n');
       {facts.map((f) => <li>{f}</li>)}
     </ul>
 
-    <!-- 写在开始：散文排版（导语放大、引用仪式化） -->
+    <!-- 散文区：导语放大直接开场，不加节标题 -->
     <section class="essay">
-      <h2 class="kicker">写在开始</h2>
       <p class="lede">
         五六年，回头看时如白驹过隙——你还站在原地，它已经跑完了。
       </p>
@@ -74,7 +73,7 @@ const facts = SITE.bio.split('\n');
 
     <!-- 关于本站：词源单独成块，与首页名言互为首尾 -->
     <section class="siteinfo">
-      <h2 class="kicker">关于本站</h2>
+      <h2 class="sec-title">关于本站<span class="sec-dot">.</span></h2>
       <div class="ety">
         <p class="ety-latin">Scio me nihil scire.</p>
         <p class="ety-zh">我知道我一无所知。</p>
@@ -173,31 +172,26 @@ const facts = SITE.bio.split('\n');
     opacity: 0.7;
   }
 
-  /* ===== 节标题：编辑感的小 kicker，不再是文档式大 h2 ===== */
+  /* ===== 节标题：衬线 + 琥珀句点，与页头「关于.」同一语言 ===== */
   .essay,
   .siteinfo {
     margin-top: 68px;
     max-width: 38em;
   }
 
-  .kicker {
-    font-family: var(--mono);
-    font-size: 11px;
+  .sec-title {
+    font-family: var(--font-display);
+    font-size: 21px;
     font-weight: 400;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin: 0 0 22px;
-    padding-bottom: 12px;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    margin: 0 0 26px;
+    padding-bottom: 14px;
     border-bottom: 1px solid var(--border);
   }
 
-  .kicker::after {
-    content: '✦';
-    margin-left: 10px;
-    font-size: 9px;
+  .sec-dot {
     color: var(--accent);
-    opacity: 0.75;
   }
 
   /* ===== 散文 ===== */

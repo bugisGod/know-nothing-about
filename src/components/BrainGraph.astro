@@ -309,6 +309,9 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       throw new Error('WebGL unavailable');
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // 画布就绪后淡入：懒加载完成不再突然弹出
+    renderer.domElement.style.opacity = '0';
+    renderer.domElement.style.transition = 'opacity 0.6s ease';
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -767,7 +770,9 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     });
 
     // ===== 主循环：多轴漂移 + 呼吸，制造纵深 =====
-    if (reduced) { for (let i = 0; i < 320; i++) tick(0); }
+    // 预跑模拟到收敛（alpha 衰减至下限）：首帧即成形星座，
+    // 每次跳回主页不再看到星星从散点「快速复位」地乱飞
+    for (let i = 0; i < 700; i++) tick(0);
     const t0 = performance.now();
     function loop() {
       rafId = requestAnimationFrame(loop);
