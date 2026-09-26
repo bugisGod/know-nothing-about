@@ -820,6 +820,8 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       renderer.render(scene, camera);
     }
     if (!rafId) loop();
+    // 首帧已渲染：淡入显形（初始化时置 0，此处必须拉回 1，否则画布永久透明）
+    requestAnimationFrame(() => { renderer.domElement.style.opacity = '1'; });
   }
   }
 </script>
