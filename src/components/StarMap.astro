@@ -13,6 +13,8 @@ interface Props {
   domains: Domain[];
 }
 const { domains } = Astro.props;
+// 「已点亮 N 颗 · 余下皆是未知」：已知之少对未知之多
+const litCount = domains.reduce((sum, d) => sum + d.entries.length, 0);
 // Bound visual density independently of article count; positions are stable.
 const pageSize = 3;
 const slots = [
@@ -86,6 +88,9 @@ const motifs = [
       </a>
     )}
   </div>
+  <p class="sky-line">
+    已点亮 <b>{litCount}</b> 颗 · 余下皆是未知
+  </p>
   <div class="map-toolbar">
     <div class="map-switch" role="group" aria-label="浏览方式">
       <button type="button" data-view="map" aria-pressed="true">
@@ -182,8 +187,8 @@ const motifs = [
   polyline {
     fill: none;
     stroke: #8093b5;
-    stroke-width: 0.45;
-    opacity: 0.32;
+    stroke-width: 0.38;
+    opacity: 0.2;
     transition: opacity 0.3s;
   }
   .star {
@@ -231,6 +236,21 @@ const motifs = [
     align-items: center;
     gap: 24px;
     padding: 12px 20px;
+  }
+
+  /* 灵魂句：已知之少 vs 未知之多，构建时从内容数据算出 */
+  .sky-line {
+    position: absolute;
+    left: 20px;
+    bottom: 8px;
+    font: 10.5px var(--mono);
+    letter-spacing: 0.22em;
+    color: var(--muted);
+  }
+
+  .sky-line b {
+    color: var(--text);
+    font-weight: 400;
   }
   .map-switch,
   .map-pagination {
