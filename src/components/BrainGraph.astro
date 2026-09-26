@@ -330,7 +330,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     camera.position.set(0, 0, camZ);
 
     const group = new THREE.Group();
-    group.position.y = 0.55; // 星群整体上移，拉近与 hero 文字的距离
+    group.position.y = 1.6; // 星群整体上移：收紧 hero 标语与星座之间的空档（世界坐标 +61px）
     scene.add(group);
 
     // ===== 初始位置：锚星布在球面（彼此远离），成员星落在锚星近旁 =====

@@ -130,7 +130,12 @@ gEdges.push(...[...edgeMap.entries()].map(([key, w]) => {
     border-radius: 0;
     background: transparent;
     height: 540px;
+    margin-top: 0; /* 星图贴紧 hero，页眉与星群之间不留空档 */
     margin-inline: calc(50% - 50vw); /* 星空铺满整屏宽 */
+  }
+
+  .night :global(.graph-sec) {
+    margin-top: 16px;
   }
 
   .night :global(.graph-caption) {
