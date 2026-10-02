@@ -5,19 +5,31 @@ const random = () => {
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
   return seed / 4294967296;
 };
-const stars = Array.from({ length: 340 }, () => ({
-  x: random() * 1440,
-  y: random() * 1000,
-  r: 0.25 + random() * 0.7,
-  o: 0.12 + random() * 0.48,
-}));
-const dust = Array.from({ length: 500 }, () => {
+// 远景恒星星层：数量加密、半径走幂律（多数极小的锐点，少数稍亮），
+// 读感是「星」而不是「雾」——雾来自大而淡的点，所以要小而实。
+// 半径下限 0.4：小于半像素的圆会被抗锯齿整颗吃掉，加密等于白加
+const stars = Array.from({ length: 700 }, () => {
+  const m = random();
+  return {
+    x: random() * 1440,
+    y: random() * 1000,
+    r: 0.4 + m * m * 0.62,
+    o: 0.3 + random() * 0.52,
+  };
+});
+// 银河尘带：这是画面上「斜贯的银河」本体。
+// 3D 椭圆环因为尺度远大于视口，画面只吃到一小段弧、读不成带；
+// 这里的解析几何是可控的：斜率 0.62（viewBox 坐标）→ 屏幕约 29°，
+// 从左上斜贯到右下，横跨整屏；垂直方向高斯抖动 ±σ≈70px 决定带宽。
+const dust = Array.from({ length: 1400 }, () => {
   const x = random() * 1440;
   return {
     x,
-    y: 780 - x * 0.5 + (random() + random() + random() - 1.5) * 160,
-    r: 0.2 + random() * 0.45,
-    o: 0.03 + random() * 0.16,
+    y: 1000 - x * 0.62 + (random() + random() + random() - 1.5) * 150,
+    r: 0.35 + random() * 0.55,
+    // 亮度必须够：合成后 alpha_eff≈0.1-0.35（灰阶 27-80）才看得见「带」。
+    // 低于 ~0.06 的整层在 #060709 上等于隐形 —— 之前那版就是这样白加的。
+    o: 0.28 + random() * 0.35,
   };
 });
 ---

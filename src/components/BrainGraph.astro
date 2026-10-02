@@ -1,63 +1,103 @@
 ---
-// 知识图谱「夜空星图」：深空面板 + 发光星点 + 雾化纵深
-// 节点 = 页面（笔记暖白 / 项目琥珀），边 = 共享标签
-// 交互：拖拽旋转 / 滚轮缩放 / 点击进入；支持 prefers-reduced-motion
-interface GraphNode {
+// 银河星图：把首页的装饰银河与导航星图合并为一套系统
+//   星团（cluster）= 分类 —— 钉在旋臂上，自带一团淡色星云晕
+//   恒星（star）  = 文章 / 项目 —— 由 slug 哈希落在所属星团内，随星系缓缓自转
+//   银河中心      = 个人信息（由 about 页承担，此处只留暖核）
+// 交互：悬停出毛玻璃信息卡，点击进入；移动端点选后卡片浮到底部。
+export interface ClusterDef {
+  key: string;
+  title: string;
+  url: string;
+  /** 域色（与分类色一致，在深空里会被降饱和使用） */
+  color?: string;
+  desc?: string;
+  count: number;
+  /** 星团形态语义：dense 密集结团 / spiral 规则螺旋 / scatter 分散广布 / natural 随机自然 */
+  form?: string;
+  /** 分类下不重复话题数（hover 信息用） */
+  topics?: number;
+  /** 话题标签列表（按文章数排序，tip 卡展示前几个） */
+  topicList?: string[];
+}
+export interface StarDef {
   id: string;
   title: string;
   url: string;
   kind: string;
   group: string;
   tags: string[];
-  /** 分类锚星（星域中心） */
-  anchor?: boolean;
-  /** 域色（恒星色温系） */
-  color?: string;
-  /** 悬停信息卡里的一句话描述 */
   desc?: string;
-  /** 星域内的文章数（仅锚星） */
-  count?: number;
+  date?: string;
+  /** 所属星团 key */
+  cluster: string;
+  /** 新星：最近发布的文章（更亮更暖 + tip 标注） */
+  recent?: boolean;
+  /** 置顶 / 精选：银河里的「亮星」（最大最亮 + 光晕） */
+  pinned?: boolean;
+}
+
+interface LinkDef {
+  a: number;
+  b: number;
+  /** 权重：共享标签数（封顶 2）+ 跨星团 1 */
+  w: number;
 }
 
 interface Props {
-  nodes: GraphNode[];
-  /** [i, j, weight] */
-  edges: [number, number, number][];
+  clusters: ClusterDef[];
+  stars: StarDef[];
+  /** 星际连线：文章之间共享标签的关联（知识网络） */
+  links?: LinkDef[];
   /** 夜空模式：去掉面板边框与底色，融入外部深色区块 */
   bare?: boolean;
   /** 整个星系在竖直方向的偏移（负值 = 下沉），hero 文字悬浮时给上方让出净空 */
   offsetY?: number;
-  /** 图下方的说明文字（默认「拖拽 · 点击星体探索」） */
+  /** 图下方的说明文字 */
   caption?: string;
   /** 说明文字下的第二行小字提示 */
   captionHint?: string;
 }
 
-const { nodes, edges, bare = false, offsetY = 0, caption, captionHint } = Astro.props;
-const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
+const { clusters, stars, links = [], bare = false, offsetY = 0, caption, captionHint } = Astro.props;
+const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u003c');
 ---
 
 <section class="graph-sec" id="graph">
   <div class:list={['graph-frame', { bare }]}>
-    <div id="brain-graph" class="graph-canvas" role="img" aria-label="三维知识图谱：每个节点对应一篇文章，连线表示共享标签。下方列表提供相同的导航。"></div>
+    <div id="brain-graph" class="graph-canvas" role="img" aria-label="银河星图：每个星团是一个分类，每颗恒星是一篇文章或项目。下方列表提供相同的导航。"></div>
+    <div id="galaxy-focus" class="galaxy-focus" aria-hidden="true">
+      <button type="button" class="gf-back">← 返回全景</button>
+      <span class="gf-name"></span>
+      <span class="gf-count"></span>
+      <a class="gf-open" href="#">打开分类页 →</a>
+    </div>
+    <div id="explore-border" class="explore-border" aria-hidden="true"></div>
+    <!-- 锁定星团后的文章列表（参考图面板 4）：悬停条目 → 星图里对应的星回亮 -->
+    <aside id="galaxy-list" class="galaxy-list" aria-hidden="true">
+      <div class="gl-head">
+        <span class="gl-title"></span>
+        <span class="gl-count"></span>
+      </div>
+      <ul class="gl-items"></ul>
+    </aside>
+    <!-- （底部摘要浮层 star-sheet 已移除：定位在画面底部会与标语/页脚文字重叠。
+         语义改为：悬停看摘要卡（graph-tip），点击直接进文章页） -->
+    <button type="button" id="explore-exit" class="explore-exit" aria-hidden="true">✦ EXIT EXPLORE</button>
+    <div id="explore-help" class="explore-help" aria-hidden="true">拖动浏览 · 滚轮缩放 · 点击星团 / 恒星查看</div>
     <div id="graph-tip" class="graph-tip" aria-hidden="true">
+      <p class="tip-kind"></p>
       <p class="tip-title"></p>
       <p class="tip-meta"></p>
-      <p class="tip-go">再点一次进入 →</p>
+      <p class="tip-desc"></p>
+      <span class="tip-go">阅读全文 →</span>
     </div>
   </div>
-  <p class="graph-caption">
-    <span class="cap-main">{caption ?? '拖拽 · 点击星体探索'}</span>
-    {captionHint && <span class="cap-sub">{captionHint}</span>}
-  </p>
-  <details class="graph-list">
-    <summary>文章索引</summary>
-    <ul>
-      {nodes.filter((n) => !n.anchor).map((n) => (
-        <li><a href={n.url}>{n.title}</a></li>
-      ))}
-    </ul>
-  </details>
+  {(caption || captionHint) && (
+    <p class="graph-caption">
+      {caption && <span class="cap-main">{caption}</span>}
+      {captionHint && <span class="cap-sub">{captionHint}</span>}
+    </p>
+  )}
   <script type="application/json" id="graph-data" set:html={dataJson} />
 </section>
 
@@ -83,13 +123,16 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     touch-action: pan-y; /* 手机竖向滑动交给页面滚动，横向拖拽仍可旋转 */
   }
 
-  /* 夜空模式：无框无底，融入外部深色区块并铺满全宽 */
+  /* 夜空模式：无框无底，fixed 铺满整个视口——不管页面多长、滚到哪里，星空永远铺底 */
   .graph-frame.bare {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
     border: none;
     border-radius: 0;
     background: transparent;
-    height: clamp(480px, 62vh, 660px);
-    margin-inline: calc(50% - 50vw);
+    height: 100%;
+    margin: 0;
   }
 
   .graph-sec {
@@ -140,21 +183,24 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     cursor: pointer;
   }
 
+  /* 悬停信息卡：毛玻璃 + 极淡描边，风格与站点深色星空一致（衬线标题 + 琥珀行动语） */
   .graph-tip {
     position: absolute;
     left: 0;
     top: 0;
-    transform: translate(-50%, calc(-100% - 14px));
-    background: rgba(18, 20, 32, 0.92);
-    border: 1px solid rgba(129, 140, 190, 0.35);
-    border-radius: 8px;
-    padding: 9px 13px;
+    transform: translate(-50%, calc(-100% - 16px));
+    background: rgba(13, 15, 25, 0.72);
+    border: 1px solid rgba(150, 160, 205, 0.16);
+    border-radius: 12px;
+    padding: 12px 15px 13px;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.12s ease;
-    max-width: 250px;
-    text-align: center;
-    backdrop-filter: blur(4px);
+    transition: opacity 0.16s ease;
+    width: max-content;
+    max-width: 280px;
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    box-shadow: 0 10px 34px rgba(3, 4, 10, 0.55);
   }
 
   .graph-tip.show {
@@ -167,49 +213,413 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     cursor: pointer;
   }
 
+  .tip-kind {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #8d95b8;
+  }
+
   .tip-go {
-    display: none;
-    margin: 7px 0 0;
+    display: inline-block;
+    margin: 10px 0 0;
     font-family: var(--mono);
     font-size: 10.5px;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.14em;
     color: #ffc46b;
   }
 
-  .graph-tip.tap .tip-go {
-    display: block;
-  }
-
   .tip-title {
-    margin: 0;
+    margin: 5px 0 0;
     font-family: var(--font-display);
-    font-size: 15px;
-    line-height: 1.4;
-    color: #f2efe6;
+    font-weight: 600;
+    font-size: 15.5px;
+    line-height: 1.35;
+    color: #f3efe6;
   }
 
   .tip-meta {
-    margin: 3px 0 0;
+    margin: 4px 0 0;
     font-family: var(--mono);
     font-size: 10.5px;
     letter-spacing: 0.06em;
     color: #8d95b8;
   }
 
-  .graph-frame :global(.star-label) {
+  .tip-desc {
+    margin: 7px 0 0;
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: rgba(232, 230, 223, 0.6);
+  }
+
+  .tip-desc:empty {
+    display: none;
+  }
+
+  /* 星团标签：名字 + 篇数，本身就是进入分类的按钮 */
+  .graph-frame :global(.cluster-label) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: flex;
+    flex-direction: column;   /* 团名在上、篇数在下：两块信息不同级，不该并排挤在一起 */
+    align-items: center;
+    gap: 3px;
+    text-align: center;
+    /* 衬线：星团名是这块空间的「地名」，衬线的庄重感让它像星图上的标注而非 UI 控件 */
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+    color: rgba(236, 234, 228, 0.82);
+    text-shadow: 0 1px 10px rgba(7, 8, 14, 0.95), 0 0 16px rgba(120, 150, 220, 0.18);
+    opacity: 0;
+    pointer-events: none;
+    will-change: transform;
+    transition: opacity 0.4s ease, color 0.25s ease, font-size 0.25s ease, text-shadow 0.25s ease;
+  }
+
+  /* hover 星团：名字明显亮起来 + 篇数浮出 —— 「这一片被指代了」要一眼看出来 */
+  .graph-frame :global(.cluster-label[data-state="hover"]) {
+    color: #ffe0aa;
+    font-size: 19px;
+    text-shadow: 0 1px 12px rgba(7, 8, 14, 0.95), 0 0 26px rgba(255, 200, 110, 0.5);
+  }
+  /* 点击锁定：团名是画面的视觉中心，但仍压得住分寸 —— 再大就成了网页 logo */
+  .graph-frame :global(.cluster-label[data-state="focus"]) {
+    color: #ffd18a;
+    font-size: 22px;
+    letter-spacing: 0.08em;
+    text-shadow:
+      0 1px 14px rgba(7, 8, 14, 0.95),
+      0 0 30px rgba(255, 190, 96, 0.55),
+      0 0 60px rgba(255, 180, 90, 0.28);
+  }
+  .graph-frame :global(.cluster-label[data-state="dim"]) {
+    color: rgba(232, 230, 223, 0.72);
+    font-size: 15px;
+    text-shadow: 0 1px 8px rgba(7, 8, 14, 0.95);
+  }
+
+  .graph-frame :global(.cl-count) {
+    opacity: 0; /* 默认只显示团名（方案：数量 hover 再出现），hover/锁定浮出 */
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    transition: opacity 0.3s ease, color 0.3s ease;
+  }
+
+  .graph-frame :global(.cluster-label[data-state="hover"]) .cl-count,
+  .graph-frame :global(.cluster-label[data-state="focus"]) .cl-count {
+    opacity: 1;
+    color: #ffc46b;
+  }
+
+  /* 聚焦态：团名居中并带上一条极淡的下划隔离线（参考图锁定态的星团标题） */
+  .graph-frame :global(.cluster-label[data-state="focus"])::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -12px;
+    width: 46px;
+    height: 1px;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, transparent, rgba(255, 196, 107, 0.55), transparent);
+  }
+
+  /* ===== P1 探索层：视口边框 + EXIT 按钮 + 操作提示（方案模块 2）===== */
+  .graph-frame :global(.explore-border) {
+    position: absolute;
+    inset: 12px;
+    border: 1px solid rgba(185, 200, 235, 0.32);
+    border-radius: 8px;
+    box-shadow:
+      inset 0 0 60px rgba(110, 140, 220, 0.07),
+      0 0 30px rgba(110, 140, 220, 0.05);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.9s ease;
+    z-index: 4;
+  }
+  .graph-frame :global(.explore-border.show) {
+    opacity: 1;
+    animation: explore-border-pulse 3.2s ease-in-out infinite;
+  }
+  @keyframes explore-border-pulse {
+    0%, 100% { border-color: rgba(185, 200, 235, 0.24); box-shadow: inset 0 0 60px rgba(110, 140, 220, 0.05), 0 0 30px rgba(110, 140, 220, 0.04); }
+    50% { border-color: rgba(185, 200, 235, 0.48); box-shadow: inset 0 0 60px rgba(110, 140, 220, 0.1), 0 0 30px rgba(110, 140, 220, 0.08); }
+  }
+  .graph-frame :global(.explore-exit) {
+    position: absolute;
+    left: 50%;
+    bottom: 92px;
+    transform: translateX(-50%);
+    padding: 11px 30px;
+    background: rgba(13, 15, 25, 0.7);
+    border: 1px solid rgba(190, 205, 235, 0.42);
+    border-radius: 999px;
+    color: #e9edf6;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease, border-color 0.2s ease, color 0.2s ease;
+    z-index: 4;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    white-space: nowrap;
+  }
+  .graph-frame :global(.explore-exit.show) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .graph-frame :global(.explore-exit:hover) {
+    border-color: rgba(217, 184, 121, 0.55);
+    color: var(--accent);
+  }
+  .graph-frame :global(.explore-help) {
+    position: absolute;
+    left: 50%;
+    bottom: 60px;
+    transform: translateX(-50%);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: rgba(232, 230, 223, 0.42);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.6s ease 0.25s;
+    z-index: 4;
+    white-space: nowrap;
+  }
+  .graph-frame :global(.explore-help.show) {
+    opacity: 1;
+  }
+  /* 探索态隐藏顶部胶囊条（方案图探索态无顶部胶囊，边界+EXIT 即模式标识） */
+  .graph-frame :global(.galaxy-focus.hidden-for-explore) {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  /* P1 探索层操作提示：底部居中，进入探索态时短暂浮现 */
+  .graph-frame :global(.explore-tip) {
+    position: absolute;
+    left: 50%;
+    top: 168px;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 26px;
+    padding: 10px 20px;
+    border: 1px solid rgba(150, 160, 205, 0.14);
+    border-radius: 999px;
+    background: rgba(13, 15, 25, 0.6);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    color: rgba(232, 230, 223, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.7s ease;
+    z-index: 3;
+    white-space: nowrap;
+  }
+  .graph-frame :global(.explore-tip.show) {
+    opacity: 1;
+  }
+
+  /* P1 银河中心常驻标识：极简 scio.（衬线 + 琥珀句点同源），主星旁 */
+  .graph-frame :global(.home-label) {
     position: absolute;
     left: 0;
     top: 0;
     pointer-events: none;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.3em;
+    color: rgba(243, 239, 230, 0.62);
+    text-shadow: 0 1px 8px rgba(7, 8, 14, 0.95);
+    white-space: nowrap;
+    will-change: transform;
+    transition: opacity 0.4s ease;
+  }
+
+  /* ===== 锁定星团后的文章列表（参考图面板 4）===== */
+  .graph-frame :global(.galaxy-list) {
+    position: absolute;
+    top: 156px;
+    right: 20px;
+    width: 268px;
+    max-height: calc(100% - 230px);
+    overflow-y: auto;
+    padding: 14px 4px 4px 16px;
+    border-left: 1px solid rgba(150, 165, 215, 0.14);
+    opacity: 0;
+    transform: translateX(14px);
+    pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    z-index: 3;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(150, 165, 215, 0.28) transparent;
+  }
+  .graph-frame :global(.galaxy-list.show) {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+  .graph-frame :global(.gl-head) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-right: 10px;
+  }
+  .graph-frame :global(.gl-title) {
+    font-family: var(--font-display);
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: rgba(232, 230, 223, 0.9);
+  }
+  .graph-frame :global(.gl-count) {
     font-family: var(--mono);
     font-size: 10.5px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(160, 172, 200, 0.65);
+  }
+  .graph-frame :global(.gl-items) {
+    list-style: none;
+    margin: 0;
+    padding: 0 10px 0 0;
+  }
+  .graph-frame :global(.gl-item) {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 9px 10px 9px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    transition: background 0.22s ease, color 0.22s ease;
+  }
+  .graph-frame :global(.gl-item::before) {
+    content: '';
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: var(--dot, rgba(255, 196, 107, 0.75));
+    vertical-align: middle;
+    box-shadow: 0 0 8px var(--dot, rgba(255, 196, 107, 0.75));
+  }
+  .graph-frame :global(.gl-item:hover),
+  .graph-frame :global(.gl-item.on) {
+    background: rgba(120, 140, 200, 0.1);
+    color: #ffe6bd;
+  }
+  .graph-frame :global(.gl-item-t) {
+    font-size: 13px;
+    line-height: 1.45;
+    display: inline;
+    font-family: var(--font-display);
+  }
+  .graph-frame :global(.gl-item-d) {
+    display: block;
+    margin-top: 3px;
+    padding-left: 13px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    color: rgba(160, 172, 200, 0.6);
+  }
+
+  /* 窄屏：列表改底部横滑，摘要浮层改贴底卡片 */
+  @media (max-width: 720px) {
+    .graph-frame :global(.galaxy-list) {
+      top: auto;
+      bottom: 66px;
+      right: 12px;
+      left: 12px;
+      width: auto;
+      max-height: 40%;
+      padding: 10px 2px 2px 12px;
+      border-left: none;
+      border-top: 1px solid rgba(150, 165, 215, 0.14);
+    }
+  }
+
+  /* ===== P2 镜头推拉：聚焦星团时的顶部信息条（避开固定页头的高度）===== */
+  .graph-frame :global(.galaxy-focus) {
+    position: absolute;
+    top: 108px;
+    left: 50%;
+    transform: translate(-50%, -8px);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 14px;
+    border: 1px solid rgba(150, 160, 205, 0.16);
+    border-radius: 999px;
+    background: rgba(13, 15, 25, 0.72);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.45s ease, transform 0.45s ease;
+    z-index: 3;
     white-space: nowrap;
-    opacity: 0.9;
-    text-shadow: 0 1px 6px rgba(7, 8, 14, 0.9);
-    will-change: transform;
-    transition: opacity 0.45s ease; /* 转入背面淡出、漂回正面淡入 */
+    max-width: calc(100% - 24px);
+  }
+  .graph-frame :global(.galaxy-focus.show) {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    pointer-events: auto;
+  }
+  .graph-frame :global(.gf-back) {
+    background: none;
+    border: 0;
+    color: var(--muted);
+    font: inherit;
+    font-size: 10.5px;
+    font-family: var(--mono);
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+  .graph-frame :global(.gf-back:hover) {
+    color: var(--text);
+  }
+  .graph-frame :global(.gf-name) {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 15px;
+    color: #f3efe6;
+  }
+  .graph-frame :global(.gf-count) {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: #8d95b8;
+  }
+  .graph-frame :global(.gf-open) {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .graph-frame :global(.gf-open:hover) {
+    text-decoration: underline;
+    text-underline-offset: 4px;
   }
 
   .graph-caption {
@@ -234,10 +644,27 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     opacity: 0.72;
   }
 
+  /* 手机：信息卡沉到底部变成「底部浮层」——手指不必追着星空中的浮动气泡点 */
   @media (max-width: 640px) {
     .graph-frame {
       height: 58vh;
       min-height: 360px;
+    }
+
+    .graph-tip.tap {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: max(14px, env(safe-area-inset-bottom));
+      top: auto;
+      width: auto;
+      max-width: none;
+      transform: none !important;
+      padding: 14px 16px 16px;
+    }
+
+    .tip-title {
+      font-size: 17px;
     }
   }
 </style>
@@ -248,8 +675,24 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
   const bootEl = document.getElementById('brain-graph');
   const bootData = document.getElementById('graph-data');
   if (bootEl && bootData && bootEl.parentElement) {
+    // 任何 boot 失败（three.js 模块 404 / WebGL 失败 / 初始化异常）都不静默：
+    // rebuild 后哈希变化，旧页面引用旧 chunk 404 是「星图消失」的主因之一
+    const showBootError = () => {
+      const mount0 = bootEl as HTMLElement;
+      if (mount0.querySelector('.galaxy-retry')) return;
+      const box = document.createElement('div');
+      box.className = 'galaxy-retry';
+      box.innerHTML =
+        '<p>星空加载失败（页面版本已更新）</p>' +
+        '<button type="button">重新加载星空</button>';
+      box.querySelector('button').addEventListener('click', () => location.reload());
+      mount0.appendChild(box);
+    };
     const boot = () =>
-      init(bootEl as HTMLElement, bootData, bootEl.parentElement as HTMLElement).catch(() => {});
+      init(bootEl as HTMLElement, bootData, bootEl.parentElement as HTMLElement).catch((e) => {
+        console.error('[BrainGraph] init failed:', e);
+        showBootError();
+      });
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       boot();
     } else {
@@ -268,27 +711,13 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 
   async function init(mount: HTMLElement, dataEl: HTMLElement, frame: HTMLElement) {
   const THREE = await import('three');
-
-  type GraphNode = {
-    id: string;
-    title: string;
-    url: string;
-    kind: string;
-    group: string;
-    tags: string[];
-    anchor?: boolean;
-    color?: string;
-    desc?: string;
-    count?: number;
-    parent?: number;
-  };
-
   const tip = document.getElementById('graph-tip') as HTMLElement;
 
   if (mount && dataEl && frame) {
-    const { nodes, edges } = JSON.parse(dataEl.textContent!) as {
-      nodes: GraphNode[];
-      edges: [number, number, number][];
+    const { clusters, stars, links = [] } = JSON.parse(dataEl.textContent!) as {
+      clusters: ClusterDef[];
+      stars: StarDef[];
+      links?: LinkDef[];
     };
 
     // 固定种子：每次加载布局一致
@@ -301,14 +730,33 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     };
     const rand = mulberry32(20260912);
 
+    // WebGL 失败/上下文丢失的降级层：保留容器、给出原因与重试入口（而不是静默黑屏）
+    const showRetry = () => {
+      if (mount.querySelector('.galaxy-retry')) return;
+      const box = document.createElement('div');
+      box.className = 'galaxy-retry';
+      box.innerHTML =
+        '<p>星空渲染暂不可用（浏览器 WebGL 资源不足，常见于开启过多标签页）</p>' +
+        '<button type="button">重新加载星空</button>';
+      box.querySelector('button').addEventListener('click', () => location.reload());
+      mount.appendChild(box);
+    };
+
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     } catch {
-      mount.remove();
-      throw new Error('WebGL unavailable');
+      // WebGL 上下文创建失败（多标签抢占/资源驱逐）：不再删容器静默吞错——
+      // 保留容器，显示可重试的降级层（用户此前「星团消失」即此路径无提示）
+      showRetry();
+      return;
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // 上下文丢失监听：标签抢占导致运行中丢上下文时，给出重试入口而不是永久黑屏
+    renderer.domElement.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      showRetry();
+    });
     // 画布就绪后淡入：懒加载完成不再突然弹出
     renderer.domElement.style.opacity = '0';
     renderer.domElement.style.transition = 'opacity 0.6s ease';
@@ -316,59 +764,39 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
 
     const scene = new THREE.Scene();
     // 雾化纵深：远处的星沉入夜空（密度偏高 → 深邃感）
-    scene.fog = new THREE.FogExp2(0x0b0c12, 0.062); // 与页面底色一致
+    scene.fog = new THREE.FogExp2(0x060709, 0.062); // 与页面底色一致
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
-    // 窄屏自动拉远相机，保证星系完整可见；用户手动缩放后不再干预
+    // 相机按视口【对角线】取距：环长轴（投影半长 ~30.5）两端伸向画面角部，贯穿整条对角线；
+    // 距离钳制 [38,46]：过近会挤爆主角星图，过窄屏装不下整环（弧段贯穿）
     const fitZ = () => {
+      const T = Math.tan((45 / 2) * Math.PI / 180);
+      // 俯瞰圆盘：直径占视口高 ~92%（圆盘各向同宽，竖屏自然出画成弧带）
+      const dist = (20 * 2) / 0.98 / (2 * T);
+      return Math.max(6, Math.min(dist, 46) - 30); // 盘心在 z=-30
+    };
+    // 环长轴屏幕角对齐视口对角线角：tan(屏幕角)=tan(rz)·cos(rx) → 解出 rz 基角
+    let rzBase = 0.58;
+    const fitRZ = () => {
       const aspect = mount.clientWidth / Math.max(mount.clientHeight, 1);
-      return aspect < 0.75 ? 14.2 : aspect < 1.1 ? 12.6 : 11.2;
+      rzBase = Math.atan(1 / (aspect * Math.cos(0.75)));
     };
     let camZ = fitZ();
     let camZTarget = camZ;
     let userZoomed = false;
+    // P1 EXPLORE 自由漫游态（声明提前：主循环 camZ 收敛速率用到）
+    let exploreMode = false;
+    let exploreT = 0;
     camera.position.set(0, 0, camZ);
 
-    const group = new THREE.Group();
-    group.position.y = 1.6; // 星群整体上移：收紧 hero 标语与星座之间的空档（世界坐标 +61px）
-    scene.add(group);
-
-    // ===== 初始位置：锚星布在球面（彼此远离），成员星落在锚星近旁 =====
-    const N = nodes.length;
-    const pos = new Float32Array(N * 3);
-    const vel = new Float32Array(N * 3);
-    const R0 = 2.7;
-    const golden = Math.PI * (3 - Math.sqrt(5));
-    const anchorIdx = nodes.map((n, i) => (n.anchor ? i : -1)).filter((i) => i >= 0);
-    anchorIdx.forEach((ai, k) => {
-      const M = Math.max(anchorIdx.length, 1);
-      const y = M === 1 ? 0.2 : 1 - (k / (M - 1)) * 1.6;
-      const r = Math.sqrt(Math.max(1 - y * y, 0));
-      const th = golden * k * 2;
-      pos[ai * 3] = Math.cos(th) * r * R0;
-      pos[ai * 3 + 1] = y * R0;
-      pos[ai * 3 + 2] = Math.sin(th) * r * R0;
-    });
-    let fib = 0;
-    for (let i = 0; i < N; i++) {
-      if (nodes[i].anchor) continue;
-      const p = nodes[i].parent;
-      if (p !== undefined && p >= 0) {
-        // 成员星：锚星近旁成团
-        pos[i * 3] = pos[p * 3] + (rand() - 0.5) * 1.7;
-        pos[i * 3 + 1] = pos[p * 3 + 1] + (rand() - 0.5) * 1.7;
-        pos[i * 3 + 2] = pos[p * 3 + 2] + (rand() - 0.5) * 1.7;
-      } else {
-        // 游离星（如项目）：球面散布
-        const y = 1 - (fib / Math.max(N - 1, 1)) * 2;
-        const r = Math.sqrt(1 - y * y);
-        const th = golden * fib * 3;
-        fib++;
-        pos[i * 3] = Math.cos(th) * r * R0 + (rand() - 0.5) * 0.8;
-        pos[i * 3 + 1] = y * R0 + (rand() - 0.5) * 0.8;
-        pos[i * 3 + 2] = Math.sin(th) * r * R0 + (rand() - 0.5) * 0.8;
-      }
-    }
+    // 滚动进度：星空是整个页面的铺底，环随页面滚动沿对角线缓缓转动下沉
+    let scrollP = 0, scrollPSmooth = 0;
+    const readScroll = () => {
+      const max = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+      scrollP = Math.min(1, Math.max(0, (window.scrollY || 0) / max));
+    };
+    addEventListener('scroll', readScroll, { passive: true });
+    readScroll();
 
     // ===== 贴图：发光星点 / 柔和圆点 / 圆环 =====
     function glowTexture(stops: [number, string][]) {
@@ -381,11 +809,25 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       g.fillRect(0, 0, 128, 128);
       return new THREE.CanvasTexture(c);
     }
+    // ★ 设计规范：亮度 ≠ 尺寸。文章星 = 「小而锐利的光点」，不是「大而发光的圆球」。
+    //   ┌ Core ── 2~3px 固定，极锐（只负责「这里有一个明确的星」）
+    //   └ Halo ── 12~24px 独立 sprite，透明度极低（只负责「这颗星很亮」）
+    //   想让星更亮 → 调 halo 的 opacity/尺寸与 core 的白度，**绝不调 core 的 size**：
+    //   把 core 调大 = 整页从「知识银河」塌成「几个大圆点」。
     const starTex = glowTexture([
       [0, '#ffffff'],
-      [0.12, '#ffffff'],
-      [0.2, 'rgba(255,255,255,0.65)'],
-      [0.38, 'rgba(255,255,255,0.12)'],
+      [0.1, '#ffffff'],
+      [0.17, 'rgba(255,255,255,0.62)'],
+      [0.24, 'rgba(255,255,255,0.1)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
+    // 文章星核心：core 只有 2~3px，实核必须占大头 —— 否则 3px 里没有几个白像素，
+    // 反而变暗。0~0.45 纯白 + 边缘极快衰减 = 「锐」的观感来源（比单纯调亮度更有效）。
+    const coreTex = glowTexture([
+      [0, '#ffffff'],
+      [0.45, '#ffffff'],
+      [0.62, 'rgba(255,255,255,0.5)'],
+      [0.82, 'rgba(255,255,255,0.08)'],
       [1, 'rgba(255,255,255,0)'],
     ]);
     const dotTex = glowTexture([
@@ -393,6 +835,7 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       [0.5, 'rgba(255,255,255,0.6)'],
       [1, 'rgba(255,255,255,0)'],
     ]);
+    // （星芒贴图已删：用户对照视觉图明确「文章星就是明亮的圆点，没有星芒」——锐核短晕的 starTex 即正确形态）
     const ringTex = (() => {
       const c = document.createElement('canvas');
       c.width = c.height = 96;
@@ -405,343 +848,1794 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       return new THREE.CanvasTexture(c);
     })();
 
-    // ===== 节点：发光星点（分类锚星带域色，成员星染淡色）=====
-    const degree = new Array(N).fill(0);
-    for (const [a, b] of edges) degree[a]++, degree[b]++;
+    // Halo 专用贴图（规范给的径向渐变：100% / 50% / 20% / 5% / 0%）：
+    // 亮区集中在前 40%，尾部迅速归零 —— 「小星看起来亮」而不是「一团雾」
+    const glowHaloTex = glowTexture([
+      [0, '#ffffff'],
+      [0.18, 'rgba(255,255,255,0.5)'],
+      [0.4, 'rgba(255,255,255,0.18)'],
+      [0.7, 'rgba(255,255,255,0.04)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
+    // 星团光晕贴图：极淡的大范围柔光（星团的「空间范围」的可见化）
+    // 中心不实心、边缘长尾衰减 —— 读作「一团雾状光晕」而不是「一颗大星」
+    const haloTex = glowTexture([
+      [0, 'rgba(255,255,255,0.42)'],
+      [0.22, 'rgba(255,255,255,0.22)'],
+      [0.5, 'rgba(255,255,255,0.07)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
+    // ★ 星团「范围雾」专用贴图：平滑高斯型衰减（中心明确、外围柔和渐隐）。
+    //   试过「平台区 + 后段渐隐」——中心到 60% 几乎均匀，看起来是一块有硬边的圆盘，
+    //   均匀提亮还压住了银河星点，观感发灰发脏（用户反馈）。现在每 20% 就掉一档，
+    //   没有硬边界，读起来是「这片空间里星更密」而不是「贴了一张膜」。
+    const clusFogTex = glowTexture([
+      [0, 'rgba(255,255,255,0.85)'],
+      [0.28, 'rgba(255,255,255,0.5)'],
+      [0.5, 'rgba(255,255,255,0.26)'],
+      [0.72, 'rgba(255,255,255,0.1)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
+    // 文章星的光晕贴图：峰值 1.0、快速衰减 —— haloTex 峰值只有 0.42，
+    // 是「光晕怎么调都不亮」的元凶（opacity 1.0 也只能加 42% 的色光）
+    const bloomTex = glowTexture([
+      [0, 'rgba(255,255,255,1)'],
+      [0.18, 'rgba(255,255,255,0.72)'],
+      [0.42, 'rgba(255,255,255,0.26)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
 
-    const white = new THREE.Color(0xf3efe2);
-    const amber = new THREE.Color(0xffc46b);
-    const nodeColor: THREE.Color[] = [];
-    for (let i = 0; i < N; i++) {
-      const n = nodes[i];
-      if (n.anchor) {
-        nodeColor.push(new THREE.Color(n.color || '#f3efe2'));
-      } else if (n.kind === '项目') {
-        nodeColor.push(amber.clone());
-      } else {
-        // 成员星：域色调淡，融入夜空
-        nodeColor.push(new THREE.Color(n.color || '#f3efe2').lerp(white, 0.55));
-      }
-    }
+    // ===== 远景银河：一个缓缓自转的螺旋星系 =====
+    // 分两级 group：tilt 掌「视角姿态」（倾角 / 对角线），spin 掌「自转」。
+    // 必须分开 —— 自转要绕盘自身的法线（局部 z）转；若直接转外层 z，会变成「甩Albania盘子」而不是自转。
+    const dustMats = [];
+    let linkBreath: THREE.ShaderMaterial | null = null; // 星际连线（呼吸明暗）
+    const galaxyTilt = new THREE.Group();
+    const galaxySpin = new THREE.Group();
+    // 分层差速：每层是刚体点云各自转（比例取方案文档 核心:内盘:外盘 = 0.05:0.10:0.06），
+    // 层间转速差产生前后景视差 —— 星系「活着」的最低成本线索，也不会有真差速的缠绕问题
+    const spinCore = new THREE.Group(); spinCore.name = 'spinCore';
+    const spinOuter = new THREE.Group(); spinOuter.name = 'spinOuter';
+    galaxySpin.name = 'spinInner';
+    galaxyTilt.name = 'galaxyTilt';
+    galaxyTilt.add(galaxySpin);
+    galaxyTilt.add(spinCore);
+    galaxyTilt.add(spinOuter);
+    // x: 盘面后仰 → 椭圆透视；z: 长轴摆到左下→右上对角
+    galaxyTilt.rotation.set(-0.6, 0, 0.58); // 俯瞰 + 34°：星系顶边向屏幕深处倾倒（往里倒的感觉），椭圆透视
+    // 星系中心压到画面中线以下：上半留给标语/标题，黑得多才「深邃」
+    galaxyTilt.position.set(0, 5.5, -30); // 银河中心在画面上 1/3（方案图布局：银河在上、标语沉底）
+    scene.add(galaxyTilt);
 
-    const sprites: THREE.Sprite[] = [];
-    const baseScale: number[] = [];
-    for (let i = 0; i < N; i++) {
-      const mat = new THREE.SpriteMaterial({
-        map: starTex, color: nodeColor[i], transparent: true, fog: true, depthWrite: false,
+
+    // ===== 螺旋星系布点 =====
+    // 窄屏密度降级：同样的星挤进小画面，单位面积密度会暴涨（手机端是桌面的 4 倍）→
+    // 要维持与桌面相同的疏密观感，星数须接近等比缩小（指数取 0.85）
+    const areaK = (mount.clientWidth * mount.clientHeight) / (1440 * 900);
+    const DN = Math.max(0.25, Math.min(1, Math.pow(areaK, 0.85))); // 375×812 → 0.29
+    // 竖屏上盘会横向撑破画面。缩放盘本身而非拉远相机（拉远会把前景星座一起缩小）
+    const aspect0 = mount.clientWidth / Math.max(mount.clientHeight, 1);
+    const gScale = 0.42 + 0.58 * Math.min(1, aspect0 / 1.6);
+
+    // 形态 = ① 指数盘：密度向中心集中  ② 对数螺旋 θ = 分支基角 + sweep·(r/R)
+    //        ③ 厚度 ∝ exp(-r/rs)：中心鼓、外盘薄 —— 斜视时中央是「一团」、外围是「一张极薄的片」，
+    //           这个厚薄反差就是纵深感最强的线索  ④ 独立核球星团（暖色）
+    const GR = 24 * gScale;   // 盘半径（世界单位）：俯视圆盘直径铺满画面高度
+    const SWEEP = 5.0;        // 旋臂缠绕量（rad）：≈ 0.8 圈/臂，多臂辐射、臂间留隙（方案图多臂涡旋）
+    const ARMS = 4;          // 四条旋臂辐射：多条悬臂 + 臂间间隙（方案图多臂结构）
+    const gj = () => (rand() + rand() + rand() - 1.5) * 2; // 近似标准正态
+
+    function galaxyMat(size, opacity, maxPx, opt = {}) {
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 }, uTex: { value: dotTex },
+          uSize: { value: size }, uOpacity: { value: opacity },
+          uScale: { value: 450 }, uMax: { value: maxPx },
+          uDrift: { value: opt.drift || 0 },   // 个体星相对图案的角速度（>0 = 恒星在自己的轨道上跑）
+          uChurn: { value: opt.churn || 0 },   // 切向涌动幅度（rad）：星海「活着」但不累积变形
+          uWarp: { value: opt.warp || 0 },     // 翘曲幅度：盘外缘在 z 上的起伏
+          uDw: { value: opt.dw || 0 },         // 密度波亮度调制强度
+          uArms: { value: ARMS }, uSweep: { value: SWEEP }, uGR: { value: GR },
+          uMouse: { value: new THREE.Vector2(9999, 9999) },
+          uMouseK: { value: 0 },
+          uFadeLo: { value: opt.fadeLo ?? 0.55 }, // 远端亮度下限：内容层（星团/文章星）调高，远侧不被空气透视吞掉
+          uSteady: { value: opt.steady || 0 }, // 闪烁压缩：文章星=1.0（亮度必须恒定在白热，不能随呼吸暗下去）
+        },
+        vertexShader: `
+          attribute vec3 aColor;
+          attribute float aSize;
+          attribute float aPhase;
+          uniform float uTime;
+          uniform float uScale;
+          uniform float uSize;
+          uniform float uMax;
+          uniform float uFadeLo;
+          uniform float uSteady;
+          uniform float uDrift;
+          uniform float uChurn;
+          uniform float uWarp;
+          uniform float uDw;
+          uniform float uArms;
+          uniform float uSweep;
+          uniform float uGR;
+          uniform vec2 uMouse;
+          uniform float uMouseK;
+          varying vec3 vColor;
+          varying float vTw;
+          varying float vFade;
+          void main() {
+            vColor = aColor;
+            vTw = 0.72 + 0.28 * sin(uTime * (0.30 + fract(aPhase * 7.31) * 0.65) + aPhase * 41.0); // 呼吸：周期 8-21s、亮度 ±28% —— 肉眼可感知的「吸气/呼气」
+            vTw = mix(vTw, 0.9 + 0.1 * sin(uTime * (0.9 + fract(aPhase * 5.7) * 1.1) + aPhase * 13.0), uSteady); // 文章星（uSteady=1）：保留「不规则闪烁」——基准亮度压在 0.9 高位（不暗下去），叠加快周期不规则微闪（±5%）
+            float r = length(position.xy);
+            // ★ 自转的正确呈现：图案整体刚性转（在 JS 的 galaxySpin 里），个体星在自己的
+            //   轨道上另有相对运动。二者的差 = 恒星穿越旋臂。
+            float th = atan(position.y, position.x)
+              + uDrift * uTime
+              + uChurn * sin(uTime * 0.11 + aPhase * 3.7);
+            // 密度波：旋臂是「驻留的波形」（θ = branch·2π/ARMS + SWEEP·r/R），只有图案在转；
+            //   恒星从波峰流入流出 → 亮度随之胀落。这是真实星系结构永存的机制（林家翘-Shu）。
+            float dw = 0.5 + 0.5 * cos(uArms * (th - uSweep * r / uGR));
+            vTw *= mix(1.0, 0.32 + 0.68 * pow(dw, 2.0), uDw);
+            // 翘曲：盘外缘沿 z 起伏，旋转时边缘此起彼伏 —— 最省成本的立体运动线索
+            float warp = uWarp * pow(clamp(r / uGR, 0.0, 1.0), 2.5) * sin(th - 0.6);
+            vec2 pxy = vec2(cos(th) * r, sin(th) * r);
+            // Explore 态鼠标引力：靠近鼠标的星尘被轻微吸引（银河开始「回应你」）
+            vec2 dm = pxy - uMouse;
+            float dl = max(length(dm), 1.4);
+            pxy -= (dm / dl) * (uMouseK / dl) * 4.0;
+            vec4 mv = modelViewMatrix * vec4(pxy.x, pxy.y, position.z + warp, 1.0);
+            // 远暗近亮 ≈ 2.3:1：立体感主要靠【大小梯度】，亮度对比过强会把远半的旋臂压没
+            vFade = clamp(1.85 - (-mv.z) * 0.018, uFadeLo, 1.3);
+            float s = uSize * aSize * (uScale / -mv.z) * (0.84 + 0.16 * vTw);
+            gl_PointSize = uMax * s / (uMax + s); // 软钳：保留近远梯度，又不炸成光斑
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: `
+          uniform sampler2D uTex;
+          uniform float uOpacity;
+          varying vec3 vColor;
+          varying float vTw;
+          varying float vFade;
+          void main() {
+            vec4 tex = texture2D(uTex, gl_PointCoord);
+            // 空气透视：越远越沉入夜空冷色 —— 深邃感的第二条线索
+            vec3 col = mix(vColor, vec3(0.60, 0.70, 0.94), clamp((1.0 - vFade) * 0.45, 0.0, 0.22));
+            gl_FragColor = vec4(col * tex.rgb, tex.a * uOpacity * vTw * vFade);
+          }`,
+        transparent: true, depthWrite: false,
       });
-      const s = nodes[i].anchor
-        ? 0.5 + Math.min(degree[i], 6) * 0.04
-        : (nodes[i].kind === '项目' ? 0.4 : 0.3) + Math.min(degree[i], 5) * 0.045 + rand() * 0.06;
-      const sp = new THREE.Sprite(mat);
-      sp.position.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
-      sp.scale.setScalar(s);
-      baseScale.push(s);
-      group.add(sp);
-      sprites.push(sp);
+      dustMats.push(mat);
+      mat.userData.baseMax = maxPx;
+      mat.userData.baseChurn = opt.churn || 0;
+      return mat;
     }
 
-    // 锚星名字标签（HTML 覆盖层，跟随投影位置）；w 供标签避让算屏宽
-    const _lv = new THREE.Vector3();
-    const labels: { el: HTMLDivElement; i: number; w: number }[] = [];
-    nodes.forEach((n, i) => {
-      if (!n.anchor) return;
-      const el = document.createElement('div');
-      el.className = 'star-label';
-      el.textContent = n.title;
-      if (n.color) el.style.color = n.color;
-      frame.appendChild(el);
-      labels.push({ el, i, w: el.offsetWidth });
-    });
-
-    // ===== 边：星尘轨迹（点连线，全图只有光点、没有笔画）=====
-    // 星尘：每条弧线按长度布点，两端渐隐、微微闪烁
-    const dotsPerEdge = new Int16Array(edges.length);
-    let totalDots = 0;
-    for (let e = 0; e < edges.length; e++) {
-      const [a, b] = edges[e];
-      const len = Math.hypot(
-        pos[b * 3] - pos[a * 3],
-        pos[b * 3 + 1] - pos[a * 3 + 1],
-        pos[b * 3 + 2] - pos[a * 3 + 2]
-      );
-      dotsPerEdge[e] = Math.max(4, Math.min(16, Math.round(len / 0.33)));
-      totalDots += dotsPerEdge[e];
-    }
-    const dotOffsets = new Int32Array(edges.length + 1);
-    for (let e = 0; e < edges.length; e++) dotOffsets[e + 1] = dotOffsets[e] + dotsPerEdge[e];
-
-    const dustGeo = new THREE.BufferGeometry();
-    const dustPos = new Float32Array(totalDots * 3);
-    const dustCol = new Float32Array(totalDots * 3);
-    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
-    dustGeo.setAttribute('color', new THREE.BufferAttribute(dustCol, 3));
-    const dust = new THREE.Points(
-      dustGeo,
-      new THREE.PointsMaterial({
-        map: dotTex, size: 0.095, sizeAttenuation: true, vertexColors: true,
-        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
-      })
-    );
-    group.add(dust);
-
-    const dimColor = new THREE.Color(0x39446e);
-    const hiColor = new THREE.Color(0xffc46b);
-    // 每条边的基色：连到锚星的边继承域色（压暗避免光污染），跨域边用暗蓝
-    const edgeBase = edges.map(([a, b]) => {
-      const src = nodes[a].anchor ? nodes[a] : nodes[b].anchor ? nodes[b] : null;
-      return src?.color
-        ? new THREE.Color(src.color).multiplyScalar(0.55)
-        : dimColor.clone();
-    });
-
-    // 每条边固定相位（形态稳定），弓起幅度随时间轻微呼吸
-    const edgePhase = new Float32Array(edges.length);
-    for (let e = 0; e < edges.length; e++) edgePhase[e] = rand() * Math.PI * 2;
-    const ctrl = new Float32Array(edges.length * 3); // 二次贝塞尔控制点
-
-    const _d = new THREE.Vector3(), _mid = new THREE.Vector3(),
-      _centroid = new THREE.Vector3(), _out = new THREE.Vector3(), _p = new THREE.Vector3();
-
-    function updateCtrl(t) {
-      // 全图质心：所有弧线统一向外弓 → 饱满的有机形态（不会内凹）
-      _centroid.set(0, 0, 0);
-      for (let i = 0; i < N; i++) {
-        _centroid.x += pos[i * 3]; _centroid.y += pos[i * 3 + 1]; _centroid.z += pos[i * 3 + 2];
+    // 盘星（含旋臂调制）：spread 越小 → 越贴臂线，旋臂越清晰
+    function makeDisk(count, spread, size, opacity, maxPx, warmMix, bright, opt = {}) {
+      const arr = new Float32Array(count * 3);
+      const col = new Float32Array(count * 3);
+      const sz = new Float32Array(count);
+      const pha = new Float32Array(count);
+      // 银白色调（用户：过于偏蓝，要银白感）—— 冷色去饱和成银白、外盘换成银灰蓝
+      const cCool = new THREE.Color(0xdde1ea);   // 银白（低饱和，亮度高）
+      const cWarm = new THREE.Color(0xfff0d2);
+      const cOuter = new THREE.Color(0x9aa6bd);  // 外盘银灰蓝（不再是深饱和蓝）
+      const cGiant = new THREE.Color(0xffb070); // 橙红巨星：参考图里的橙色主角星
+      const cYoung = new THREE.Color(0xa9c8ff); // 蓝白年轻星：旋臂上的高光主角
+      for (let i = 0; i < count; i++) {
+        const u = rand();
+        const r0 = Math.pow(u, 0.72) * GR;
+        const branch = Math.floor(rand() * ARMS);
+        // armShift：整层粒子的臂相位偏移——π/4 = 正好落在 ARMS=4 的臂间空隙（臂间丝带用）
+        const th = branch * ((Math.PI * 2) / ARMS) + (opt.armShift || 0) + SWEEP * (r0 / GR) + gj() * (spread * (0.35 + 0.9 * r0 / GR));
+        const rr = Math.max(0.2, r0 + gj() * (spread * GR * (0.25 + 0.75 * r0 / GR)));
+        arr[i * 3] = Math.cos(th) * rr;
+        arr[i * 3 + 1] = Math.sin(th) * rr;
+        // 厚度：中心鼓包 + 外盘薄 —— 斜视下的「纵深感」几乎全来自这一行
+        // ★ 用户：带宽宽一点 —— 薄盘基底 0.16→0.30、整体 ×1.15（只加宽盘带，核球不跟着鼓胀）
+        const bulge = Math.exp(-Math.pow(Math.min(rr / (GR * 0.24), 20), 1.4));
+        arr[i * 3 + 2] = gj() * 1.15 * (0.30 + 2.2 * bulge);
+        // 内暖外冷（真实的星族渐变）：中心呼应站点的琥珀，外围是冷蓝夜
+        const warm = Math.min(1, Math.max(0, 1 - (rr / GR) * 1.6)) * (rand() * 0.6 + 0.4) * warmMix;
+        // 外盘渐入冷蓝：让盘有「内暖外冷」的色阶，而不是整片同色的灰白
+        const outK = Math.min(1, Math.max(0, (rr / GR - 0.42) / 0.58)) * 0.6;
+        // 星族点缀：主角星（橙红巨星/蓝白年轻星）—— 用户反馈红粒偏多：橙巨星概率 1.2%→0.5%
+        const giantK = rand();
+        let c;
+        if (giantK < 0.005) c = cGiant.clone();
+        else if (giantK < 0.013) c = cYoung.clone();
+        else c = cCool.clone().lerp(cWarm, warm).lerp(cOuter, outK);
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        // 粒度幂律：海量 1px 级微星融成连续星海，极少数大星 —— 深邃 = 大小跨度，不是星星多
+        sz[i] = (0.35 + 0.65 * Math.pow(rand(), 4)) * bright;
+        if (giantK < 0.013) sz[i] *= 2.1 + rand() * 1.1; // 主角星比背景星大 2~3 倍
+        pha[i] = rand() * Math.PI * 2;
       }
-      _centroid.multiplyScalar(1 / Math.max(N, 1));
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
+      const pts = new THREE.Points(geo, galaxyMat(size, opacity, maxPx, opt));
+      (opt.parent ?? galaxySpin).add(pts);
+      return pts;
+    }
 
-      for (let e = 0; e < edges.length; e++) {
-        const [a, b] = edges[e];
-        _mid.set((pos[a * 3] + pos[b * 3]) / 2, (pos[a * 3 + 1] + pos[b * 3 + 1]) / 2, (pos[a * 3 + 2] + pos[b * 3 + 2]) / 2);
-        _out.copy(_mid).sub(_centroid);
-        if (_out.lengthSq() < 1e-6) _out.set(Math.sin(e * 2.3), Math.cos(e * 1.7), 0.3);
-        _out.normalize();
-        const mag = Math.min(_d.set(pos[b * 3] - pos[a * 3], pos[b * 3 + 1] - pos[a * 3 + 1], pos[b * 3 + 2] - pos[a * 3 + 2]).length() * 0.13, 0.7)
-          * (1 + 0.2 * Math.sin(t * 0.35 + edgePhase[e]));
-        ctrl[e * 3] = _mid.x + _out.x * mag;
-        ctrl[e * 3 + 1] = _mid.y + _out.y * mag;
-        ctrl[e * 3 + 2] = _mid.z + _out.z * mag;
+    // 核球：扁椭球星团，暖色、密集 —— 星系的视觉锚点
+    function makeBulge(count, size = 0.30, opacity = 0.92, maxPx = 9, szMul = 0.7, parent = galaxySpin) {
+      const arr = new Float32Array(count * 3);
+      const col = new Float32Array(count * 3);
+      const sz = new Float32Array(count);
+      const pha = new Float32Array(count);
+      const cWarm = new THREE.Color(0xffeccf);
+      const cCore = new THREE.Color(0xfffaf0);
+      for (let i = 0; i < count; i++) {
+        const rb = Math.abs(gj()) * GR * 0.10;
+        const tb = rand() * Math.PI * 2;
+        arr[i * 3] = Math.cos(tb) * rb;
+        arr[i * 3 + 1] = Math.sin(tb) * rb * 0.85;
+        // z 厚度必须小于盘倾角下的投影短轴，否则核球在斜视时拉成「竖条」
+        arr[i * 3 + 2] = gj() * GR * 0.022;
+        const c = cWarm.clone().lerp(cCore, 1 - Math.min(1, rb / (GR * 0.1)));
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        sz[i] = (0.35 + 0.65 * Math.pow(rand(), 3)) * 0.7;
+        pha[i] = rand() * Math.PI * 2;
       }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 0.4);
+      const pts = new THREE.Points(geo, galaxyMat(size, opacity, maxPx));
+      parent.add(pts);
+      return pts;
     }
 
-    // 二次贝塞尔取点
-    function bez(out, e, t01) {
-      const [a, b] = edges[e];
-      const u = 1 - t01;
-      const w0 = u * u, w1 = 2 * u * t01, w2 = t01 * t01;
-      out.x = w0 * pos[a * 3] + w1 * ctrl[e * 3] + w2 * pos[b * 3];
-      out.y = w0 * pos[a * 3 + 1] + w1 * ctrl[e * 3 + 1] + w2 * pos[b * 3 + 1];
-      out.z = w0 * pos[a * 3 + 2] + w1 * ctrl[e * 3 + 2] + w2 * pos[b * 3 + 2];
+    // 核心光晕：少量大尺寸低透明暖点叠在核球上 —— 概念图里的「暖核辉光」。
+    // 没有它，核球只是一团离散小点，星系没有可辨识的中心，整体读作「两条弧线」。
+    function makeCoreGlow(count, radius, size, opacity, maxPx, parent = galaxySpin) {
+      const arr = new Float32Array(count * 3);
+      const col = new Float32Array(count * 3);
+      const sz = new Float32Array(count);
+      const pha = new Float32Array(count);
+      const cCore = new THREE.Color(0xfff3dc);
+      for (let i = 0; i < count; i++) {
+        const rb = Math.abs(gj()) * radius;
+        const tb = rand() * Math.PI * 2;
+        arr[i * 3] = Math.cos(tb) * rb;
+        arr[i * 3 + 1] = Math.sin(tb) * rb * 0.85;
+        arr[i * 3 + 2] = gj() * radius * 0.4;
+        col[i * 3] = cCore.r; col[i * 3 + 1] = cCore.g; col[i * 3 + 2] = cCore.b;
+        sz[i] = 0.5 + rand() * 0.5;
+        pha[i] = rand() * Math.PI * 2;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 0.4);
+      const pts = new THREE.Points(geo, galaxyMat(size, opacity, maxPx));
+      parent.add(pts);
+      return pts;
     }
 
-    function syncCurves(t, hovered) {
-      updateCtrl(t);
-      for (let e = 0; e < edges.length; e++) {
-        const [a, b] = edges[e];
-        const active = hovered >= 0 && (a === hovered || b === hovered);
-        const base = dotOffsets[e], n = dotsPerEdge[e];
-        for (let k = 0; k < n; k++) {
-          const u = (k + 0.5) / n;
-          bez(_p, e, 0.08 + 0.84 * u); // 两端留白，不顶到星星
-          const i = (base + k) * 3;
-          dustPos[i] = _p.x; dustPos[i + 1] = _p.y; dustPos[i + 2] = _p.z;
-          const endFade = Math.sin(Math.PI * u); // 两端渐隐
-          const shimmer = 0.9 + 0.1 * Math.sin(t * 1.4 + edgePhase[e] + k * 0.9);
-          const c = active ? hiColor : edgeBase[e];
-          const f = endFade * shimmer * (active ? 1 : 0.38);
-          dustCol[i] = c.r * f; dustCol[i + 1] = c.g * f; dustCol[i + 2] = c.b * f;
+    // 七层。每层的「运动角色」不同 —— 自转看起来对不对，全在这七行的 opt 上：
+    //   churn = 涌动（短周期摆动，让星海不死板，且永不累积变形）
+    //   drift = 真正的个体漂移（只在 tracer 层给，数量少，长期变形不可见）
+    //   dw    = 密度波亮度调制（0 = 亮度与臂无关；1 = 完全由「是否在臂上」决定亮度）
+    //   warp  = 盘外缘翘曲：旋转时边缘此起彼伏，是「三维空间中的运动」最强的廉价线索
+    const galDisk  = makeDisk(Math.round(20000 * DN), 0.07, 0.31, 0.95, 9, 0.5, 1, // 银色粒子稍加重：0.28→0.31
+      { churn: 0.012, warp: 0.6, dw: 0.6 });
+    const galArms  = makeDisk(Math.round(4000 * DN), 0.11, 0.55, 0.92, 12, 0.35, 1.6, // 散布 0.055→0.11：旋臂棱角软化（用户：不要那么规则）
+      { churn: 0.014, warp: 0.6, dw: 0.9 });
+    // 臂隙填充（用户：旋臂中间别那么空）：dw=0 的均匀银尘层——不受密度波调制，
+    // 淡淡铺满整个盘面（含臂隙），旋臂亮、臂隙淡，不再「臂外全黑」
+    let galFill: THREE.Points;
+    {
+      // 絮状填充（用户：絮状 = 顺流向拉长的短弧丝，不是圆球团）：
+      // 短弧丝（总量 30000×DN），每条沿旋臂流向弯曲、切向拉长，粒数 8~33，疏密随机；
+      // 角度分槽+抖动：丝缕覆盖所有方位角，抹平臂隙的整片空区；亮度均值上调更可见
+      const N_TOTAL = Math.round(30000 * DN);
+      const arrF = new Float32Array(N_TOTAL * 3);
+      const colF = new Float32Array(N_TOTAL * 3);
+      const szF = new Float32Array(N_TOTAL);
+      const phaF = new Float32Array(N_TOTAL);
+      const cFill = new THREE.Color(0xdde1ea);
+      const rngF = mulberry32(774411);
+      let w = 0;
+      let slot = 0;
+      const NSLOTS = 24;
+      while (w < N_TOTAL) {
+        const r0 = GR * (0.26 + 0.78 * Math.sqrt(rngF()));
+        const th0 = (((slot++) % NSLOTS) + rngF() * 0.9) / NSLOTS * Math.PI * 2;
+        const arc = 0.08 + rngF() * 0.38;                   // 弧丝长短差异拉开
+        const n = Math.min(N_TOTAL - w, 8 + Math.floor(rngF() * 26));
+        const thDir = rngF() > 0.5 ? 1 : -1;
+        const jit = 0.15 + rngF() * 0.7;                    // 每条丝自己的松散度
+        const bow = 0.02 + rngF() * 0.09;                   // 每条丝自己的弯曲度
+        for (let i = 0; i < n && w < N_TOTAL; i++, w++) {
+          const t = n > 1 ? i / (n - 1) : 0.5;
+          const th = th0 + thDir * t * arc;
+          const rr = Math.max(r0, GR * 0.22) * (1 + Math.sin(t * Math.PI) * bow * thDir); // 弧丝微弯（沿流向鼓一点）；整体抬到核心光海之外（主星禁入）
+          const px = Math.cos(th) * rr;
+          const py = Math.sin(th) * rr * 0.9;
+          const perp = (rngF() - 0.5) * 2 * jit;             // 细垂直抖动：丝而不绳，宽窄随机
+          arrF[w * 3] = px + (-Math.sin(th)) * perp;
+          arrF[w * 3 + 1] = py + Math.cos(th) * perp * 0.9;
+          arrF[w * 3 + 2] = (rngF() - 0.5) * 1.3;
+          const f = 0.3 + rngF() * 0.66;
+          colF[w * 3] = cFill.r * f; colF[w * 3 + 1] = cFill.g * f; colF[w * 3 + 2] = cFill.b * f;
+          szF[w] = 0.2 + rngF() * 0.42;
+          phaF[w] = rngF() * Math.PI * 2;
         }
       }
-      dustGeo.attributes.position.needsUpdate = true;
-      dustGeo.attributes.color.needsUpdate = true;
+      const geoF = new THREE.BufferGeometry();
+      geoF.setAttribute('position', new THREE.BufferAttribute(arrF, 3));
+      geoF.setAttribute('aColor', new THREE.BufferAttribute(colF, 3));
+      geoF.setAttribute('aSize', new THREE.BufferAttribute(szF, 1));
+      geoF.setAttribute('aPhase', new THREE.BufferAttribute(phaF, 1));
+      geoF.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
+      galFill = new THREE.Points(geoF, galaxyMat(0.5, 0.75, 10, { churn: 0.01, warp: 0.7 }));
+      galFill.material.blending = THREE.AdditiveBlending;
+      galaxySpin.add(galFill);
+    }
+    const galBulge = makeBulge(Math.round(3600 * DN), 0.34, 0.96, 10, 0.75, spinCore);
+    const galCore  = makeCoreGlow(Math.round(60 * DN), GR * 0.10, 5.0, 0.11, 36, spinCore);
+    const galSheen = makeDisk(Math.round(1800 * DN), 0.075, 2.2, 0.05, 24, 0.55, 1,
+      { churn: 0.010, warp: 0.6, dw: 0.85 });
+    const galHalo  = makeDisk(Math.round(500 * DN), 0.09, 1.30, 0.04, 20, 0.5, 1,
+      { churn: 0.008, warp: 2.4, dw: 0.3, parent: spinOuter });
+    // tracer：少数「能看出在流动」的星。它们不跟图案同步（drift），且被密度波完整调制
+    // （dw=1）→ 流入旋臂时被点亮、流出时暗下去。数量少，长期漂移不伤结构。
+    const galStream = makeDisk(Math.round(900 * DN), 0.035, 0.42, 0.55, 13, 0.55, 1.4,
+      { drift: -0.016, warp: 0.6, dw: 1 });
+
+    // 域色增艳：CATEGORIES 色板偏灰（#93a9d6 一类），在星海里辨识度不足。
+    // 只提饱和 + 略提亮度，不动色相 —— 与列表页标识色同源，仍是同一色系。
+    const vivid = (hex: string) => {
+      const c = new THREE.Color(hex);
+      const hsl = { h: 0, s: 0, l: 0 };
+      c.getHSL(hsl);
+      return c.setHSL(hsl.h, Math.min(1, hsl.s * 1.75), Math.min(0.74, hsl.l * 1.18));
+    };
+
+    // ===== 内容层：星团（分类）与恒星（文章 / 项目）=====
+    // ★ 这是首页真正的导航主体，前面的银河是它的「宇宙背景」。
+    // 星团钉在旋臂上：真实星系的疏散星团与电离氢云就是这样分布在臂上，而不是散布在臂间。
+    // 恒星位置由 slug 哈希决定（每颗星独立的确定性种子）→ 新文章加入时旧星不会搬家，
+    // 且不用跑任何力模拟，首帧即到位。
+    const NS = stars.length, NC = clusters.length;
+    // 星团可视半径（边界环/背景星群/文章星布点共用的半径基准；必须早于恒星布点定义）。
+    // scatter 只比其他团略宽（1.05）——之前 1.28+均匀铺边+多边形尖峰叠加，项目团显得特别大
+    // 星团的「空间范围」= 团半径。基准由盘半径与形态决定，再乘【文章数增长系数】：
+    //   文章变多 → 团的范围跟着变大（半径按 √n 增长，等价于密度恒定），封顶 1.7×。
+    //   它是单一事实来源：密度云 Plummer 半径、文章星散布环带与间距、主星禁入区、
+    //   团色范围雾（直径 = 2×团半径）全部由它推导 —— 加文章后整团自动长大，无需手调。
+    const clusterBaseRad = (k: number) =>
+      Math.max(GR * 0.11, 2.4) * (clusters[k]?.form === 'scatter' ? 1.05 : 0.95);
+    const clusterRadOf = (k: number) => {
+      const n = Math.max(1, clusters[k]?.count ?? 1);
+      const grow = Math.min(1.7, 0.8 + 0.2 * Math.sqrt(n / 2));
+      return clusterBaseRad(k) * grow;
+    };
+    // 主星光晕直径（世界单位）——单一事实来源：光晕精灵与文章星禁入区都从它推导，
+    // 调整光晕大小后禁入区自动跟随，不需要每次手调布点
+    const MAIN_STAR_HALO = 0.78;
+    // 每团一条多边形轮廓 r(θ) = 1 + Σ aᵢ·cos(nᵢθ+φᵢ)：3~5 边主边形 + 次谐波破规整，
+    // 参数由团 key 哈希决定 —— 团团形态不同。背景星/文章星/边界环共用它，整团剪影就是这一个多边形。
+    // 振幅收敛（主 0.14~0.26 / 次 0.06~0.14）：峰值比 ≤1.4，多边形可辨但不把团撑出尖刺
+    const shapeCache: { n: number; a: number; ph: number }[][] = [];
+    const clusterShape = (k: number) => {
+      if (!shapeCache[k]) {
+        const rng = mulberry32(hash32('shape:' + clusters[k].key));
+        const n0 = 3 + Math.floor(rng() * 3); // 3~5 边
+        shapeCache[k] = [
+          { n: n0, a: 0.14 + rng() * 0.12, ph: rng() * Math.PI * 2 },
+          { n: n0 + 1 + Math.floor(rng() * 2), a: 0.06 + rng() * 0.08, ph: rng() * Math.PI * 2 },
+        ];
+      }
+      return shapeCache[k];
+    };
+    const clusterShapeR = (k: number, th: number) => {
+      let r = 1;
+      for (const L of clusterShape(k)) r += L.a * Math.cos(L.n * th + L.ph);
+      return Math.max(0.6, r);
+    };
+    // 文章星所属星团（状态机按团算倍率；必须早于恒星布点，否则 TDZ）
+    const starClusterIdx = new Int16Array(NS);
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    const hash32 = (s: string) => {
+      let h = 2166136261;
+      for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+      return h >>> 0;
+    };
+
+    // 星团中心：沿旋臂由内向外摊开，依次落在不同的臂上
+    // ★ 内圈下限 0.40→0.56×GR：最内团曾贴着银河中心的核球光海，
+    //   密度云/主星被亮区彻底淹没（实测「项目团的文章星在团外」—— 其实是团本身不可见）。
+    //   外圈收敛到 0.83×GR：再往外团会贴上视口缘、密度云被裁掉一半。
+    const clusPos = new Float32Array(NC * 3);
+    clusters.forEach((c, k) => {
+      // 三团都收在盘的中部（0.54~0.69×GR）：分布再外，透视会把外圈团推到画面角上，
+      // 视觉上就像「这团不属于银河」；同时最内圈仍离核球光海足够远。
+      const rr = GR * (0.5 + 0.22 * ((k + 0.5) / Math.max(NC, 1)));
+      const branch = k % ARMS;
+      const th = branch * ((Math.PI * 2) / ARMS) + SWEEP * (rr / GR) + (rand() - 0.5) * 0.5;
+      clusPos[k * 3] = Math.cos(th) * rr;
+      clusPos[k * 3 + 1] = Math.sin(th) * rr;
+      clusPos[k * 3 + 2] = gj() * 0.5;
+    });
+    // ★ 视口安全区适配（自转周期 ~7.5min，任何团都会周期性转到画面边缘；
+    //   贴边团的密度云被视口裁掉一半 → 文章星看起来「在团外」）：
+    //   布局后按初始相机姿态投影，团中心离视口边缘不足 120/150px 时，该团在盘面内
+    //   向安全方向平移（步长 1 世界单位，最多 12 次 —— 保持在原臂附近，不破坏布局语义）。
+    {
+      const w0 = mount.clientWidth, h0 = mount.clientHeight;
+      const safeX = Math.min(140, w0 * 0.16), safeY = Math.min(110, h0 * 0.14);
+      // 与渲染时保持一致：主循环不调 lookAt（相机默认朝 -z），这里也不能调，否则投影错位；
+      // camera 不是 scene 的子对象，必须自己 updateMatrixWorld()，否则用的是旧矩阵。
+      camera.position.set(0, 0, camZ);
+      camera.updateMatrixWorld();
+      scene.updateMatrixWorld();
+      const _v = new THREE.Vector3();
+      const projOf = (x: number, y: number, z: number) => {
+        _v.set(x, y, z).applyMatrix4(galaxyTilt.matrixWorld).project(camera);
+        return { x: (_v.x * 0.5 + 0.5) * w0, y: (-_v.y * 0.5 + 0.5) * h0 };
+      };
+      const core = projOf(0, 0, 0);                       // 银河中心（盘心）的屏幕位置
+      const sy = (k: number) => projOf(clusPos[k * 3], clusPos[k * 3 + 1], clusPos[k * 3 + 2]);
+      // ★ 直接按【屏幕位置】布局：感知到的「离银河远近」是屏幕距离，不是盘面半径
+      //   （盘倾斜 + 自转投影后两者非线性对应，调径向参数治不好）。
+      //   目标：团心距银心 260~430px（内不过核球光海、外不飘到画面角），
+      //        且不进边缘安全区，彼此屏幕间距 ≥150px。
+      const R_MIN = Math.min(260, Math.min(w0, h0) * 0.3);
+      const R_MAX = Math.min(430, Math.min(w0, h0) * 0.5);
+      const cost = (k: number) => {
+        const p = sy(k);
+        const d = Math.hypot(p.x - core.x, p.y - core.y);
+        let c = Math.max(0, R_MIN - d) + Math.max(0, d - R_MAX);
+        c += Math.max(0, safeY - p.y) + Math.max(0, p.y - (h0 - safeY));
+        c += Math.max(0, safeX - p.x) + Math.max(0, p.x - (w0 - safeX));
+        for (let j = 0; j < NC; j++) {
+          if (j === k) continue;
+          const q = sy(j);
+          c += Math.max(0, 150 - Math.hypot(p.x - q.x, p.y - q.y));
+        }
+        return c;
+      };
+      for (let pass = 0; pass < 2; pass++) {
+        for (let k = 0; k < NC; k++) {
+          const rBase = Math.hypot(clusPos[k * 3], clusPos[k * 3 + 1]) || 1;
+          const branch = k % ARMS;
+          const baseTh = branch * ((Math.PI * 2) / ARMS);
+          for (let it = 0; it < 24; it++) {
+            const c0 = cost(k);
+            if (c0 <= 0.5) break;
+            const th = Math.atan2(clusPos[k * 3 + 1], clusPos[k * 3]);
+            // ★ 候选 = 沿臂滑动：只改角度，半径严格按旋臂方程回算（th = baseTh + SWEEP·r/GR）
+            //   —— 团无论怎么调都钉在臂上。旧版的径向/自由切向移动会让团脱离旋臂
+            //   （用户：团偏离旋臂很多了）。
+            const opts: { dx: number; dy: number }[] = [];
+            for (const dTh of [0.05, -0.05, 0.1, -0.1, 0.16, -0.16]) {
+              const thN = th + dTh;
+              const rrN = ((thN - baseTh) / SWEEP) * GR;
+              if (rrN > rBase * 1.25 || rrN < rBase * 0.75) continue;       // 径向变化限 ±25%
+              opts.push({ dx: Math.cos(thN) * rrN - clusPos[k * 3], dy: Math.sin(thN) * rrN - clusPos[k * 3 + 1] });
+            }
+            let best: { c: number; dx: number; dy: number } | null = null;
+            for (const o of opts) {
+              const ox = clusPos[k * 3], oy = clusPos[k * 3 + 1];
+              clusPos[k * 3] += o.dx; clusPos[k * 3 + 1] += o.dy;
+              const c = cost(k);
+              clusPos[k * 3] = ox; clusPos[k * 3 + 1] = oy;
+              if (!best || c < best.c) best = { c, dx: o.dx, dy: o.dy };
+            }
+            if (!best || best.c >= c0) break;
+            clusPos[k * 3] += best.dx; clusPos[k * 3 + 1] += best.dy;
+          }
+        }
+      }
     }
 
-    // ===== 悬停圆环 =====
-    const ring = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: ringTex, color: 0xffc46b, transparent: true, depthWrite: false })
+    // 恒星：在所属星团区域内散布，形态随星团语义不同（方案图「分类星团的视觉结构示意」）：
+    // dense 密集结团 / spiral 规则螺旋 / scatter 分散广布 / natural 随机自然。
+    // 位置由 slug 哈希决定（每颗星独立的确定性种子）→ 新文章加入时旧星不会搬家。
+    const starPos = new Float32Array(NS * 3);
+    const starCol = new Float32Array(NS * 3);
+    const starSize = new Float32Array(NS);
+    const starPha = new Float32Array(NS);
+    const cIdx = new Map<string, number>();
+    // 星团 → 成员恒星索引（hover 星团时提亮成员、聚焦时降权用）
+    const clusterStars: number[][] = clusters.map((c) =>
+      stars.map((s, i) => (s.cluster === c.key ? i : -1)).filter((i) => i >= 0)
     );
-    ring.scale.setScalar(1.15);
-    ring.visible = false;
-    group.add(ring);
-
-    // ===== 远景星野（视差层）：多而细、暗而不喧，只作纵深 =====
-    // 「余下皆是未知」：已知星被大片无名暗星包围，越密越显已知之少
-    const starField = (() => {
-      const M = 700;
-      const arr = new Float32Array(M * 3);
-      for (let i = 0; i < M; i++) {
-        const u = rand() * 2 - 1, th = rand() * Math.PI * 2, rr = 26 + rand() * 30;
-        const s = Math.sqrt(1 - u * u);
-        arr[i * 3] = Math.cos(th) * s * rr;
-        arr[i * 3 + 1] = u * rr;
-        arr[i * 3 + 2] = Math.sin(th) * s * rr;
+    clusters.forEach((c, k) => cIdx.set(c.key, k));
+    {
+      const counter = new Array(NC).fill(0);
+      // 安全区系统（系统性规则，不是逐次手调）：
+      //   ① 主星禁入区：文章星不得落入主星光晕范围内（半径从 MAIN_STAR_HALO 推导，
+      //      调光晕大小禁入区自动跟随）；② 星间距：本团文章星之间保持最小距离，
+      //      后续加文章自动避开已有成员，不会叠星。确定性拒绝采样：每颗星用自己的
+      //      哈希流重采样 —— 不冲突的老星一格不动（「加文章不搬家」依然成立）。
+      const placed = clusters.map(() => [] as { x: number; y: number }[]);
+      for (let i = 0; i < NS; i++) {
+        const s = stars[i];
+        const k = cIdx.get(s.cluster) ?? 0;
+        const n = counter[k]++;
+        const rng = mulberry32(hash32(s.id));
+        const form = clusters[k]?.form ?? 'natural';
+        // 文章星落位：环比散布到 0.30~0.60 倍团半径（★ 修「文章不在团里面」）：
+        //   密度场（成员星云）铺满整个团半径，文章星却挤在中心 0.25 倍处 —— 视觉上
+        //   像是贴着主星的一小撮，读不出「这些文章属于这一团」。现在推到可见密区的环带上。
+        // ★ 落位分两步：先用【不含文章数增长的基准尺度】算出这颗星的「半径比例」（由 slug
+        //   哈希决定，永远不变），再乘【当前团半径】得到实际位置。
+        //   这样团随文章变多而长大时，整团等比外扩 —— 老星的相对结构（方向/次序/邻接）不变，
+        //   不会像直接参与 spread 那样被推着搬家。
+        const spreadBase = clusterBaseRad(k) * 0.6;
+        const spreadNow = clusterRadOf(k) * 0.6;
+        // 形态语义（方案图分类星团视觉结构）：同分类的星自然聚团，位置又稳定
+        // 主星禁入半径改按团半径取（原固定 0.7 世界单位：大团把文章星挤到中心、小团又推到团外）
+        const keepout = clusterRadOf(k) * 0.36;    // ① 主星禁入半径
+        const minGap = clusterRadOf(k) * 0.14;     // ② 文章星最小间距
+        let th = 0, rrNorm = 0, rrCur = 0, ok = false;
+        for (let tries = 0; tries < 30 && !ok; tries++) {
+          let rrB: number;
+          if (form === 'dense') {
+            // 密集结团：半径收紧、内密外疏（收缩 0.55→0.85：太狠会把文章星全压在禁入环下限）
+            th = golden * n + (rng() - 0.5) * 1.0;
+            rrB = (0.22 + 0.78 * Math.sqrt(rng())) * spreadBase * 0.85;
+          } else if (form === 'spiral') {
+            // 规则螺旋线分布：星团内部再绕一条小螺线
+            const tt = n * 0.9 + (rng() - 0.5) * 0.3;
+            rrB = (0.25 + 0.75 * (tt % 3) / 3) * spreadBase;
+            th = tt * 0.85 + Math.log(rrB + 1) * 1.6;
+          } else if (form === 'scatter') {
+            // 分散、星系分布较广：均匀铺满大范围
+            th = rng() * Math.PI * 2;
+            rrB = (0.2 + 0.8 * Math.sqrt(rng())) * spreadBase;
+          } else {
+            // natural 随机、自然分布
+            th = golden * n + (rng() - 0.5) * 1.0;
+            rrB = (0.32 + 0.68 * Math.sqrt(rng())) * spreadBase;
+          }
+          rrNorm = rrB / spreadBase;                       // 归一化比例：只由 slug 哈希决定
+          // 剪影跟随本团多边形轮廓（与背景星/边界环共用同一函数）
+          rrCur = rrNorm * spreadNow * clusterShapeR(k, th);
+          // 下限要 ≥ 主星禁入半径（keepout 0.36×rad）：文章星散布在 0.38~0.60 倍团半径的密区环带
+          rrCur = Math.max(rrCur, clusterRadOf(k) * 0.38);
+          // ★ 与成员星云同比例压扁（y×0.75）：星团是压扁的椭圆，文章星也必须按椭圆散布。
+          //   此前文章星按【正圆】落位，沿 y 轴会溢出密度云之外 —— 这就是
+          //   「项目团的文章星在团外」的根因（scatter 形态散布最广，最明显）。
+          const cx2 = Math.cos(th) * rrCur, cy2 = Math.sin(th) * rrCur * 0.75;
+          ok = Math.hypot(cx2, cy2) >= keepout
+            && placed[k].every((p) => Math.hypot(p.x - cx2, p.y - cy2) >= minGap);
+        }
+        const pxS = Math.cos(th) * rrCur, pyS = Math.sin(th) * rrCur * 0.75;
+        placed[k].push({ x: pxS, y: pyS });
+        starClusterIdx[i] = k;
+        starPos[i * 3] = clusPos[k * 3] + pxS;
+        starPos[i * 3 + 1] = clusPos[k * 3 + 1] + pyS;
+        starPos[i * 3 + 2] = clusPos[k * 3 + 2] + (rng() - 0.5) * (form === 'scatter' ? 0.8 : 0.6);
+        // ★ 恒星色 = 团色发光（用户：文章星不要白色亮点，要发出团色的光）。
+        //   白热核换成「高明度团色」：HSL 亮度拉到 0.60 再只混 12% 白 ——
+        //   色相明确归团，同时亮度不至于掉下来（纯饱和蓝感知亮度只有白的一半）。
+        const base = vivid(clusters[k]?.color || '#f3efe2');
+        const hslS = { h: 0, s: 0, l: 0 };
+        base.getHSL(hslS);
+        // 亮度再提一档（用户：文章星还能更亮）—— 只动亮度不动尺寸：
+        //   HSL 亮度 0.60→0.66、饱和度补满、白混入 0.12→0.16（色相仍是团色，不洗成白点）
+        const c = base.clone()
+          .setHSL(hslS.h, Math.min(1, hslS.s * 1.0), 0.66)
+          .lerp(new THREE.Color(0xffffff), 0.16);
+        starCol[i * 3] = c.r; starCol[i * 3 + 1] = c.g; starCol[i * 3 + 2] = c.b;
+        // 恒星层级（方案图「恒星的层级与状态」）：置顶亮星(大亮晕) > 新星(稍亮) > 普通文章。
+        // ★ 文章少时整体提一档：星团的视觉主体必须是文章星本身，而不是那层背景云。
+        //   内容多了之后邻居自然把场面撑起来，这里的补偿就会显得多余 —— 所以只在稀疏时生效。
+        const fewK = NS <= 8 ? 1.7 : NS <= 16 ? 1.35 : 1;
+        starSize[i] = fewK * (s.kind === '项目' ? 1.2 : 1.0) * (s.recent ? 1.35 : 1) * (s.pinned ? 1.8 : 1);
+        starPha[i] = rng() * Math.PI * 2;
       }
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-      const pts = new THREE.Points(
-        g,
-        new THREE.PointsMaterial({
-          map: dotTex, color: 0x9aa6d8, size: 0.38, sizeAttenuation: true,
-          transparent: true, opacity: 0.3, depthWrite: false, fog: false,
-        })
-      );
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    starGeo.setAttribute('aColor', new THREE.BufferAttribute(starCol, 3));
+    starGeo.setAttribute('aSize', new THREE.BufferAttribute(starSize, 1));
+    starGeo.setAttribute('aPhase', new THREE.BufferAttribute(starPha, 1));
+    starGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
+    // ⚠️ uMax=40 的教训：全景距离下每颗文章星被软钳成 40px 的软光斑，两颗相邻文章星
+    // 的光斑一叠就是一团雾（用户圈出的糊斑）。24px 上限下文章星仍是画面最大的点
+    // （背景星上限 14px、实际多在 4~8px），但「是星」而不是「是云」。
+    // Core 尺寸写死在 uMax：软钳公式 uMax*s/(uMax+s) 会让远近视差消失、恒定 ≈uMax px，
+    // 这正是规范要的「文章星在任何深度都是 2~3px 的锐点」。
+    // Core 尺寸写死在 uMax：软钳公式 uMax*s/(uMax+s) 会让远近视差消失、恒定 ≈uMax px，
+    // 这正是规范要的「文章星在任何深度都是恒定的小锐点」。
+    // DPR=1 的 headless/低分屏上 2.8px 会没入背景星（2.2px）里 —— 取参数表上限 4px。
+    // fadeLo 0.85→0.95：远侧的文章星也不被空气透视压暗（亮度下限抬高 = 整体更亮且稳定）
+    const starPts = new THREE.Points(starGeo, galaxyMat(2.0, 1.0, 4, { churn: 0.004, fadeLo: 0.95, steady: 1 })); // 文章星：Core 恒定 ~4px（亮由 Halo 承担，不由 size 承担）
+    starPts.material.uniforms.uTex.value = coreTex; // 文章星核心贴图：实核占大头 → 极锐的小亮点
+    starPts.material.userData.baseMax = 4;
+    dustMats.push(starPts.material); // 登记：resize 时跟随 pixelRatio 修正（手机否则偏小）
+    galaxySpin.add(starPts);
+    // P0 hover 层级：命中的恒星本体放大提亮（方案图「当前选中」级），离开回落
+    const starSizeBase = starSize.slice();
+    // 鼠标视差（默认态）：非拖拽时相机随鼠标微偏 —— 透视自动让远近星产生分层位移
+    let mxT = 0, myT = 0, mxS = 0, myS = 0;
+    // 引力反投用的临时对象（每帧复用，不在循环里分配）
+    const _rayV = new THREE.Vector3(), _rayDir = new THREE.Vector3(), _rayHit = new THREE.Vector3();
+    const _rayN = new THREE.Vector3(), _planeP = new THREE.Vector3(), _rayQ = new THREE.Quaternion();
+    let hoverScale = 1, hoverPinned = false, hoverPrev = -1;
+    // P0 星团交互层级：区域 → 视觉核心 → 文章星，三层各有各的表达方式
+    let hovCluster = -1;               // 当前 hover 的星团（-1 无）
+    // 每团的状态插值（每帧向目标收敛，避免突变）：
+    // prox = 鼠标邻近度（0..1，Explore/常态都生效，驱动「吸附」）
+    // near = prox 平滑值；hov = hover 平滑值；foc = 锁定平滑值；dim = 他团降权系数
+    const clusProx = new Float32Array(NC);
+    const clusNearT = new Float32Array(NC);
+    const clusHovT = new Float32Array(NC);
+    const clusFocT = new Float32Array(NC);
+    const clusDimT = new Float32Array(NC).fill(1);
+    const clusLabelOp = new Float32Array(NC).fill(1);
+
+    // ===== 星际连线：文章之间共享标签的关联 —— 知识网络（方案图核心概念）=====
+    // 星尘点线（不是几何线：1px WebGL 线在星海里等于不存在）——沿微弯弧布微尘粒子，
+    // 端点渐隐、随内盘同转；跨星团的关联更亮（罕见也珍贵）。
+    // links 由构建期算好传入（自动 + frontmatter related 覆盖）；另含团内微连线（方案第④元素）。
+    {
+      const pos: number[] = [];
+      const col: number[] = [];
+      const sz: number[] = [];
+      const pha: number[] = [];
+      // 跨团知识连线：权重越高越亮；团内微连线（方案④）：同团文章星两两相连，暗一档
+      // —— 暗示「这些星属于同一个东西」，探索态随知识网络一同浮现
+      const pairList: { a: number; b: number; bright: number }[] = links
+        .map(({ a, b, w }) => ({ a, b, bright: 0.5 + Math.min(w, 3) * 0.12 }));
+      clusterStars.forEach((members, k) => {
+        // 团内微连线用本团域色（用户：一个星团内所有元素同一颜色）
+        const cc = vivid(clusters[k]?.color || '#9db8ff');
+        for (let x = 0; x < members.length; x++)
+          for (let y = x + 1; y < members.length; y++)
+            pairList.push({ a: members[x], b: members[y], bright: 0.26, tint: [cc.r, cc.g, cc.b] });
+      });
+      for (const { a, b, bright, tint } of pairList) {
+        const sa = stars[a], sb = stars[b];
+        if (!sa || !sb) continue;
+        const ax = starPos[a * 3], ay = starPos[a * 3 + 1], az = starPos[a * 3 + 2];
+        const bx = starPos[b * 3], by = starPos[b * 3 + 1], bz = starPos[b * 3 + 2];
+        // 控制点 = 中点 + 垂直偏移 + z 抬升：星图上「绕一点走」的星际航线
+        const dx = bx - ax, dy = by - ay;
+        const len = Math.hypot(dx, dy) || 1;
+        const bend = Math.min(2.4, len * 0.16);
+        const rngL = mulberry32(hash32(sa.id < sb.id ? sa.id + sb.id : sb.id + sa.id));
+        const sgn = rngL() > 0.5 ? 1 : -1;
+        const cx = (ax + bx) / 2 - (dy / len) * bend * sgn;
+        const cy = (ay + by) / 2 + (dx / len) * bend * sgn;
+        const cz = (az + bz) / 2 + 0.5 + rngL() * 1.4;
+        // 冷蓝白 —— 网络是图例级核心元素，要一眼可见（bright 已在 pairList 里按权重/团内档分好）
+        const n = Math.round(Math.min(110, Math.max(24, len * 10))); // 每 2-3 单位一粒：连续成线
+        for (let s = 0; s < n; s++) {
+          const t = (s + 0.5) / n;
+          const u = 1 - t;
+          pos.push(
+            u * u * ax + 2 * u * t * cx + t * t * bx,
+            u * u * ay + 2 * u * t * cy + t * t * by,
+            u * u * az + 2 * u * t * cz + t * t * bz,
+          );
+          const f = Math.sin(t * Math.PI); // 端点渐隐
+          const tn = tint ?? [1, 1.06, 1.3]; // 跨团知识连线：冷蓝白（站点级元素）；团内微连线：本团域色
+          col.push(bright * f * tn[0], bright * f * tn[1], bright * f * tn[2]);
+          // 尺寸取恒星一半：光点纹理边缘 alpha 低，粒子过小会连 1% 的亮度都攒不出来
+          sz.push((0.5 + rngL() * 0.4) * (0.55 + 0.45 * f));
+          pha.push(rngL() * Math.PI * 2);
+        }
+      }
+      if (!pos.length) { linkBreath = null; } else {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('aColor', new THREE.Float32BufferAttribute(col, 3));
+      geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sz, 1));
+      geo.setAttribute('aPhase', new THREE.Float32BufferAttribute(pha, 1));
+      geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
+      const mat = galaxyMat(1.4, 1.0, 9, { churn: 0.006 });
+      mat.userData.base = 0.9;
+      linkBreath = mat;
+      galaxySpin.add(new THREE.Points(geo, mat));
+      }
+    }
+
+    // （P3 新星脉冲环已删除：用户「文章星的圈，加这些干嘛」—— 星本体已经是团色光点，套圈是多余装饰）
+
+    // ===== P3 亮星光晕：置顶 / 精选文章的外圈淡晕（方案图「亮星」：大亮晕）=====
+    // 颜色跟随所属星团域色
+    const pinnedHalos: { sp: THREE.Sprite; base: number; ph: number }[] = [];
+    stars.forEach((s, i) => {
+      if (!s.pinned) return;
+      const cc = vivid(clusters[starClusterIdx[i]]?.color || '#9db8ff');
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: dotTex, color: cc, transparent: true, opacity: 0.16, depthWrite: false, fog: false,
+      }));
+      sp.position.set(starPos[i * 3], starPos[i * 3 + 1], starPos[i * 3 + 2]);
+      sp.scale.setScalar(3.4);
+      galaxySpin.add(sp);
+      pinnedHalos.push({ sp, base: 3.4, ph: (i % 7) * 0.9 });
+    });
+
+    // ===== 银河中心 = 个人主页（方案图「银河中心」映射）=====
+    // 主星用星芒粒子团（galaxyMat 管线全星系共用、渲染稳定）：中心密核 + 四向光芒臂；
+    // 入口光环用 ringTex sprite 挂 galaxySpin（与脉冲环同机制，已验证可见）；
+    // hover/点击见 pick 的 home 分支（screenOfRaw 命中判定与渲染解耦，不受此影响）
+    {
+      const HR = 60; // 星芒粒子数
+      const arr = new Float32Array(HR * 3);
+      const rngSun = mulberry32(20260928); // 独立种子：不依赖恒星循环的局部 rng
+      const col = new Float32Array(HR * 3);
+      const sz = new Float32Array(HR);
+      const pha = new Float32Array(HR);
+      const cSun = new THREE.Color(0xfff2d8);
+      for (let i = 0; i < HR; i++) {
+        const arm = i % 4;                       // 四向光芒臂
+        const along = Math.pow(rngSun(), 1.6);      // 沿臂靠中心更密
+        const dist = 0.4 + along * 3.6;
+        const th = (arm * Math.PI) / 2 + (rngSun() - 0.5) * 0.22;
+        arr[i * 3] = Math.cos(th) * dist;
+        arr[i * 3 + 1] = Math.sin(th) * dist;
+        arr[i * 3 + 2] = (rngSun() - 0.5) * 0.4;
+        const f = 1 - along * 0.75;              // 离中心渐暗
+        col[i * 3] = cSun.r * f; col[i * 3 + 1] = cSun.g * f; col[i * 3 + 2] = cSun.b * f;
+        sz[i] = (0.5 + rngSun() * 0.5) * (0.5 + 0.5 * f);
+        pha[i] = rngSun() * Math.PI * 2;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 8);
+            galaxySpin.add(new THREE.Points(geo, galaxyMat(3.6, 0.06, 60))); // 微妙区域光，非大光斑
+      // （中心入口光环已删除：用户「中间 scio. 的圈，加这些干嘛」—— 银河中心的星芒粒子团本身就是入口标识）
+    }
+
+    // P1 探索层操作提示（首次进入显示数秒，方案文档模块 5）
+    const exploreTip = document.createElement('div');
+    exploreTip.className = 'explore-tip';
+    exploreTip.innerHTML = '<span>拖动浏览</span><span>滚轮缩放</span><span>点击星团 / 恒星查看</span>';
+    frame.appendChild(exploreTip);
+
+    // P1 银河中心常驻「scio.」标识：中心=「你」的文字锚点（方案图核心旁标注）
+    const homeLabel = document.createElement('div');
+    homeLabel.className = 'home-label';
+    homeLabel.textContent = 'scio.';
+    frame.appendChild(homeLabel);
+
+    // ===== 星团视觉核心（②层）：每团一群域色小星 + 一片极淡光晕 =====
+    // 向心高斯分布（中心密边缘疏）、亮度分级（大部分暗、少数亮）、纯装饰不参与交互。
+    // 它们让星团看起来是「一团星星」的实体，而不是空荡的几颗文章星。
+    // ★ 每团一个独立 Points：hover / 锁定时要能对「他团降权」，合在一个对象里做不到。
+    const clusterBgPts: THREE.Points[] = [];
+    {
+      // ★ 密度场要能「读出边界」就必须够密：成员星太少时轮廓是噪点，不是一团星。
+      //   460 颗 / 团在 3 团规模下开销可忽略（总 ~1400 点），换来连续可辨的密度梯度。
+      const BG = 460;
+      for (let k = 0; k < NC; k++) {
+        const arr = new Float32Array(BG * 3);
+        const col = new Float32Array(BG * 3);
+        const sz = new Float32Array(BG);
+        const pha = new Float32Array(BG);
+        const rngB = mulberry32(hash32('bgstar:' + clusters[k].key));
+        // 域色与分类标识色一致（列表页/全站同色系），星海里适度增艳
+        const base = vivid(clusters[k]?.color || '#9db8ff');
+        // 背景星云贴着边界环内侧（共用半径体系），整团一致缩小
+        const rad = clusterRadOf(k) * 0.88;
+        // 形态语义（方案「分类星团的视觉结构示意」）：不同分类不同的星团结构
+        const form = clusters[k]?.form ?? 'natural';
+        // ★ 径向密度 = Plummer 剖面（球状星团的标准模型）：
+        //   中心平缓富集 → 外围按 ~r^-4 衰减 → 到 tidal radius 自然截断。
+        //   星团「有结构」是这条密度曲线算出来的，不是描描出来的；边界由亮度与密度
+        //   一起衰减得到，所以不需要画圆。
+        //   （旧实现 sqrt(u) 的面均匀抽样 → 各处密度相同 → 没有边界 → 读成一堆噪点）
+        const RT = rad;            // 潮汐半径：星团的空间边界
+        // 核心半径 ≥0.30RT：中心密度放缓 —— 密度场要「渐变的外壳」而不是「实心的核」，
+        // 核心堆太密会糊成一团雾，把文章星埋掉（用户实测反馈）
+        const RC = rad * (form === 'dense' ? 0.30 : form === 'scatter' ? 0.55 : 0.32); // 核心半径
+        const plummerR = (u: number) => {
+          const xT = RT / RC;
+          const mT = Math.pow(xT, 3) / Math.pow(1 + xT * xT, 1.5); // 归一化累积质量 M(<RT)
+          const m = Math.min(mT * 0.9999, Math.max(mT * 1e-6, u * mT));
+          let lo = 0, hi = xT;
+          for (let it = 0; it < 22; it++) {   // 二分反解 CDF；初始化期一次性成本
+            const mid = (lo + hi) * 0.5;
+            const mm = Math.pow(mid, 3) / Math.pow(1 + mid * mid, 1.5);
+            if (mm < m) lo = mid; else hi = mid;
+          }
+          return RC * (lo + hi) * 0.5;
+        };
+        for (let i = 0; i < BG; i++) {
+          const j = i;
+          // form 决定「成员如何绕中心排布」，Plummer 统一决定「径向上站多远」
+          let th: number, dr: number;
+          if (form === 'dense') {
+            th = rngB() * Math.PI * 2;
+            dr = plummerR(rngB());                                 // 紧密闭团
+          } else if (form === 'spiral') {
+            const tt = i * 0.5 + (rngB() - 0.5) * 0.5;             // 规则双螺旋带
+            dr = plummerR(rngB());
+            th = tt * 1.05 + Math.log(dr + 1) * 1.35;
+          } else if (form === 'scatter') {
+            th = rngB() * Math.PI * 2;
+            dr = plummerR(rngB());                                 // 分散广布
+          } else {
+            th = golden * i + (rngB() - 0.5) * 0.8;                // 随机自然（黄金角铺开）
+            dr = plummerR(rngB());
+          }
+          // 剪影跟随本团多边形轮廓（与文章星/边界环共用同一函数）
+          dr *= clusterShapeR(k, th);
+          arr[j * 3] = clusPos[k * 3] + Math.cos(th) * dr;
+          arr[j * 3 + 1] = clusPos[k * 3 + 1] + Math.sin(th) * dr * 0.75;
+          arr[j * 3 + 2] = clusPos[k * 3 + 2] + (rngB() - 0.5) * (form === 'scatter' ? 1.2 : 1.0);
+          // 亮度分级（压暗：结构靠密度读出，雾感让位给文章星）—— 方案三层：星云最淡、密度成形、文章星主体
+          // 再叠加径向渐隐式压暗：越靠外的成员越弱 —— 密度场的「渐变」就是边界的可见化
+          // 径向衰减加重（0.35→0.5）：外缘成员更暗，密度到潮汐半径自然截断 —— 边界就是这条梯度
+          const rim = 1 - 0.5 * Math.min(1, dr / RT);
+          const roll = rngB();
+          let f: number, sMul: number;
+          if (roll < 0.45)      { f = 0.58 + rngB() * 0.16; sMul = 0.85; }
+          else if (roll < 0.85) { f = 0.74 + rngB() * 0.16; sMul = 1.0; }
+          else if (roll < 0.97) { f = 0.9; sMul = 1.2; }
+          else                  { f = 1.05; sMul = 1.45; }
+          f *= rim;
+          col[j * 3] = base.r * f; col[j * 3 + 1] = base.g * f; col[j * 3 + 2] = base.b * f;
+          sz[j] = (0.35 + rngB() * 0.45) * sMul;
+          pha[j] = rngB() * Math.PI * 2;
+        }
+        const geoB = new THREE.BufferGeometry();
+        geoB.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+        geoB.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+        geoB.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+        geoB.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+        geoB.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
+        // 背景成员（规范）：1~2px、低亮度 —— 文章星不必比它大很多，只需亮很多
+        // 成员星要比银河盘尘亮一档（否则密度场被盘星海淹没，读不出「这一团」的空间范围）
+        const matB = galaxyMat(0.66, 0.82, 2.8, { fadeLo: 0.85 });
+        matB.userData.baseMax = 2.8;
+        dustMats.push(matB); // 登记后才能跟随 pixelRatio 修正尺寸（手机上否则偏小）
+        const pts = new THREE.Points(geoB, matB);
+        galaxySpin.add(pts);
+        clusterBgPts.push(pts);
+      }
+    }
+
+    // ===== 文章星的贴身亮光（第三层的身份证明）=====
+    // 视觉图：文章星是「带可见光晕的亮星」——光晕 = 域色发光，让亮光在团里跳出来。
+    // ★ 规范参数表（亮度由 Halo 承担，不由 Core 尺寸承担）：
+    //   inner（bloom 内核）  ≈5px   opacity 0.16
+    //   outer（halo 光晕）   ≈12px  opacity 0.12    hover →18px / Explore →24px
+    //   Core（Points）       2~3px  恒定不动
+    // 实际像素换算：相机 z=16、盘面 z=-30 → 距离 ≈46，sprite px = 世界单位 × 23.6
+    const GLOW_R = 0.66;   // ≈15.6px（规范：Halo 12~24px 区间内）
+    const GLOW_IN = 0.22;  // ≈5.2px（规范：bloom 内核 ≈5px）
+    const GLOW_OP = 0.42;  // 规范 0.08~0.18 是「白光」标准；团色（感知亮度约白的一半）按 ×2.6 补偿
+    const GLOW_IN_OP = 0.46;
+    // 诊断口：非空时指定星的 Halo 参数被逐帧强制覆盖（其余星走正常状态机）
+    let GLOW_DBG: { i: number; inOp?: number; inSc?: number; outOp?: number; outSc?: number } | null = null;
+    const starGlows: THREE.Sprite[] = [];
+    for (let i = 0; i < NS; i++) {
+      const k = starClusterIdx[i];
+      // 光晕色 = 同款饱和团色（与星体同源）——叠出鲜艳的色光而不是白雾
+      const hslG = { h: 0, s: 0, l: 0 };
+      new THREE.Color(clusters[k]?.color || '#9db8ff').getHSL(hslG);
+      const c0 = new THREE.Color().setHSL(hslG.h, Math.min(1, hslG.s * 2.2 + 0.15), 0.5); // 同上：l=0.5 拉满色度
+      // 内圈亮光：小而炽的饱和团色（锐）—— 透明度压低：它是「色相」，不是「白球」
+      const inner = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: bloomTex, color: c0.clone(),
+        transparent: true, opacity: GLOW_IN_OP, depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        fog: false,
+      }));
+      inner.scale.setScalar(GLOW_IN);
+      inner.position.set(starPos[i * 3], starPos[i * 3 + 1], starPos[i * 3 + 2] - 0.1);
+      galaxySpin.add(inner);
+      starGlows.push(inner);
+      // 外圈团色光晕：★ 贴图必须用 bloomTex（峰值 1.0）—— haloTex 峰值只有 0.42，
+      // opacity 0.15 × 0.42 = 实际峰值 0.06，等于没有（「调了 opacity 却看不到」的坑）。
+      // 规范的「Halo opacity 0.08~0.18」指的是最终叠加亮度，贴图峰值要按 1.0 算。
+      const spMat = new THREE.SpriteMaterial({
+        // 外晕也是团色：只混 10% 白（用户：文章星要发团色的光，不要白色亮点）
+        map: glowHaloTex, color: c0.clone().lerp(new THREE.Color(0xffffff), 0.1),
+        transparent: true, opacity: GLOW_OP * 1.3, depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        fog: false,
+      });
+      const sp = new THREE.Sprite(spMat);
+      sp.scale.setScalar(GLOW_R);
+      sp.position.set(starPos[i * 3], starPos[i * 3 + 1], starPos[i * 3 + 2] - 0.12);
+      galaxySpin.add(sp);
+      starGlows.push(sp);
+    }
+
+    // ===== 轨道弧 = 星团边界的可见化（对照视觉图）=====
+    // 光滑细椭圆弧（不用 shapeR——多边形谐波在细线上是锯齿），半径贴着可见密度云外缘；
+    // 两套倾角系统（贴盘微倾 + 翻出盘面强倾）交错 → 断断续续的空间感。挂 galaxySpin 随自转。
+    const clusterArcMats: THREE.LineBasicMaterial[][] = [];
+    {
+      const rngO = mulberry32(777001);
+      for (let k = 0; k < NC; k++) {
+        const mats: THREE.LineBasicMaterial[] = [];
+        // 半径比例随机：0.9~1.3 倍团半径 —— 贴着密度云外缘转，不同星团弧圈大小不同
+        const rad = clusterRadOf(k) * (0.9 + rngO() * 0.4);
+        const base = vivid(clusters[k]?.color || '#9db8ff').lerp(new THREE.Color(0xdfe6ff), 0.35);
+        // ★ 立体感（用户：轨道弧立体一点）+ 每团随机：
+        //   第一层永远贴盘（近水平扁椭圆），其余层大角度倾斜、朝向随机 ——
+        //   「水平椭圆 × 倾斜椭圆交叉」才是立体感的来源；半径逐层放大形成圈层。
+        const nSys = 2 + Math.floor(rngO() * 2);
+        for (let si = 0; si < nSys; si++) {
+          const flat = si === 0;
+          const rx = flat ? (rngO() - 0.5) * 0.25 : 0.45 + rngO() * 0.75;  // 倾斜层最大 ~1.2rad（近立起）
+          const rz = (rngO() - 0.5) * (flat ? 0.8 : 1.7);                  // 倾斜层朝向随机 → 与盘面椭圆交叉
+          const radL = rad * (0.72 + (flat ? 0 : 0.12 + rngO() * 0.55));   // 半径逐层放大
+          const squash = 0.55 + rngO() * 0.4;                              // 每层扁率独立
+          const zAmp = flat ? 0.15 : 0.3 + rngO() * 0.5;                   // 倾斜层 z 起伏更大
+          const segs = 1 + Math.floor(rngO() * 2);                         // 每层 1~2 段：保持断续
+          let a0 = rngO() * Math.PI * 2;
+          for (let s = 0; s < segs; s++) {
+            const span = (0.55 + rngO() * 1.05);           // 弧段 30~90°
+            const SEG = 48;
+            const pts: THREE.Vector3[] = [];
+            for (let i = 0; i <= SEG; i++) {
+              const th = a0 + (i / SEG) * span;
+              const r2 = radL * (1 + Math.sin(th * 2 + s * 1.7) * 0.05); // 极缓的半径起伏（光滑、非锯齿）
+              pts.push(new THREE.Vector3(Math.cos(th) * r2, Math.sin(th) * r2 * squash, Math.sin(th * 1.6 + a0) * zAmp));
+            }
+            a0 += span + (0.35 + rngO() * 0.6);            // 段间缺口：断断续续
+            const geo = new THREE.BufferGeometry().setFromPoints(pts);
+            const m = new THREE.LineBasicMaterial({
+              color: base, transparent: true, opacity: 0, depthWrite: false,
+              blending: THREE.AdditiveBlending,
+              fog: false,
+            });
+            m.userData.opMul = 0.55 + rngO() * 0.45;       // 段亮度随机：有明有暗（下限保证探索态都可见）
+            const line = new THREE.Line(geo, m);
+            line.rotation.set(rx, 0, rz);
+            line.position.set(clusPos[k * 3], clusPos[k * 3 + 1], clusPos[k * 3 + 2]);
+            line.renderOrder = 5;
+            galaxySpin.add(line);
+            mats.push(m);
+          }
+        }
+        clusterArcMats.push(mats);
+      }
+    }
+
+    // ===== 团心成员散星（纯装饰，已降级）：密度氛围，不是主角 =====
+    // ★ 主星（下方 clusCoreStars）承担「团心亮星」的角色后，这里只留成员级散星
+    //   （原先的 1 颗核心 ◉ 与主星重复，且 16→6 颗大点挤在团心会叠成紫雾 —— 已删）。
+    const clusCorePts: THREE.Points[] = [];
+    const clusCoreHalo: THREE.Sprite[] = [];
+    clusters.forEach((c, k) => {
+      const rad0 = clusterRadOf(k);
+      const base = vivid(c.color || '#9db8ff');
+      const white = new THREE.Color(0xfff6e8);
+      const N = 5; // 全部成员级：与背景星同档
+      const arr = new Float32Array(N * 3), col = new Float32Array(N * 3);
+      const sz = new Float32Array(N), pha = new Float32Array(N);
+      const rngC = mulberry32(hash32('cluster-core:' + c.key));
+      for (let i = 0; i < N; i++) {
+        const th = rngC() * Math.PI * 2;
+        const dr = Math.abs(gj()) * rad0 * 0.3;
+        arr[i * 3] = clusPos[k * 3] + Math.cos(th) * dr;
+        arr[i * 3 + 1] = clusPos[k * 3 + 1] + Math.sin(th) * dr * 0.75;
+        arr[i * 3 + 2] = clusPos[k * 3 + 2] + (rngC() - 0.5) * 0.4;
+        const cc = base.clone().lerp(white, 0.2);
+        col[i * 3] = cc.r; col[i * 3 + 1] = cc.g; col[i * 3 + 2] = cc.b;
+        sz[i] = 0.45 + rngC() * 0.3;
+        pha[i] = rngC() * Math.PI * 2;
+      }
+      const geoC = new THREE.BufferGeometry();
+      geoC.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geoC.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geoC.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      geoC.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      geoC.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
+      const matC = galaxyMat(0.9, 0.6, 10, { fadeLo: 0.85 });
+      matC.userData.baseMax = 10;
+      dustMats.push(matC); // 进 dustMats：才有 uTime 呼吸与 DPR 尺寸修正
+      const pts = new THREE.Points(geoC, matC);
+      galaxySpin.add(pts);
+      clusCorePts.push(pts);
+      // 包裹光核的柔光：不是「一颗大星」，而是一小团雾 —— 参考图星团中心的辉光
+      // ★ 用户：星团带点团色的光晕（视觉图上的雾状光晕）—— 基线 0.04 → 0.1，凝视可见、hover 更明确
+      const spMat = new THREE.SpriteMaterial({
+        map: clusFogTex, color: base.clone(), // 范围雾 = 纯域色（用户：包裹晕与星团同色）
+        transparent: true, opacity: 0.36, depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        fog: false,
+      });
+      const sp = new THREE.Sprite(spMat);
+      // sprite 的 scale 是【整幅尺寸】（直径），要覆盖到密度云边界（半径 = 团半径）需 ×2
+      sp.scale.setScalar(rad0 * 2.0);
+      sp.position.set(clusPos[k * 3], clusPos[k * 3 + 1], clusPos[k * 3 + 2] - 0.2);
+      galaxySpin.add(sp);
+      clusCoreHalo.push(sp);
+    });
+
+    // ===== 星团主星：分类核心的实体化（◉）=====
+    // 语义（用户 + 视觉图）：主星 = 星团正中那颗代表分类的星。
+    // ★ 用户定稿：不要浮夸的白热球 —— 颜色也是团色，亮度不超过文章星，只稍微大一点。
+    //   sprite 峰值 = color × opacity（Points 才有 vFade/vTw 加成），取 l=0.55 的团色
+    //   → 峰值亮度 ≈ 0.55，低于文章星核心（l=0.60 × vFade1.3 ≈ 0.82）。
+    // 拾取/悬停/点击见 pick 的 core 分支（HIT_CORE 24px）。
+    const clusCoreStars: THREE.Sprite[] = [];
+    clusters.forEach((c, k) => {
+      const base = vivid(c.color || '#9db8ff');
+      const hslM = { h: 0, s: 0, l: 0 };
+      base.getHSL(hslM);
+      const mainCol = base.clone().setHSL(hslM.h, Math.min(1, hslM.s * 0.92), 0.55);
+      const mk = (tex: THREE.Texture, scale: number, opacity: number, color: THREE.Color) => {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: tex, color, transparent: true, opacity, depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          fog: false,
+        }));
+        sp.scale.setScalar(scale);
+        sp.position.set(clusPos[k * 3], clusPos[k * 3 + 1], clusPos[k * 3 + 2]);
+        galaxySpin.add(sp);
+        clusCoreStars.push(sp);
+        return sp;
+      };
+      mk(glowHaloTex, 0.6, 0.2, base.clone());                                     // ② 团色辉光（14px，与星团同色）
+      mk(coreTex, 0.52, 0.85, mainCol);                                            // ① 团色主星（12px sprite → ~5.4px 实核：比文章星略大，不抢戏）
+    });
+
+    // ===== 星团区域光晕（①层本体）：几乎不可见的柔光，标定「这一片空间」=====
+    // 默认 0.055 —— 凝视才察觉；靠近微起、hover 明确、锁定最强。它从不「变亮成一团星」，
+    // 因为星团要表达的语义是「空间范围」，不是「很多颗星」。
+    const clusHalo: THREE.Sprite[] = [];
+    const clusHaloBase: number[] = [];
+    clusters.forEach((c, k) => {
+      const mat = new THREE.SpriteMaterial({
+        map: haloTex,
+        color: vivid(c.color || '#9db8ff'),
+        transparent: true,
+        opacity: 0.055,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending, // 光晕只加光：普通混合会把背后的星海压黑
+        fog: false, // ★ 雾会把 46 距离处的 sprite 全部灭掉（FogExp2(0.062) @46 ≈ 100%）
+      });
+      const sp = new THREE.Sprite(mat);
+      const base = clusterRadOf(k) * 2.5;
+      sp.scale.setScalar(base);
+      sp.position.set(clusPos[k * 3], clusPos[k * 3 + 1], clusPos[k * 3 + 2] - 0.4);
+      galaxySpin.add(sp);
+      clusHalo.push(sp);
+      clusHaloBase.push(base);
+    });
+
+    // ===== 星云（纯装饰，与星团/分类无关，不存储任何信息）=====
+    // 星云 = 随机但具有密度结构的微弱粒子 / 雾状光效，只负责营造宇宙空间感，不承载分类或文章信息。
+    //   ① 密度结构（关键：不是均匀噪点）—— 云核（向心密、边缘疏）+ 核间丝缕 + 8% 极稀薄弥散，
+    //      看起来随机，实际有空间结构；否则就是一层「粒子背景」。
+    //   ② 亮度分级（每 1000 颗）：700 若有若无 / 200 轻微可见 / 80 偶尔闪 / 20 明显微光 —— 层次感的来源。
+    //   ③ 极慢异速漂移（不同层不同速）+ 非同步的轻微亮度变化，绝不「闪烁」。
+    //   ④ 星云可以穿过星团：它的边界必须模糊 —— 星团的边界只由恒星的空间聚集形成，
+    //      否则用户会把星云误读成分类。
+    let nebCloud: THREE.Points, nebDust: THREE.Points;
+    {
+      const rngN = mulberry32(20260929);
+      const CORES = 18; // 密度场骨架：云核数量（太少 → 团块感生硬；太多 → 又变成均匀噪点）
+      const PALETTE = ['#5f79c9', '#8a6fc9', '#b07a9e', '#c9a06d', '#7f8fd0', '#6fb0c4'].map((h) => new THREE.Color(h));
+      const SAT = ['#4a7ce8', '#9a6fe0', '#e87fa8', '#4ac9c9', '#e8b46a'].map((h) => new THREE.Color(h));
+      const cores: { x: number; y: number; z: number; rad: number; w: number; ci: number }[] = [];
+      for (let c2 = 0; c2 < CORES; c2++) {
+        const rr = GR * (0.34 + 0.72 * Math.sqrt(rngN()));
+        const th = rngN() * Math.PI * 2;
+        const rad = 2.6 + rngN() * 4.4;
+        cores.push({
+          x: Math.cos(th) * rr, y: Math.sin(th) * rr, z: gj() * 0.9,
+          rad, w: Math.pow(rad, 1.5), ci: c2 % PALETTE.length,
+        });
+      }
+      const wSum = cores.reduce((a, c2) => a + c2.w, 0);
+      const pickCore = (u: number) => {
+        let acc = 0;
+        for (const c2 of cores) { acc += c2.w / wSum; if (u <= acc) return c2; }
+        return cores[cores.length - 1];
+      };
+      const N_CLOUD = Math.round(2600 * DN); // 云雾层：中大柔斑，重叠成雾
+      const N_DUST = Math.round(6600 * DN);  // 微尘层：小粒子撒在云上
+      const build = (n: number, big: boolean) => {
+        const arr = new Float32Array(n * 3), col = new Float32Array(n * 3);
+        const sz = new Float32Array(n), pha = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+          const u = rngN();
+          let cx2: number, cy2: number, cz2: number, base: THREE.Color;
+          if (u < 0.78) {
+            // 云核：向心高斯 → 云心密、向边缘指数式稀疏（「中心密度高、边缘稀疏」）
+            const c2 = pickCore(rngN());
+            const dr = Math.abs(gj()) * 0.62 * c2.rad;
+            const th2 = rngN() * Math.PI * 2;
+            cx2 = c2.x + Math.cos(th2) * dr;
+            cy2 = c2.y + Math.sin(th2) * dr;
+            cz2 = c2.z + (rngN() - 0.5) * 1.5;
+            base = PALETTE[c2.ci];
+          } else if (u < 0.92) {
+            // 丝缕：两核之间连线上的游走 —— 云与云之间有稀薄的桥，才自然连成片
+            const a2 = cores[Math.floor(rngN() * cores.length)];
+            const b2 = cores[Math.floor(rngN() * cores.length)];
+            const tt = rngN(), bend = (rngN() - 0.5) * 5.0;
+            cx2 = a2.x + (b2.x - a2.x) * tt + bend;
+            cy2 = a2.y + (b2.y - a2.y) * tt + bend * 0.6;
+            cz2 = a2.z + (rngN() - 0.5) * 1.6;
+            base = PALETTE[a2.ci];
+          } else {
+            // 弥散底噪：整盘极稀薄一层，保证云与云之间不出现突兀空档
+            const rr = GR * (0.25 + 0.85 * Math.sqrt(rngN()));
+            const th2 = rngN() * Math.PI * 2;
+            cx2 = Math.cos(th2) * rr; cy2 = Math.sin(th2) * rr; cz2 = gj() * 1.1;
+            base = PALETTE[Math.floor(rngN() * PALETTE.length)];
+          }
+          arr[i * 3] = cx2; arr[i * 3 + 1] = cy2; arr[i * 3 + 2] = cz2;
+          // ---- 亮度分级：700 / 200 / 80 / 20（每 1000 颗）----
+          const roll = rngN();
+          let f: number, sMul: number;
+          if (roll < 0.70)      { f = 0.05 + rngN() * 0.08; sMul = 0.9; }  // 700：若有若无
+          else if (roll < 0.90) { f = 0.16 + rngN() * 0.14; sMul = 1.15; } // 200：轻微可见
+          else if (roll < 0.98) { f = 0.34 + rngN() * 0.18; sMul = 1.5; }  // 80：偶尔闪一下
+          else                  { f = 0.62 + rngN() * 0.33; sMul = 2.2; }  // 20：明显微光
+          // 亮档混入高饱和色相：暗粒子在 additive 下只呈灰白，色相要靠亮粒子显现
+          const mixC = roll >= 0.98 ? base.clone().lerp(SAT[Math.floor(rngN() * SAT.length)], 0.6) : base;
+          col[i * 3] = mixC.r * f; col[i * 3 + 1] = mixC.g * f; col[i * 3 + 2] = mixC.b * f;
+          sz[i] = (big ? 0.55 + rngN() * 0.6 : 0.22 + rngN() * 0.38) * sMul;
+          pha[i] = rngN() * Math.PI * 2;
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+        g.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+        g.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+        g.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+        g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
+        return g;
+      };
+      // ① 云雾层：中大柔斑、单粒极淡，靠重叠成雾
+        fog: false,
+      nebCloud = new THREE.Points(build(N_CLOUD, true), galaxyMat(1.5, 0.26, 30, { churn: 0.0009 }));
+      // ★ 加性混合：雾只能「加光」。普通混合下暗粒子会把背景压黑（暗色覆盖亮底）
+      nebCloud.material.blending = THREE.AdditiveBlending;
+      galaxyTilt.add(nebCloud);
+      // ② 微尘层：小粒子撒在云上；churn 更慢 → 层间错动，看不出「整片一起转」
+      nebDust = new THREE.Points(build(N_DUST, false), galaxyMat(0.55, 0.85, 9, { churn: 0.0005 }));
+      nebDust.material.blending = THREE.AdditiveBlending;
+      galaxyTilt.add(nebDust);
+    }
+
+    // 悬停/选中高亮环：跟着目标恒星走（星系空间里的一个精灵）
+    const ring = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: ringTex, color: 0xffc46b, transparent: true, depthWrite: false, opacity: 0.85, fog: false })
+    );
+    ring.scale.setScalar(1.9);
+    ring.visible = false;
+    galaxySpin.add(ring);
+
+    // 星团标签（HTML 覆盖层）：名字 + 篇数，本身就是进入分类的按钮
+    const _lv = new THREE.Vector3();
+    const clusterLabels: { el: HTMLDivElement; k: number; w: number }[] = [];
+    let frameNo = 0;
+    clusters.forEach((c, k) => {
+      const el = document.createElement('div');
+      el.className = 'cluster-label';
+      el.innerHTML = `<span class="cl-name"></span><span class="cl-count"></span>`;
+      (el.querySelector('.cl-name') as HTMLElement).textContent = c.title;
+      // 星图风计数：零填充两位 + ARTICLES —— 是「星团的信息」，不是列表页的分类徽标
+      (el.querySelector('.cl-count') as HTMLElement).textContent = `${String(c.count).padStart(2, '0')} ARTICLES`;
+      if (c.color) el.style.color = c.color;
+      // 星团标签：探索态 → 页内拉近聚焦；默认态 → 直接进分类页（相机不动）
+      el.addEventListener('click', () => {
+        if (exploreMode) { flyTo(k); return; }
+        if (clusters[k]?.url) location.href = clusters[k].url;
+      });
+      frame.appendChild(el);
+      clusterLabels.push({ el, k, w: el.offsetWidth });
+    });
+
+    // ===== 背景星幕：两个不同深度的微星层 =====
+    // 远层（z=-46）小、暗、偏蓝 → 宇宙深处；近层（z=-28）稍大稍亮。
+    // 相机游移时两层错位 → 最便宜的「无限深」。同一平面只会得到「墙纸」。
+    function makeBackdrop(n, z, size, opacity, bluish) {
+      const dist = fitZ() - z;
+      const W2 = 0.58 * dist; // fov45 需 tan(22.5°)≈0.414，取 0.58 留余量（含竖屏）
+      const arr = new Float32Array(n * 3);
+      const col = new Float32Array(n * 3);
+      const sz = new Float32Array(n);
+      const pha = new Float32Array(n);
+      const cW = new THREE.Color(0xe4e6ec);
+      const cB = new THREE.Color(0xaebbdd);
+      const cG = new THREE.Color(0xd8c290);
+      for (let i = 0; i < n; i++) {
+        arr[i * 3] = (rand() * 2 - 1) * W2 * 2;
+        arr[i * 3 + 1] = (rand() * 2 - 1) * W2 * 2;
+        arr[i * 3 + 2] = z + (rand() * 2 - 1) * 4; // 轻微厚度：不是一张纸
+        const pick = rand();
+        const c = pick < bluish ? cB : pick < bluish + (1 - bluish) * 0.75 ? cW : cG;
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        sz[i] = 0.4 + 0.6 * Math.pow(rand(), 4); // 幂律：海量微星 + 极少数亮星（参考图的星场质感）
+        pha[i] = rand() * Math.PI * 2;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 }, uTex: { value: dotTex },
+          uSize: { value: size }, uOpacity: { value: opacity }, uScale: { value: 450 },
+          uMax: { value: 5 },
+        },
+        vertexShader: `
+          attribute vec3 aColor;
+          attribute float aSize;
+          attribute float aPhase;
+          uniform float uTime;
+          uniform float uScale;
+          uniform float uSize;
+          uniform float uMax;
+          varying vec3 vColor;
+          varying float vTw;
+          varying float vY;
+          void main() {
+            vColor = aColor;
+            vTw = 0.72 + 0.28 * sin(uTime * (0.30 + fract(aPhase * 7.31) * 0.65) + aPhase * 41.0); // 呼吸：周期 8-21s、亮度 ±28% —— 肉眼可感知的「吸气/呼气」
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            float s = uSize * aSize * (uScale / -mv.z) * (0.84 + 0.16 * vTw);
+            gl_PointSize = uMax * s / (uMax + s);
+            gl_Position = projectionMatrix * mv;
+            vY = gl_Position.y / gl_Position.w;
+          }`,
+        fragmentShader: `
+          uniform sampler2D uTex;
+          uniform float uOpacity;
+          varying vec3 vColor;
+          varying float vTw;
+          varying float vY;
+          void main() {
+            vec4 tex = texture2D(uTex, gl_PointCoord);
+            // 上浓下淡（vY 负值=画面下半 0.55）：底部留给页脚/标语呼吸
+            float band = mix(0.55, 1.0, smoothstep(-0.85, 0.2, vY));
+            gl_FragColor = vec4(vColor * tex.rgb, tex.a * uOpacity * vTw * band);
+          }`,
+        transparent: true, depthWrite: false,
+      });
+      dustMats.push(mat);
+      mat.userData.baseMax = 5;
+      const pts = new THREE.Points(geo, mat);
+      pts.position.set(0, 2, 0);
       scene.add(pts);
       return pts;
+    }
+    const backFar  = makeBackdrop(Math.round(850 * DN), -46, 0.15, 0.40, 0.58);
+    const backNear = makeBackdrop(Math.round(420 * DN), -28, 0.19, 0.50, 0.42);
+
+    // ===== 近景浮尘：相机与星图之间的稀疏大暗星 =====
+    // 距相机仅 4~10 单位，相机游移时位移最大 → 全画面视差的「锚」。极暗，只提供深度不抢戏。
+    const fgGroup = new THREE.Group();
+    scene.add(fgGroup);
+    (() => {
+      const n = Math.round(90 * DN);
+      const arr = new Float32Array(n * 3);
+      const col = new Float32Array(n * 3);
+      const pha = new Float32Array(n);
+      const cW = new THREE.Color(0xdfe4ee);
+      const cB = new THREE.Color(0xaebbdd);
+      for (let i = 0; i < n; i++) {
+        let x, y;
+        do { x = (rand() * 2 - 1) * 17; y = (rand() * 2 - 1) * 10; }
+        while (Math.abs(x) < 5.5 && Math.abs(y) < 4); // 避开标语中心
+        arr[i * 3] = x;
+        arr[i * 3 + 1] = y;
+        arr[i * 3 + 2] = 2 + rand() * 6;
+        const c = rand() < 0.7 ? cW : cB;
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        pha[i] = rand() * Math.PI * 2;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 }, uTex: { value: dotTex },
+          uSize: { value: 0.055 }, uOpacity: { value: 0.16 }, uScale: { value: 450 },
+          uMax: { value: 9 },
+        },
+        vertexShader: `
+          attribute vec3 aColor;
+          attribute float aPhase;
+          uniform float uTime;
+          uniform float uScale;
+          uniform float uSize;
+          uniform float uMax;
+          varying vec3 vColor;
+          varying float vTw;
+          void main() {
+            vColor = aColor;
+            vTw = 0.72 + 0.28 * sin(uTime * (0.30 + fract(aPhase * 7.31) * 0.65) + aPhase * 41.0); // 呼吸：周期 8-21s、亮度 ±28% —— 肉眼可感知的「吸气/呼气」
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            float s = uSize * (uScale / -mv.z) * (0.84 + 0.16 * vTw);
+            gl_PointSize = uMax * s / (uMax + s);
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: `
+          uniform sampler2D uTex;
+          uniform float uOpacity;
+          varying vec3 vColor;
+          varying float vTw;
+          void main() {
+            vec4 tex = texture2D(uTex, gl_PointCoord);
+            gl_FragColor = vec4(vColor * tex.rgb, tex.a * uOpacity * vTw);
+          }`,
+        transparent: true, depthWrite: false,
+      });
+      dustMats.push(mat);
+      mat.userData.baseMax = 9;
+      fgGroup.add(new THREE.Points(geo, mat));
     })();
 
-    // ===== 力导向模拟（带边界钳制）=====
+
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let alpha = 1;
-    const BOUND = 3.9;
-    // 每条边的自然长度与劲度：归属边（连着锚星）短而强 → 成员凝聚成团；标签边松而弱
-    const isAnchorEdge = (e: number) => {
-      const [a, b] = edges[e];
-      return !!(nodes[a].anchor || nodes[b].anchor);
-    };
-    const restOf = (e: number) => (isAnchorEdge(e) ? 1.5 : 2.2);
-    const stiffOf = (e: number) => (isAnchorEdge(e) ? 0.055 : 0.03);
-    function tick(t) {
-      for (let i = 0; i < N; i++)
-        for (let j = i + 1; j < N; j++) {
-          let dx = pos[i * 3] - pos[j * 3],
-            dy = pos[i * 3 + 1] - pos[j * 3 + 1],
-            dz = pos[i * 3 + 2] - pos[j * 3 + 2];
-          let d2 = dx * dx + dy * dy + dz * dz;
-          if (d2 < 1e-4) d2 = 1e-4;
-          const f = (12 / d2) * alpha;
-          const d = Math.sqrt(d2);
-          dx /= d; dy /= d; dz /= d;
-          vel[i * 3] += dx * f; vel[i * 3 + 1] += dy * f; vel[i * 3 + 2] += dz * f;
-          vel[j * 3] -= dx * f; vel[j * 3 + 1] -= dy * f; vel[j * 3 + 2] -= dz * f;
-        }
-      for (let e = 0; e < edges.length; e++) {
-        const [a, b, w] = edges[e];
-        let dx = pos[b * 3] - pos[a * 3],
-          dy = pos[b * 3 + 1] - pos[a * 3 + 1],
-          dz = pos[b * 3 + 2] - pos[a * 3 + 2];
-        const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-4;
-        const f = (d - restOf(e)) * stiffOf(e) * w * alpha;
-        dx /= d; dy /= d; dz /= d;
-        vel[a * 3] += dx * f; vel[a * 3 + 1] += dy * f; vel[a * 3 + 2] += dz * f;
-        vel[b * 3] -= dx * f; vel[b * 3 + 1] -= dy * f; vel[b * 3 + 2] -= dz * f;
-      }
-      for (let i = 0; i < N; i++) {
-        const ix = i * 3, iy = i * 3 + 1, iz = i * 3 + 2;
-        vel[ix] -= pos[ix] * 0.032;
-        vel[iy] -= pos[iy] * 0.032;
-        vel[iz] -= pos[iz] * 0.032;
-        for (const idx of [ix, iy, iz]) {
-          vel[idx] *= 0.86;
-          pos[idx] += Math.max(-0.35, Math.min(0.35, vel[idx]));
-        }
-        const r = Math.sqrt(pos[ix] ** 2 + pos[iy] ** 2 + pos[iz] ** 2);
-        if (r > BOUND) {
-          const s = BOUND / r;
-          pos[ix] *= s; pos[iy] *= s; pos[iz] *= s;
-          vel[ix] *= 0.7; vel[iy] *= 0.7; vel[iz] *= 0.7;
-        }
-        sprites[i].position.set(pos[ix], pos[iy], pos[iz]);
-      }
-      alpha = Math.max(alpha * 0.9943, reduced ? 0 : 0.04);
-      syncCurves(t, hovered);
-    }
 
     // ===== 交互 =====
-    let rotX = 0.2, rotY = 0.5, tRotX = rotX, tRotY = rotY;
-    let dragging = false, moved = 0, lastX = 0, lastY = 0, hovered = -1;
+    // 初始方位角必须为 0：非零的 rotX/rotY 会直接偏转整个星系的姿态（把盘压扁）
+    let rotX = 0, rotY = 0, tRotX = rotX, tRotY = rotY;
+    let dragging = false, moved = 0, lastX = 0, lastY = 0;
+    let hitKind: 'star' | 'cluster' | 'core' = 'star';
+    let hitIdx = -1;            // hover/选中的目标
+    const HIT_STAR = 30, HIT_CLUSTER = 88, HIT_CORE = 24; // 主星判定半径：主星是实体，点它就是进分类
     const tmp = new THREE.Vector3();
 
-    function pick(cx: number, cy: number): number {
+    // 星系空间 → 屏幕坐标：内容 Points 挂在 galaxySpin 下，会随星系自转
+    function screenOfRaw(x: number, y: number, z: number) {
       const rect = mount.getBoundingClientRect();
-      let best = -1, bestD = Infinity;
-      for (let i = 0; i < N; i++) {
-        const thresh = nodes[i].anchor ? 34 : 26; // 锚星更大，拾取半径放宽
-        tmp.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(group.matrixWorld).project(camera);
-        const sx = (tmp.x * 0.5 + 0.5) * rect.width + rect.left;
-        const sy = (-tmp.y * 0.5 + 0.5) * rect.height + rect.top;
-        const dx = sx - cx, dy = sy - cy, d = dx * dx + dy * dy;
-        if (d < thresh * thresh && d < bestD) { bestD = d; best = i; }
-      }
-      return best;
+      tmp.set(x, y, z)
+        .applyMatrix4(galaxySpin.matrixWorld)
+        .project(camera);
+      return {
+        x: (tmp.x * 0.5 + 0.5) * rect.width + rect.left,
+        y: (-tmp.y * 0.5 + 0.5) * rect.height + rect.top,
+        z: tmp.z,
+      };
     }
 
-    function showTip(i: number) {
+    function screenOf(arr: Float32Array, i: number) {
       const rect = mount.getBoundingClientRect();
-      tmp.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(group.matrixWorld).project(camera);
-      const sx = (tmp.x * 0.5 + 0.5) * rect.width;
-      const sy = (-tmp.y * 0.5 + 0.5) * rect.height;
-      tip.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, calc(-100% - 12px))`;
-      (tip.querySelector('.tip-title') as HTMLElement).textContent = nodes[i].title;
-      const n = nodes[i];
-      const meta = n.anchor
-        ? `${n.desc || n.group} · ${n.count ?? ''} 篇`
-        : `${n.kind} · ${n.group}${n.desc ? ' — ' + n.desc : ''}`;
-      (tip.querySelector('.tip-meta') as HTMLElement).textContent = meta;
+      tmp.set(arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2])
+        .applyMatrix4(galaxySpin.matrixWorld)
+        .project(camera);
+      return {
+        x: (tmp.x * 0.5 + 0.5) * rect.width + rect.left,
+        y: (-tmp.y * 0.5 + 0.5) * rect.height + rect.top,
+        z: tmp.z,
+      };
+    }
+
+    // 星团在屏幕上的视觉半径（盘内正交两方向投影后取平均）：引力区随缩放/视角自动伸缩
+    function clusterScreenR(k: number) {
+      const cx = clusPos[k * 3], cy = clusPos[k * 3 + 1], cz = clusPos[k * 3 + 2];
+      const r = clusterRadOf(k);
+      const a = screenOfRaw(cx, cy, cz);
+      const bx = screenOfRaw(cx + r, cy, cz);
+      const by = screenOfRaw(cx, cy + r, cz);
+      return (Math.hypot(bx.x - a.x, bx.y - a.y) + Math.hypot(by.x - a.x, by.y - a.y)) * 0.5;
+    }
+
+    function pick(cx: number, cy: number) {
+      let best = -1, kind: 'star' | 'cluster' | 'home' | 'core' = 'star', bestD = Infinity;
+      // 银河中心 = 个人主页入口（方案图「银河中心」映射）：先于星/星团判定
+      const hp = screenOfRaw(0, 0, 0);
+      if (hp.z <= 1) {
+        const dh = Math.hypot(hp.x - cx, hp.y - cy);
+        if (dh < HIT_STAR * 1.4 && dh < bestD) { bestD = dh; best = 0; kind = 'home'; }
+      }
+      for (let i = 0; i < NS; i++) {
+        const p = screenOf(starPos, i);
+        if (p.z > 1) continue;
+        const d = Math.hypot(p.x - cx, p.y - cy);
+        if (d < HIT_STAR && d < bestD) { bestD = d; best = i; kind = 'star'; }
+      }
+      // ★ 星团主星：分类核心（用户语义「中间是这个星团是什么」）—— 点击进分类页。
+      //   优先级低于文章星、高于团区域（主星是实体，不是空白区）。
+      for (let k = 0; k < NC; k++) {
+        const p = screenOf(clusPos, k);
+        if (p.z > 1) continue;
+        const d = Math.hypot(p.x - cx, p.y - cy);
+        if (d < HIT_CORE && d < bestD) { bestD = d; best = k; kind = 'core'; }
+      }
+      // ★ 星团区域判定：
+      //   默认态——文章星最高、主星次之、区域兜底（点到星就是星）。
+      //   探索态——反转：点团内任意处（含主星/文章星附近）= 聚焦这个团（深入语义，
+      //   方案「探索深入：显示更多文章星」）。拉远后整团只占几十像素，星和团无法区分，
+      //   文章星等聚焦拉近后再点击（那时的近景才是「点文章」的状态）。
+      if (best < 0 || exploreMode) {
+        for (let k = 0; k < NC; k++) {
+          const p = screenOf(clusPos, k);
+          if (p.z > 1) continue;
+          const d = Math.hypot(p.x - cx, p.y - cy);
+          // 外围引力区：半径由星团的实际投影大小决定（不是写死的像素），
+          // 再外扩一点 —— 星团是「一片空间」，点它周围的空白也算指向这一片。
+          const r = Math.max(40, clusterScreenR(k) * 1.2 + 22);
+          if (d >= r) continue;
+          if (exploreMode) { best = k; kind = 'cluster'; break; } // 探索态：团区域命中即胜（星/主星让位）
+          if (d < bestD) { bestD = d; best = k; kind = 'cluster'; }
+        }
+      }
+      return { kind, idx: best };
+    }
+
+    const q = (sel: string) => tip.querySelector(sel) as HTMLElement;
+    const targetUrl = (kind: string, idx: number) => {
+      if (kind === 'home') return '/about/'; // 银河中心 → 个人主页
+      if (kind === 'core') return clusters[idx]?.url; // 星团主星 → 分类页（方案：点击主星进专题/分类）
+      return kind === 'star' ? stars[idx]?.url : clusters[idx]?.url;
+    };
+
+    function showTip(kind: 'star' | 'cluster' | 'home' | 'core', idx: number) {
+      const arr = kind === 'star' ? starPos : clusPos;
+      const rect = mount.getBoundingClientRect();
+      const p = kind === 'home' ? screenOfRaw(0, 0, 0) : screenOf(arr, idx);
+      tip.style.transform =
+        `translate(${p.x - rect.left}px, ${p.y - rect.top}px) translate(-50%, calc(-100% - 16px))`;
+      if (kind === 'home') {
+        // 银河中心：个人主页入口（方案图「银河中心」映射）
+        q('.tip-kind').textContent = '银河中心';
+        q('.tip-title').textContent = 'scio. 个人主页';
+        q('.tip-meta').textContent = '关于我 · 项目 · 时间线';
+        q('.tip-desc').textContent = '这个站的核心：从一个原点出发的全部思考';
+        q('.tip-go').textContent = '进入主页 →';
+      } else if (kind === 'star') {
+        const s = stars[idx];
+        q('.tip-kind').textContent = `${s.recent ? '新星 · ' : ''}${s.pinned ? '亮星 · ' : ''}${s.kind} · ${s.group}`;
+        q('.tip-title').textContent = s.title;
+        q('.tip-meta').textContent = s.date ? `${s.date}${s.tags?.length ? ' · ' + s.tags.slice(0, 3).join(' / ') : ''}` : (s.tags?.slice(0, 3).join(' / ') || '');
+        q('.tip-desc').textContent = s.desc || '';
+        q('.tip-go').textContent = '阅读全文 →';
+      } else if (kind === 'core') {
+        // 星团主星：分类核心（方案图 ② 悬停卡「AI · 12 篇文章 · 专题」的形态）
+        const c = clusters[idx];
+        q('.tip-kind').textContent = '星团核心';
+        q('.tip-title').textContent = c.title;
+        q('.tip-meta').textContent = `${c.count} 篇文章 · ${c.topics ?? 0} 个话题`;
+        q('.tip-desc').textContent = c.topicList?.length
+          ? c.topicList.slice(0, 5).join(' · ')
+          : (c.desc || '');
+        q('.tip-go').textContent = '进入分类 →';
+      } else {
+        const c = clusters[idx];
+        q('.tip-kind').textContent = '星团';
+        q('.tip-title').textContent = c.title;
+        q('.tip-meta').textContent = `${c.count} 篇 · ${c.topics ?? 0} 个话题`;
+        // 方案卡片：话题标签列表（LLM · Agent · RAG…）；无标签回退到分类描述
+        q('.tip-desc').textContent = c.topicList?.length
+          ? c.topicList.slice(0, 5).join(' · ')
+          : (c.desc || '');
+        q('.tip-go').textContent = '进入分类 →';
+      }
       tip.classList.add('show');
     }
 
+    // 双指缩放（方案图移动端适配：触屏手势支持）：两指间距变化 → 相机推拉
+    const activePtr = new Map<number, { x: number; y: number }>();
+    let pinchDist = 0;
     mount.addEventListener('pointerdown', (e) => {
+      activePtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePtr.size >= 2) {
+        // 进入双指：结束单指拖拽，切换为捏合缩放
+        const pts = [...activePtr.values()];
+        pinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        dragging = false;
+        mount.classList.remove('grabbing');
+        return;
+      }
       dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
       mount.classList.add('grabbing');
       mount.setPointerCapture(e.pointerId);
     });
     mount.addEventListener('pointermove', (e) => {
+      if (!dragging && focusT <= 0.02) {
+        mxT = (e.clientX / mount.clientWidth) * 2 - 1;
+        myT = (e.clientY / mount.clientHeight) * 2 - 1;
+      }
+      if (activePtr.has(e.pointerId)) activePtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePtr.size >= 2) {
+        const pts = [...activePtr.values()];
+        const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        if (pinchDist > 0 && d > 0 && focusT <= 0.02) {
+          userZoomed = true;
+          camZTarget = Math.max(7.2, Math.min(16, camZTarget * (pinchDist / d)));
+        }
+        pinchDist = d;
+        return;
+      }
       if (dragging) {
+        if (focusT > 0.02) { lastX = e.clientX; lastY = e.clientY; return; } // 聚焦态不旋转
         const dx = e.clientX - lastX, dy = e.clientY - lastY;
         moved += Math.abs(dx) + Math.abs(dy);
         tRotY += dx * 0.0052;
-        tRotX = Math.max(-1.2, Math.min(1.2, tRotX + dy * 0.0042));
+        tRotX = Math.max(-0.3, Math.min(0.3, tRotX + dy * 0.0042));
         lastX = e.clientX; lastY = e.clientY;
       } else if (e.pointerType === 'mouse') {
-        hovered = pick(e.clientX, e.clientY);
-        mount.classList.toggle('pointing', hovered >= 0);
-        ring.visible = hovered >= 0;
-        if (hovered >= 0) showTip(hovered); else tip.classList.remove('show');
+        const h = pick(e.clientX, e.clientY);
+        hitKind = h.kind; hitIdx = h.idx;
+        rawMx = e.clientX; rawMy = e.clientY;
+        mount.classList.toggle('pointing', hitIdx >= 0);
+        hovCluster = hitKind === 'cluster' ? hitIdx : -1; // 星团 hover 状态
+        // 吸附（⑥入口 3）：鼠标越靠近某星团，该团邻近度越高 —— 光晕微起、标签被轻轻牵引。
+        // 不是「立刻选中」，而是先有视觉回应；再靠近才由 pick 判为 hover。
+        for (let k = 0; k < NC; k++) {
+          const p = screenOf(clusPos, k);
+          const d = p.z > 1 ? 1e9 : Math.hypot(p.x - e.clientX, p.y - e.clientY);
+          const reach = Math.max(120, clusterScreenR(k) * 2.0);
+          clusProx[k] = Math.max(0, 1 - d / reach);
+        }
+        // 悬停圆环只给文章星：星团用「光晕 + 边界」表达，不再套一个大圆环
+        ring.visible = hitIdx >= 0 && hitKind === 'star';
+        // ★ hover 星团不弹信息卡：星团是一片空间，不是对象。
+        //   只做「边界浮现 + 名字提亮 + 团内星提亮 + 他团降权」；
+        //   分类信息要到点击锁定后才出现（移动端点选仍走底部卡片）。
+        if (hitIdx >= 0 && hitKind !== 'cluster') showTip(hitKind, hitIdx);
+        else tip.classList.remove('show');
       }
     });
-    // 触屏两段式：首点选中并弹卡，再点（或点卡片）进入；鼠标保持点击直达
-    let selected = -1;
+    // 触屏两段式：轻点选中并浮出卡片（移动端卡片沉到底部），再点进入；鼠标点击直达
     function clearSelection() {
-      selected = -1;
+      hitIdx = -1;
+      ring.visible = false;
       tip.classList.remove('show', 'tap');
     }
+
+    // ===== 星团文章列表（参考图面板 4）=====
+    // ★ 语义（用户定稿）：底部摘要浮层已移除 —— 它压在标语/页脚文字上，位置本身就不合理。
+    //   现在：悬停 = 摘要卡（graph-tip，跟着星走）；点击 = 直接进文章页。
+    const listPanel = document.getElementById('galaxy-list') as HTMLElement;
+    let hoverListIdx = -1;  // 列表悬停的文章（星图上对应星回亮）
+    const openArticle = (i: number) => {
+      const s = stars[i];
+      if (s?.url) location.href = s.url;
+    };
+
+    function showList(k: number) {
+      const c = clusters[k];
+      (listPanel.querySelector('.gl-title') as HTMLElement).textContent = c.title;
+      (listPanel.querySelector('.gl-count') as HTMLElement).textContent =
+        `${clusterStars[k].length} 篇`;
+      const ul = listPanel.querySelector('.gl-items') as HTMLElement;
+      ul.innerHTML = '';
+      const dot = vivid(c.color || '#9db8ff').getStyle();
+      clusterStars[k].forEach((si) => {
+        const s = stars[si];
+        const li = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'gl-item';
+        btn.style.setProperty('--dot', dot);
+        btn.innerHTML = `<span class="gl-item-t"></span><span class="gl-item-d"></span>`;
+        (btn.querySelector('.gl-item-t') as HTMLElement).textContent = s.title;
+        (btn.querySelector('.gl-item-d') as HTMLElement).textContent = s.date || '';
+        // 悬停列表项 → 星图上那颗星回亮（双向的第二半：悬星时在主循环里给列表项加 .on）
+        btn.addEventListener('pointerenter', () => { hoverListIdx = si; });
+        btn.addEventListener('pointerleave', () => { if (hoverListIdx === si) hoverListIdx = -1; });
+        btn.addEventListener('click', () => openArticle(si)); // 列表项：直接进文章页
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+      listPanel.classList.add('show');
+      listPanel.setAttribute('aria-hidden', 'false');
+    }
+    function hideList() {
+      hoverListIdx = -1;
+      listPanel.classList.remove('show');
+      listPanel.setAttribute('aria-hidden', 'true');
+    }
+
+    // ===== P2 镜头推拉：点击星团 → 银河拉近到该星团（页内探索，不跳转）=====
+    let focusIdx = -1;   // 聚焦星团（-1 = 全景）
+    let focusT = 0;      // 0..1 拉近进度
+    let spinT = 0;       // 自转时钟（可冻结）
+    let lastFocusIdx = 0; // 退出聚焦过程的收尾目标
+    let spinFreeze = -1; // 聚焦时刻的自转时钟（聚焦期间星系静止，凝视不追转）
+    let focusRel: THREE.Vector3 | null = null; // 星团相对 tilt 的坐标（冻结时刻缓存）
+    const focusBar = document.getElementById('galaxy-focus') as HTMLElement;
+    const FOCUS_DIST = 6.1;   // 拉近后相机距星团的距离（z 向）→ 星团占大半屏
+                              // ★ 相机 z = 星团实际世界 z + FOCUS_DIST（动态）。
+                              //   旧实现硬编码 camZ=-23.9：倾角把部分星团在 z 向抬高 ±7，
+                              //   星团会落到相机背后被裁掉（聚焦后画面全黑）。
+
+    function flyTo(k: number) {
+      if (k < 0 || k >= NC) return;
+      if (exploreMode) exitExplore(); // 从漫游态进入分类聚焦：恢复 focus bar 分类模式
+      focusIdx = k;
+      hovCluster = -1;
+      // 锁定轨道视觉由本团轨道弧承担（focT 分级渐现），不再叠加闭合环
+      // 每次聚焦都重新缓存目标星团的世界坐标（复用上次缓存会把镜头对准上一个星团）
+      spinFreeze = spinT;
+      focusRel = new THREE.Vector3(
+        clusPos[k * 3], clusPos[k * 3 + 1], clusPos[k * 3 + 2],
+      ).applyMatrix4(galaxySpin.matrixWorld);
+      focusRel.x -= galaxyTilt.position.x;
+      focusRel.y -= galaxyTilt.position.y;
+      // z 保留「星团相对 tilt 的局部 z」：盘的 58° 倾角会把旋臂上的星团在 z 向抬高 ±7，
+      // 硬编码的相机距离会让星团落到相机背后（聚焦后画面全黑的根因）。相机位置在主循环里按它动态计算。
+      focusRel.z -= galaxyTilt.position.z;
+      // 文章星「退一步」由主循环状态机统一处理（聚焦团 0.82 / 他团 0.55），此处不再直接写 starSize
+      const c = clusters[k];
+      (focusBar.querySelector('.gf-name') as HTMLElement).textContent = c.title;
+      (focusBar.querySelector('.gf-count') as HTMLElement).textContent = `${c.count} 篇 · ${c.topics ?? 0} 个话题`;
+      (focusBar.querySelector('.gf-open') as HTMLAnchorElement).href = c.url;
+      focusBar.classList.add('show');
+      focusBar.setAttribute('aria-hidden', 'false');
+      clearSelection();
+      tip.classList.remove('show', 'tap');
+      showList(k); // 参考图面板 4：锁定后列出该星团全部文章
+    }
+    function flyBack() {
+      if (focusIdx < 0 && focusT <= 0.001) return;
+      focusIdx = -1;
+      // 恢复同样交给状态机（他团降权系数回到 1）
+      focusBar.classList.remove('show');
+      focusBar.setAttribute('aria-hidden', 'true');
+      clearSelection();
+      hideList();
+    }
+    (focusBar.querySelector('.gf-back') as HTMLElement).addEventListener('click', flyBack);
+    // P1 EXPLORE = 自由漫游模式：镜头向后拉，第一次完整展示整个银河，
+    // 然后用户自己决定靠近哪个星团（探索某分类 = 点星团，不归 EXPLORE 管）
+    // 吸附感：hover 星团时标签向鼠标轻微偏移（方案「靠近星团 → 轻微响应」）
+    let rawMx = 0, rawMy = 0;
+    // 探索层 UI 引用（DOM 在组件 HTML 段）
+    const exploreBorder = document.getElementById('explore-border') as HTMLElement;
+    const exploreExit = document.getElementById('explore-exit') as HTMLButtonElement;
+    const exploreHelp = document.getElementById('explore-help') as HTMLElement;
+
+    // （旧「锁定三层同心环」已删：闭合环 = 方案❌的平面圈；锁定轨道视觉由本团轨道弧承担）
+
+    function enterExplore() {
+      if (exploreMode) return;
+      if (focusIdx >= 0) flyBack();
+      exploreMode = true;
+      focusBar.classList.add('explore');
+      (focusBar.querySelector('.gf-name') as HTMLElement).textContent = '自由探索';
+      (focusBar.querySelector('.gf-count') as HTMLElement).textContent = '靠近星团查看 · 点击进入分类';
+      (focusBar.querySelector('.gf-open') as HTMLElement).style.display = 'none';
+      (focusBar.querySelector('.gf-back') as HTMLElement).textContent = '← 退出探索';
+      focusBar.classList.add('show');
+      focusBar.setAttribute('aria-hidden', 'false');
+      clearSelection();
+      // 探索层视觉：视口边框浮现 + 底部 EXIT（方案模块 2 的模式标识）
+      exploreBorder.classList.add('show');
+      exploreExit.classList.add('show');
+      exploreExit.setAttribute('aria-hidden', 'false');
+      // hero 整体淡出：EXPLORE（进入）与 EXIT（退出）是互斥 CTA，不能同屏
+      document.body.classList.add('explore-on');
+      // 首次进入探索层：短暂显示操作提示（会话内一次）
+      if (!sessionStorage.getItem('explore-tip-seen')) {
+        sessionStorage.setItem('explore-tip-seen', '1');
+        exploreTip.classList.add('show');
+        setTimeout(() => exploreTip.classList.remove('show'), 3200);
+      }
+      const sh = document.getElementById('sky-hint');
+      if (sh) sh.classList.add('sky-hint-faded'); // 探索态隐藏常驻提示，避免三层文字打架
+    }
+    function exitExplore() {
+      if (!exploreMode) return;
+      exploreMode = false;
+      userZoomed = false;
+      camZTarget = fitZ(); // 镜头退回全景距离
+      exploreBorder.classList.remove('show');
+      exploreExit.classList.remove('show');
+      exploreExit.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('explore-on');
+      focusBar.classList.remove('explore');
+      (focusBar.querySelector('.gf-open') as HTMLElement).style.display = '';
+      (focusBar.querySelector('.gf-back') as HTMLElement).textContent = '← 返回全景';
+      focusBar.classList.remove('show');
+      focusBar.setAttribute('aria-hidden', 'true');
+    }
+    (focusBar.querySelector('.gf-back') as HTMLElement).addEventListener('click', () => {
+      if (exploreMode) { exitExplore(); return; }
+      flyBack();
+    });
+    exploreExit.addEventListener('click', () => { exitExplore(); flyBack(); });
+    addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      exitExplore(); flyBack();
+    });
+    document.addEventListener('galaxy:explore', () => {
+      if (focusIdx >= 0) flyBack();
+      enterExplore();
+    });
     mount.addEventListener('pointerup', (e) => {
+      activePtr.delete(e.pointerId);
+      if (activePtr.size < 2) pinchDist = 0;
       dragging = false;
       mount.classList.remove('grabbing');
       if (moved >= 8) return;
-      const i = pick(e.clientX, e.clientY);
+      const h = pick(e.clientX, e.clientY);
       if (e.pointerType === 'mouse') {
-        if (i >= 0 && nodes[i].url) location.href = nodes[i].url;
+        if (h.idx >= 0) {
+          // ★ 星团：页内拉近（相机运动）是【探索态独有】—— 默认态点击星团直接进分类页，
+          //   不做任何相机位移（用户：非探索状态不应该点击星团有拉近效果）
+          if (h.kind === 'cluster') {
+            if (exploreMode) { flyTo(h.idx); return; }
+            const u = targetUrl(h.kind, h.idx);
+            if (u) location.href = u;
+            return;
+          }
+          // 探索态点主星 = 点星团（漫游语义下点团=拉近聚焦，不导航离场）；
+          // 主星「点击进分类页」只在默认态生效 —— 探索态出口是聚焦后的 focus bar / 文章星
+          if (exploreMode && h.kind === 'core') { flyTo(h.idx); return; }
+          // 文章星：弹摘要浮层（不直跳 —— 误点只是多出一个可关闭的浮层，不会离开页面）
+          if (h.kind === 'star') { openArticle(h.idx); return; } // 文章星：直接进文章页（不再弹浮层）
+          const url = targetUrl(h.kind, h.idx);
+          if (url) location.href = url;
+        } else if (focusT > 0.02) {
+          flyBack(); // 聚焦态点空白：回到全景
+        }
         return;
       }
-      if (i >= 0) {
-        if (i === selected) {
-          if (nodes[i].url) location.href = nodes[i].url;
+      if (h.idx >= 0) {
+        if (h.kind === hitKind && h.idx === hitIdx && tip.classList.contains('tap')) {
+          if (h.kind === 'cluster') {   // 星团：二次点 → 探索态拉近 / 默认态进分类页
+            if (exploreMode) flyTo(h.idx);
+            else { const u = targetUrl(h.kind, h.idx); if (u) location.href = u; }
+          }
+          else if (h.kind === 'star') { openArticle(h.idx); } // 文章星：二次点 → 进文章页
+          else if (exploreMode && h.kind === 'core') { flyTo(h.idx); } // 探索态主星：二次点 → 拉近（不导航）
+          else { const url = targetUrl(h.kind, h.idx); if (url) location.href = url; }
         } else {
-          selected = i;
-          hovered = i;
-          ring.visible = true;
-          showTip(i);
+          hitKind = h.kind; hitIdx = h.idx;
+          ring.visible = h.kind === 'star';
+          showTip(h.kind, h.idx);
           tip.classList.add('tap');
         }
       } else {
-        clearSelection();
-        ring.visible = false;
+        clearSelection(); // 点空白：回到「只看星图」的干净状态
       }
     });
     tip.addEventListener('click', () => {
-      if (selected >= 0 && nodes[selected].url) location.href = nodes[selected].url;
+      // 星团卡上的「进入分类」：探索态 → 页内拉近聚焦；默认态 → 直接进分类页（不位移相机）
+      if (hitKind === 'cluster') {
+        if (exploreMode) { flyTo(hitIdx); return; }
+        const u = targetUrl(hitKind, hitIdx);
+        if (u) location.href = u;
+        return;
+      }
+      if (hitKind === 'star') { openArticle(hitIdx); return; } // 文章卡 → 直接进文章页
+      const url = targetUrl(hitKind, hitIdx);
+      if (url) location.href = url;
+    });
+    mount.addEventListener('pointercancel', (e) => {
+      activePtr.delete(e.pointerId);
+      if (activePtr.size < 2) pinchDist = 0;
+      dragging = false;
+      mount.classList.remove('grabbing');
     });
     mount.addEventListener('pointerleave', (e) => {
       if (e.pointerType === 'mouse') {
-        hovered = -1; ring.visible = false; tip.classList.remove('show');
+        hitIdx = -1; ring.visible = false; tip.classList.remove('show');
         mount.classList.remove('pointing');
+        hovCluster = -1; clusProx.fill(0); // 离开画布：吸附与 hover 一并归零，光晕缓缓回落
       }
     });
     mount.addEventListener('wheel', (e) => {
-      // 普通滚轮放行给页面滚动；Ctrl/Cmd + 滚轮才缩放
+      // 探索态：普通滚轮 = 缩放银河（方案文档「滚轮缩放 Zoom」）
+      if (exploreMode && focusT <= 0.02) {
+        e.preventDefault();
+        userZoomed = true;
+        camZTarget = Math.max(6.5, Math.min(30, camZTarget + e.deltaY * 0.02));
+        return;
+      }
+      // 非探索态：普通滚轮放行给页面滚动；Ctrl/Cmd + 滚轮缩放
       if (!e.ctrlKey && !e.metaKey) return;
+      if (focusT > 0.02) return;
       e.preventDefault();
       userZoomed = true;
       camZTarget = Math.max(7.2, Math.min(16, camZTarget + e.deltaY * 0.006));
@@ -751,9 +2645,17 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
     function resize() {
       const w = mount.clientWidth, h = mount.clientHeight;
       renderer.setSize(w, h);
+      const pr = renderer.getPixelRatio();
+      // uScale/uMax 都是「物理像素」语义：乘 pixelRatio 后真机（dpr 2/3）上的星点尺寸才与桌面观感一致
+      dustMats.forEach((m) => {
+        m.uniforms.uScale.value = h * pr * 0.5;
+        if (m.userData.baseMax !== undefined) m.uniforms.uMax.value = m.userData.baseMax * pr;
+      });
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      if (!userZoomed) camZTarget = fitZ();
+      fitRZ();
+      userZoomed = false; // 视口变了：旧的手动缩放失效，重新自适应
+      camZTarget = fitZ();
     }
     new ResizeObserver(resize).observe(mount);
     resize();
@@ -768,60 +2670,511 @@ const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
       if (document.hidden) { cancelAnimationFrame(rafId); rafId = 0; }
       else if (inView && !rafId) loop();
     });
+    // ★ 浏览器「返回」回到首页时，页面常由 bfcache 恢复（JS 状态原样保留）——
+    //   那样会带着「聚焦某团 + 相机拉近」的状态回来（探索态却已退出，观感错乱）。
+    //   返回首页应当是干净的默认全景：退出探索、解除聚焦、复位缩放与选中态。
+    addEventListener('pageshow', (e) => {
+      if (!(e as PageTransitionEvent).persisted) return;
+      exitExplore();
+      flyBack();
+      userZoomed = false;
+      camZTarget = fitZ();
+      clearSelection();
+      tip.classList.remove('show', 'tap');
+      if (inView && !rafId) loop();
+    });
 
-    // ===== 主循环：多轴漂移 + 呼吸，制造纵深 =====
-    // 预跑模拟到收敛（alpha 衰减至下限）：首帧即成形星座，
-    // 每次跳回主页不再看到星星从散点「快速复位」地乱飞
-    for (let i = 0; i < 700; i++) tick(0);
+    // ===== 主循环 =====
+    // 内容星是静态布点（无力学收敛），首帧即成形：不需要预跑，也不会看到「星星复位地乱飞」
     const t0 = performance.now();
+    let labDiag = false;                  // 标签判定诊断（?debug=1 时开启，写 dataset.why）
+    const hitBox = (a: Box, g: Box) => !(a.r < g.l || a.l > g.r || a.b < g.t || a.t > g.b); // 矩形相交
+    const guard: DOMRect[] = [];          // 静态禁区（hero 文案 / 页脚 / 视图切换）：20 帧刷新一次
+    // 统一矩形结构 {l,t,r,b}（此前混用 {l,t,r,b} 与 {left,top,right,bottom}，
+    // 字段读不到 → 比较恒 false → 互撞判定恒真，标签被大量误杀）
+    type Box = { l: number; t: number; r: number; b: number };
+    const dynGuard: Box[] = [];  // 动态禁区（摘要浮层 / 列表 / 锁定信息条 / 探索提示）：每帧刷新
+    const guardM: Box[] = [];    // 静态禁区换算到 mount 内坐标（数值每帧刷新，来源 20 帧刷新）
+    let hotIdx = -1;  // 星图 / 列表二者任一悬停的文章星（状态机写入，供后续块读取）
+    let lastHot = -2; // 列表 ↔ 星图高亮同步的脏检查（悬停切换时才动 DOM）
     function loop() {
       rafId = requestAnimationFrame(loop);
       if (!inView) { cancelAnimationFrame(rafId); rafId = 0; return; }
       const t = (performance.now() - t0) * 0.001;
-      if (!reduced) tick(t);
-      if (!dragging) tRotY += 0.0018;
-      const wob = reduced ? 0 : Math.sin(t * 0.22) * 0.05; // 轻微俯仰呼吸
+      const dt = Math.min(0.05, Math.max(0.001, t - ((loop as unknown as { lastT?: number }).lastT ?? t - 0.016)));
+      (loop as unknown as { lastT: number }).lastT = t;
+      // 自转时钟：聚焦星团时冻结（凝视不追转），返回后从冻结处继续，不跳变
+      if (!(reduced || focusIdx >= 0)) spinT += dt;
+      if (!dragging && focusT <= 0.02) tRotY += 0.00025; // 松手后极缓的方位漂移（聚焦时停）
       rotX += (tRotX - rotX) * 0.07;
       rotY += (tRotY - rotY) * 0.07;
-      camZ += (camZTarget - camZ) * 0.1;
-      group.rotation.set(rotX + wob, rotY, 0);
+      // 探索拉远时收敛放慢：3 秒缓缓后退（其他缩放保持原速）
+      camZ += (camZTarget - camZ) * (exploreMode ? 0.028 : 0.1);
       camera.position.z = camZ;
-      starField.rotation.y = -rotY * 0.25; // 远景反向缓转 → 视差
-      starField.rotation.x = -rotX * 0.2;
+      const scrollK = frame.classList.contains('bare') ? 0.05 : 1;
+      scrollPSmooth += (scrollP - scrollPSmooth) * 0.06;
+      // 刚性自转：整盘同速绕盘法线（≈ 密度波图案），约 7.5 分钟一圈。
+      // 不可用「内快外慢」的差速 —— 真星系那样，但动画里几分钟就会把旋臂缠成一团。
+      if (!reduced) {
+        // 分层差速（方案文档比例 核心:内盘:外盘 = 0.05:0.10:0.06 → 1:2:1.2，
+        // 节奏整体放缓到站内静谧档）：层间视差让星系有前后纵深地「活着」
+        // ★ 增量积分（不用 spinT 绝对式）：速率切换（探索 ×5 ⇄ 常态 ×1）不产生角度跳变，
+        //   聚焦时停止积分即冻结 —— 绝对式在速率切换瞬间会整盘回跳（曾致聚焦对准错误星团）
+        if (focusIdx < 0) {
+          // ★ 旋转方向：旋臂随半径逆时针展开（SWEEP 正值），自转必须顺时针 —— 臂拖曳在旋转后
+          //   （真实星系臂都是 trailing；反向会变成「前导臂」，不符合物理常识）
+          const spinSpeed = exploreMode ? 2 : 1;
+          spinCore.rotation.z -= dt * 0.007 * spinSpeed;
+          galaxySpin.rotation.z -= dt * 0.014 * spinSpeed;
+          spinOuter.rotation.z -= dt * 0.0084 * spinSpeed;
+        }
+        // 星云独立漂移：异向异速（~0.1px/s 档）+ 正弦漂浮 —— 宇宙环境按自己的节奏动，不跟盘转
+        nebCloud.rotation.z -= dt * 0.0006;
+        nebDust.rotation.z += dt * 0.0004;
+        nebCloud.position.x = Math.sin(t * 0.013) * 0.22;
+        nebDust.position.y = Math.cos(t * 0.011) * 0.18;
+      }
+      // ===== P2 镜头推拉：相机深入 + 星系平移，把目标星团送到画面中心 =====
+      focusT += ((focusIdx >= 0 ? 1 : 0) - focusT) * Math.min(1, dt * 2.4);
+      if (focusIdx >= 0) lastFocusIdx = focusIdx;
+      if (focusT > 0.0005) {
+        const e = focusT * focusT * (3 - 2 * focusT);
+        const rel = focusRel ?? new THREE.Vector3();
+        const baseX = 0, baseY = 5.5, targetY = 0.5;
+        galaxyTilt.position.x = baseX - rel.x * e;
+        galaxyTilt.position.y = baseY + (targetY - baseY - rel.y) * e;
+        // 相机停在「星团实际世界 z」前方 FOCUS_DIST 处（rel.z = 星团相对 tilt 的局部 z）
+        const clusterCamZ = galaxyTilt.position.z + rel.z + FOCUS_DIST;
+        camZTarget = fitZ() + (clusterCamZ - fitZ()) * e;
+        userZoomed = true; // 聚焦接管缩放，滚轮不干扰
+      } else if (galaxyTilt.position.x !== 0 || galaxyTilt.position.z !== -30) {
+        // 回归全景：平移复位（y 由滚动联动接管）—— 不复位星系会永久停在聚焦偏移处
+        galaxyTilt.position.x = 0;
+        galaxyTilt.position.z = -30;
+      }
+      // 拖拽 = 转动整个星系的观察方位（tilt），内容恒星随之一同转动
+      galaxyTilt.rotation.x = -0.6 + Math.sin(t * 0.078) * 0.02 + rotX + scrollPSmooth * 0.05 * scrollK;
+      galaxyTilt.rotation.y = Math.sin(t * 0.062 + 1.4) * 0.02 + rotY;
+      galaxyTilt.rotation.z = rzBase + scrollPSmooth * 0.1 * scrollK;
+      // 聚焦时 y 由镜头推拉接管（上方插值），滚动联动让位
+      if (focusT <= 0.0005) galaxyTilt.position.y = 5.5 - scrollPSmooth * 3 * scrollK;
+      dustMats.forEach((m) => (m.uniforms.uTime.value = t));
+      // P1 EXPLORE 探索态：星尘涌动渐强（自由漫游时银河更「活」）
+      // 探索拉远收敛放慢：镜头缓缓后退（~3s），给「进入银河」的仪式感
+      exploreT += ((exploreMode && focusIdx < 0 ? 1 : 0) - exploreT) * Math.min(1, dt * 0.9);
+      const wanderK = Math.max(focusT, exploreT);
+      dustMats.forEach((m) => {
+        if (!m.uniforms.uChurn) return; // 旧层（topDust 等）无此 uniform
+        const base = m.userData.baseChurn ?? 0;
+        if (base > 0) m.uniforms.uChurn.value = base * (1 + wanderK * 1.6);
+      });
+      // 自由漫游：镜头缓缓后退 14 单位（银河明显缩小，完整展示整片星空的探索起点）
+      if (exploreMode && focusIdx < 0) camZTarget = fitZ() + 14;
+      // 鼠标引力：鼠标射线与星系盘面求交 → 盘面局部坐标（Explore 态渐强；默认态 0 = 不回应）。
+      // 用 three.js 射线求交 + worldToLocal，精确处理 tilt.z/x 与自转的全部旋转（手推逆旋转会漏轴导致象限错位）
+      {
+        _rayV.set(mxS, -myS, 0.5).unproject(camera);
+        _rayDir.copy(_rayV).sub(camera.position).normalize();
+        galaxySpin.getWorldQuaternion(_rayQ);
+        _rayN.set(0, 0, 1).applyQuaternion(_rayQ);
+        const denom = _rayN.dot(_rayDir);
+        if (Math.abs(denom) > 1e-4) {
+          const tPlane = _rayN.dot(_planeP.copy(galaxyTilt.position).sub(camera.position)) / denom;
+          if (tPlane > 0) {
+            _rayHit.copy(camera.position).addScaledVector(_rayDir, tPlane);
+            galaxySpin.worldToLocal(_rayHit);
+            dustMats.forEach((m) => {
+              if (!m.uniforms.uMouse) return;
+              m.uniforms.uMouse.value.set(_rayHit.x, _rayHit.y);
+              m.uniforms.uMouseK.value = exploreT * 1.1;
+            });
+          }
+        }
+      }
+      // 关系线两态：默认隐约（隐藏的信息），Explore 态浮现亮起（回应探索）
+      // 关系线：默认若隐若现；Explore 态清晰浮现；锁定星团时也浮现（规范④「星星连接」：
+      // 同星团内的文章星有微弱连线，揭示它们同属一个知识簇）
+      if (linkBreath) linkBreath.uniforms.uOpacity.value = 0.05 + exploreT * (0.83 + Math.sin(t * 0.4) * 0.06) + focusT * 0.4;
 
-      if (ring.visible && hovered >= 0)
-        ring.position.set(pos[hovered * 3], pos[hovered * 3 + 1], pos[hovered * 3 + 2]);
+      // ===== 星团交互层级状态机（方案定稿）=====
+      // ① 区域（光晕+边界） ② 视觉核心（背景星+光晕） ③ 文章星（可点，永远最高优先级）
+      // 状态：idle 淡淡聚集 / near 微光晕 / hover 边界浮现 / focus 锁定+轨道线 / dim 他团降权
+      {
+        const breath = 0.5 + 0.5 * Math.sin(t * 0.33);
+        const hoverStarIdx = hitKind === 'star' ? hitIdx : -1;
+        // 列表悬停也算 hover：鼠标在右侧列表上扫过时，星图里对应的星跟着回亮（双向联动）
+        hotIdx = hoverStarIdx >= 0 ? hoverStarIdx : hoverListIdx;
+        if (hoverListIdx >= 0 && hoverStarIdx < 0) {
+          // 反向：星图上的高亮环也给到列表对应的那颗星（鼠标此时在列表上，不在画布上）
+          ring.visible = true;
+          ring.position.set(starPos[hotIdx * 3], starPos[hotIdx * 3 + 1], starPos[hotIdx * 3 + 2]);
+          ring.scale.setScalar(1.15);
+        } else if (hoverStarIdx < 0) {
+          ring.visible = false; // 指针既不悬星也不悬列表：撤掉高亮环
+        }
+        for (let k = 0; k < NC; k++) {
+          const isFoc = focusIdx === k;
+          const isHov = hovCluster === k;
+          // 邻近度：只有鼠标在画布上时才有效（触屏无 hover，保持 0）
+          clusNearT[k] += (clusProx[k] - clusNearT[k]) * Math.min(1, dt * 4);
+          clusHovT[k] += ((isHov ? 1 : 0) - clusHovT[k]) * Math.min(1, dt * 5);
+          clusFocT[k] += ((isFoc ? 1 : 0) - clusFocT[k]) * Math.min(1, dt * 3);
+          // 他团降权：有 hover / 锁定目标时，其余星团整体退进背景
+          const dimTgt = focusIdx >= 0 ? (isFoc ? 1 : 0.32)
+            : hovCluster >= 0 ? (isHov ? 1 : 0.5) : 1;
+          clusDimT[k] += (dimTgt - clusDimT[k]) * Math.min(1, dt * 4);
+          const d = clusDimT[k];
+          // ① 区域光晕：默认几乎不可见，靠近微起，hover 明确，锁定最强（都乘他团降权）
+          const haloOp = (0.07 + clusNearT[k] * 0.05 + clusHovT[k] * 0.085 + clusFocT[k] * 0.10) * d;
+          (clusHalo[k].material as THREE.SpriteMaterial).opacity = haloOp * (0.9 + breath * 0.12);
+          clusHalo[k].scale.setScalar(clusHaloBase[k] * (1 + clusNearT[k] * 0.05 + clusFocT[k] * 0.08));
+          // ② 轨道弧（断续弧段）：★ 只在探索态出现（用户：非探索状态不要显示轨道弧）；
+          //   进入探索后整体浮现，锁定某团时该团的弧更实。常态/hover 一律不显示。
+          const arcO = exploreT * (0.42 + clusFocT[k] * 0.4) * d;
+          clusterArcMats[k].forEach((m) => { m.opacity = arcO * (m.userData.opMul ?? 1); });
+          // ③ 视觉核心（背景星）：他团降权，hover/锁定时本团略提；密度回调一档 —— 团要看得出来，仍弱于文章星
+          clusterBgPts[k].material.uniforms.uOpacity.value =
+            0.8 * d * (1 + clusHovT[k] * 0.3 + clusFocT[k] * 0.16);
+          // 团心亮核（已降级）：允许存在但不能比文章星强
+          clusCorePts[k].material.uniforms.uOpacity.value =
+            0.3 * d * (1 + clusHovT[k] * 0.3 + clusFocT[k] * 0.16);
+          // ★ 雾的直径要≈密度云直径（sprite scale = 直径），否则「范围」读不出来：
+          //   1.05 → 2.0 倍团半径，正好覆盖到成员星云的边界。
+          clusCoreHalo[k].scale.setScalar(
+            clusterRadOf(k) * 2.0 * (1 + clusHovT[k] * 0.12 + clusFocT[k] * 0.18),
+          );
+          // 基线 0.26 × 贴图峰值 0.85 → 中心可见、外围柔和转淡（不压星点、不发灰）
+          (clusCoreHalo[k].material as THREE.SpriteMaterial).opacity =
+            (0.26 + clusNearT[k] * 0.04 + clusHovT[k] * 0.07 + clusFocT[k] * 0.09)
+            * d * (0.9 + breath * 0.14);
+          // 标签存在感：他团压暗，本团随状态提亮（聚焦时最亮，名称与信息成为视觉中心）
+          clusLabelOp[k] = d * (0.72 + clusHovT[k] * 0.18 + clusFocT[k] * 0.28);
+        }
+        // 文章星层级（唯一写入点 —— 以前多处写 starSize 会互相覆盖）
+        // 方案表：默认正常 / hover 星团 全体稍微降权（本团 0.9 他团 0.7，边界与雾当主角）/
+        // 锁定：本团文章星满亮（聚焦进来就是要看它们——主角），他团 0.55 /
+        // hover 某颗星 → 该星 ×hoverScale 再突出
+        for (let i = 0; i < NS; i++) {
+          const k = starClusterIdx[i];
+          let m = 1;
+          if (focusIdx >= 0) m = k === focusIdx ? 1 : 0.55;
+          else if (hovCluster >= 0) m = k === hovCluster ? 0.9 : 0.7;
+          if (i === hotIdx) m *= hoverScale;
+          const v = starSizeBase[i] * m;
+          if (Math.abs(starSize[i] - v) > 0.01) { starSize[i] = v; starGeo.attributes.aSize.needsUpdate = true; }
+          // Halo 跟随层级变化，Core 恒定：hover → 18px、Explore → 24px，星本体永远 2~3px。
+          // ★ 索引：每颗星两个 sprite（2i = 内核 bloom，2i+1 = 外圈 halo）
+          const boost = Math.min(2, m) * (1 + exploreT * 0.55);
+          const dbg = GLOW_DBG && GLOW_DBG.i === i ? GLOW_DBG : null;
+          const gIn = starGlows[i * 2];
+          if (gIn) {
+            (gIn.material as THREE.SpriteMaterial).opacity = dbg?.inOp ?? GLOW_IN_OP * Math.min(1.5, boost);
+            gIn.scale.setScalar(dbg?.inSc ?? GLOW_IN * (0.85 + 0.35 * Math.min(1.6, boost)));
+          }
+          const gOut = starGlows[i * 2 + 1];
+          if (gOut) {
+            (gOut.material as THREE.SpriteMaterial).opacity = dbg?.outOp ?? GLOW_OP * Math.min(1.7, boost);
+            gOut.scale.setScalar(dbg?.outSc ?? GLOW_R * (0.9 + 0.55 * Math.min(1.8, boost)));
+          }
+        }
+      }
+      // P0 hover 恒星放大：星星先大起来，信息卡再出现（方案文档交互顺序）
+      // 尺寸写入统一在星团状态机里（hover 星团 / 锁定星团 的倍率也作用在同一颗星上）
+      {
+        if (hotIdx !== lastHot) {
+          lastHot = hotIdx;
+          listPanel.querySelectorAll<HTMLElement>('.gl-item').forEach((b, i) => {
+            b.classList.toggle('on', focusIdx >= 0 && clusterStars[focusIdx][i] === hotIdx);
+          });
+        }
+        hoverPrev = hotIdx;
+        const target = hotIdx >= 0 ? 1.65 : 1;
+        hoverScale += (target - hoverScale) * 0.18;
+      }
+      // P1 中心 scio. 标识跟随主星（主星上方）
+      {
+        const p = screenOfRaw(0, 0, 0);
+        const rectG = mount.getBoundingClientRect();
+      homeLabel.style.transform = `translate(${p.x - rectG.left + 26}px, ${p.y - rectG.top - 30}px)`;
+      homeLabel.style.opacity = focusT > 0.02 ? '0' : '0.62';
+      }
+      // （旧锁定环逐帧更新已随 focusRing 一并删除：锁定轨道视觉由本团轨道弧承担）
+      // 亮星光晕：置顶/精选的淡晕缓息 + 银河中心主星呼吸
+      for (const p of pinnedHalos) {
+        const k = 0.5 + 0.5 * Math.sin(t * 0.8 + p.ph);
+        p.sp.scale.setScalar(p.base * (0.92 + 0.14 * k));
+        (p.sp.material as THREE.SpriteMaterial).opacity = 0.10 + 0.08 * k;
+      }
+      // 星云呼吸（方案核心推荐）：整个银河极缓慢地收缩→舒展（±1.2%，~80s 一轮）
+      // 用户不会意识到「它在做动画」，只会觉得这个页面是活的
+      galaxySpin.scale.setScalar(1 + Math.sin(t * 0.15) * 0.026);
+      // 极缓的整体呼吸：星系像在缓慢吸气/呼气（幅度克制，不做“闪烁迪斯科”）
+      // 层呼吸：周期拉长到 ~1 分钟级，「吸气/呼气」而不是闪烁
+      // ★ ShaderMaterial 必须写 uniforms.uOpacity.value —— .opacity 属性不进渲染（历史静默失效）
+      // 银河带银色粒子加重（用户）：盘 0.80→0.92、旋臂 0.72→0.78（仍留呼吸振幅）
+      galDisk.material.uniforms.uOpacity.value = 0.92 + Math.sin(t * 0.16) * 0.08;
+      galArms.material.uniforms.uOpacity.value = 0.78 + Math.sin(t * 0.21 + 1.6) * 0.12;
+      galHalo.material.uniforms.uOpacity.value = 0.035 + Math.sin(t * 0.14 + 0.6) * 0.018;
 
-      // 锚星标签：只亮视深最靠前的 K 个（2 颗→1、6 颗→2、封顶 4），
-      // 星空缓转时排名自然轮换 → 「漂到正面才显示」；再叠屏幕避让，锚星再多不叠罗汉
-      if (labels.length) {
+      // 相机极缓游移（星系自身的呼吸式漂移，与鼠标无关）：近景浮尘与远景星幕错动出视差。
+      // ★ 鼠标视差已按用户要求移除：鼠标一动画面就整体跟着晃，观感是「银河在追鼠标」。
+      //   mxS/myS 仍参与拾取射线（unproject 用），故保留平滑跟随，但不进相机位置。
+      // ★ 聚焦态游移归零：±0.5 世界单位的漂移在近距（~6）下被放大成 ±150px 的画面偏移，
+      //   星团会明显偏离画面中心（曾致「锁定前端团却对不准」）。drift 随 focusT 平滑收敛。
+      mxS += (mxT - mxS) * 0.035;
+      myS += (myT - myS) * 0.035;
+      const drift = 1 - focusT;
+      camera.position.x = Math.sin(t * 0.042) * 0.5 * drift;
+      camera.position.y = Math.sin(t * 0.031 + 1.2) * 0.32 * drift;
+      if (!reduced) fgGroup.rotation.y += 0.0004;
+
+      if (ring.visible && hitIdx >= 0) {
+        const arr = hitKind === 'star' ? starPos : clusPos;
+        ring.position.set(arr[hitIdx * 3], arr[hitIdx * 3 + 1], arr[hitIdx * 3 + 2]);
+        ring.scale.setScalar(1.15); // 只罩文章星：星团用光晕+边界表达，不套圆环
+      }
+
+      // 星团标签：名字 + 篇数，点击进分类。剔除出界/压到标语/互相撞车的其余隐藏；
+      // 聚焦态全部隐藏（顶部 focus bar 已接管信息）
+      if (clusterLabels.length) {
         const w = mount.clientWidth, h = mount.clientHeight;
-        const K = Math.min(4, Math.max(1, Math.round(labels.length / 3)));
-        const order = labels
-          .map((L) => {
-            _lv.set(pos[L.i * 3], pos[L.i * 3 + 1], pos[L.i * 3 + 2]).applyMatrix4(group.matrixWorld);
-            return { L, z: _lv.z };
-          })
-          .sort((a, b) => b.z - a.z);
-        const taken: { x: number; y: number; w: number }[] = [];
-        order.forEach(({ L, z }, rank) => {
-          tmp.set(pos[L.i * 3], pos[L.i * 3 + 1], pos[L.i * 3 + 2])
-            .applyMatrix4(group.matrixWorld)
+        frameNo++;
+        if (frameNo % 20 === 0) {
+          guard.length = 0;
+          guardM.length = 0;
+          // 禁区用 hero 的【文字子块】而非 .hero 容器：容器横贯整屏（含两侧大片空白），
+          // 按容器剔除会把落在两侧空白处的星团标签误杀（如右侧的「前端」）；
+          // 探索态 hero 已整体淡出，其禁区解除（标签可自由出现），页脚/切换按钮仍可见仍避让
+          for (const sel of (exploreMode
+            ? ['.site-footer', '.view-switch']
+            : ['.hero h1', '.hero .origin', '.hero .explore', '.hero .whisper', '.site-footer', '.view-switch'])) {
+            const el = document.querySelector(sel);
+            if (el) { guard.push(el.getBoundingClientRect()); guardM.push({ l: 0, t: 0, r: 0, b: 0 }); }
+          }
+        }
+        // ★ 坐标系统一：禁区的 rect 是【视口坐标】，标签的 x/y 是【mount 内坐标】，
+        //   页面滚动后两者差一整个滚动距离 —— 不统一会让禁区判定全错（实测曾致标签大量消失）。
+        const mr = mount.getBoundingClientRect();
+        for (let gi = 0; gi < guard.length; gi++) {
+          const g = guard[gi], m = guardM[gi];
+          m.l = g.left - mr.left; m.r = g.right - mr.left;
+          m.t = g.top - mr.top; m.b = g.bottom - mr.top;
+        }
+        // ★ 动态禁区每帧刷新（摘要浮层 / 文章列表 / 锁定信息条 / 探索提示随交互出现或消失）
+        dynGuard.length = 0;
+        for (const sel of ['#galaxy-list', '#galaxy-focus', '.explore-tip', '#graph-tip']) {
+          const el = document.querySelector(sel) as HTMLElement | null;
+          if (!el) continue;
+          if (el.getAttribute('aria-hidden') === 'true') continue;
+          if (parseFloat(getComputedStyle(el).opacity) < 0.05) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width > 1 && r.height > 1) {
+            // sel 一并带上：悬停卡自己也要排在禁区里，判定时要能把自己排除掉
+            dynGuard.push({ l: r.left - mr.left, t: r.top - mr.top, r: r.right - mr.left, b: r.bottom - mr.top, sel });
+          }
+        }
+        // 提到主循环作用域：星团标签与悬停卡都要用它做禁区判定
+        const items = clusterLabels.map((L) => {
+          tmp.set(clusPos[L.k * 3], clusPos[L.k * 3 + 1], clusPos[L.k * 3 + 2])
+            .applyMatrix4(galaxySpin.matrixWorld)
             .project(camera);
           const x = (tmp.x * 0.5 + 0.5) * w;
           const y = (-tmp.y * 0.5 + 0.5) * h;
-          const lit = rank < K && z > -1 && tmp.z < 1;
-          const busy = lit && taken.some((r) => Math.abs(x - r.x) < (r.w + L.w) / 2 + 10 && Math.abs(y - r.y) < 18);
-          if (lit && !busy) taken.push({ x, y, w: L.w });
-          L.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, 16px)`;
-          L.el.style.opacity = !lit || busy ? '0' : '';
+          // 标签真实尺寸（hover 15→19px、focus 更大 → 高度 49→56→61，必须按实测值算，否则撑大后压到下方）
+          const lw = L.el.offsetWidth, lh = L.el.offsetHeight;
+          const rPx = clusterScreenR(L.k);
+          const base = focusIdx === L.k ? -(rPx * 0.5 + 30) : rPx * 0.78 + 14;
+          // 候选偏移：原位 → 小幅上/下让位 → 大幅让位（撞到 UI 时先避让，避不开才隐藏）
+          const cands = focusIdx === L.k
+            ? [base, base - 40, base + 40, base - 80]
+            : [base, base + 28, base - 28, base + 56, base - 56];
+          const isFoc = focusIdx === L.k;
+          let dy = base, ok = false, box = { l: 0, t: 0, r: 0, b: 0 };
+          const why: string[] = [];
+          for (const c of cands) {
+            const t = y + c;
+            const a = { l: x - lw / 2 - 6, r: x + lw / 2 + 6, t: t - 6, b: t + lh + 6 };
+            // 边界按矩形算（含半宽）：窄屏不会再出现标签左/右出界
+            const out = a.l < 8 || a.r > w - 8 || a.t < 8 || a.b > h - 8;
+            if (labDiag) why.push(`c=${Math.round(c)}:${tmp.z < 1 ? '' : 'z'}${out ? 'out' : ''}`);
+            // 静态禁区（hero 文案 / 页脚 / 视图切换）：★ 沿用宽松的「中心点」判定 ——
+            //   用户确认 hero 遮挡不算问题（银河会动，遮挡是暂时的），若改用矩形相交，
+            //   hero 标题横贯整屏会把大片标签误杀（实测只剩 1 个标签）。
+            const cx = x, cy = t + lh / 2;
+            const stat = isFoc ? false
+              : guardM.some((g) => cx > g.l - 8 && cx < g.r + 8 && cy > g.t - 8 && cy < g.b + 8);
+            // 动态禁区（摘要浮层 / 列表 / 锁定信息条 / 探索提示）：严格矩形相交，一律避让
+            //   —— 含聚焦态（移动端团名被锁定信息条压住就是因为漏了它）
+            const dyn = dynGuard.some((g) => hitBox(a, g));
+            if (labDiag && why.length) why[why.length - 1] += `${stat ? 'stat' : ''}${dyn ? 'dyn' : ''}`;
+            if (tmp.z < 1 && !out && !stat && !dyn) { dy = c; box = a; ok = true; break; }
+          }
+          // 聚焦态：其余团的标签一律隐藏（聚焦的语义 = 只看这一片）
+          if (focusIdx >= 0 && focusIdx !== L.k) ok = false;
+          L.el.dataset.ok = ok ? '1' : '0';
+          L.el.dataset.why = why.join(' | ');
+          L.el.dataset.dy = String(Math.round(dy));
+          L.el.dataset.px = String(Math.round(x));
+          L.el.dataset.py = String(Math.round(y));
+          return { L, x, y, z: tmp.z, ok, dy, box };
+        });
+        const taken: Box[] = [];
+        items.filter((p) => p.ok).sort((a, b) => a.z - b.z).forEach((p) => {
+          // 互撞判定改用真实矩形（此前用团中心 ±20px，与实际绘制位置不符）
+          const busy = taken.some((r) => hitBox(p.box, r));
+          // 占位在下方按最终矩形入册（吸附偏移后），此处不再 push（否则两种结构混进 taken）
+          // 吸附感（入口 3）：靠近的星团标签被鼠标轻轻牵引（不是立刻选中，只是「有回应」）。
+          // 牵引强度随邻近度渐强 —— 鼠标越近，整片区域越像被磁场拉动。
+          let px = p.x, py = p.y;
+          const pk = clusNearT[p.L.k];
+          if (pk > 0.01) {
+            const mdx = rawMx - px, mdy = rawMy - (p.y + 18);
+            const md = Math.hypot(mdx, mdy) || 1;
+            const pull = Math.min(6, 50 / md) * (0.35 + pk * 0.65);
+            px += (mdx / md) * pull; py += (mdy / md) * pull;
+          }
+          // 位置用避让后算出的 dy（候选里已排除撞 UI / 出界的偏移）
+          p.L.el.style.transform = `translate(${px}px, ${py}px) translate(-50%, ${Math.round(p.dy)}px)`;
+          // 写死数值而非空串：CSS 默认 opacity:0，空串会回落到隐形。
+          // 他团降权 + hover/锁定提亮：名称与信息成为视觉中心时，它自然最亮。
+          const op = busy ? 0 : Math.min(1, clusLabelOp[p.L.k]);
+          p.L.el.style.opacity = String(op);
+          p.L.el.dataset.state = focusIdx === p.L.k ? 'focus'
+            : hovCluster === p.L.k ? 'hover' : clusDimT[p.L.k] < 0.8 ? 'dim' : 'idle';
+          p.L.el.style.pointerEvents = busy ? 'none' : 'auto';
+          if (!busy) {
+            // 吸附后位置会小偏移（≤6px），占位矩形同步平移，否则互撞判定会失准
+            const sx = px - p.x, sy = py - p.y;
+            taken.push({ l: p.box.l + sx, t: p.box.t + sy, r: p.box.r + sx, b: p.box.b + sy });
+          }
+        });
+        items.filter((p) => !p.ok).forEach((p) => {
+          p.L.el.style.opacity = '0';
+          p.L.el.style.pointerEvents = 'none';
+          p.L.el.dataset.state = 'idle';
         });
       }
+
+      // 恒星在缓缓自转：提示卡要跟着走，否则会「飘离」它所描述的星
+      if (tip.classList.contains('show') && hitIdx >= 0) {
+        const arr = hitKind === 'star' ? starPos : clusPos;
+        const rect = mount.getBoundingClientRect();
+        tmp.set(arr[hitIdx * 3], arr[hitIdx * 3 + 1], arr[hitIdx * 3 + 2])
+          .applyMatrix4(galaxySpin.matrixWorld)
+          .project(camera);
+        // ★ 悬停卡也要避开页面文字（此前压在 hero 标题上 988px²）：
+        //   默认悬在星上方，压到静态禁区或顶出视口时改挂到星下方。
+        const sxT = (tmp.x * 0.5 + 0.5) * rect.width, syT = (-tmp.y * 0.5 + 0.5) * rect.height;
+        const twT = tip.offsetWidth, thT = tip.offsetHeight;
+        const above = { l: sxT - twT / 2, r: sxT + twT / 2, t: syT - 16 - thT, b: syT - 16 };
+        const below = { l: sxT - twT / 2, r: sxT + twT / 2, t: syT + 16, b: syT + 16 + thT };
+        const guards = [...guardM, ...dynGuard.filter((g) => (g as any).sel !== '#graph-tip')];
+        const outT = (a: Box) => a.l < 8 || a.r > rect.width - 8 || a.t < 8 || a.b > rect.height - 8;
+        // 两侧都可能压到文字（hero 横跨半屏、页脚在底）→ 取【重叠面积更小】的一侧
+        const ovArea = (a: Box) => guards.reduce((s, g) => {
+          const x = Math.min(a.r, g.r) - Math.max(a.l, g.l);
+          const y = Math.min(a.b, g.b) - Math.max(a.t, g.t);
+          return s + (x > 0 && y > 0 ? x * y : 0);
+        }, 0);
+        const useBelow = !outT(below) && (outT(above) || ovArea(below) < ovArea(above));
+        tip.style.transform = useBelow
+          ? `translate(${sxT}px, ${syT}px) translate(-50%, 16px)`
+          : `translate(${sxT}px, ${syT}px) translate(-50%, calc(-100% - 16px))`;
+      }
+
       renderer.render(scene, camera);
     }
     if (!rafId) loop();
     // 首帧已渲染：淡入显形（初始化时置 0，此处必须拉回 1，否则画布永久透明）
     requestAnimationFrame(() => { renderer.domElement.style.opacity = '1'; });
+    // 诊断口（?debug=1 时暴露）：测试脚本读星团投影坐标用
+    if (new URLSearchParams(location.search).has('debug')) {
+      labDiag = true;
+      (window as any).__gal = {
+        tilt: galaxyTilt, cam: () => camZ, scene, camPos: () => [+camera.position.x.toFixed(2), +camera.position.y.toFixed(2), +camera.position.z.toFixed(2)],
+        spinRotZ: () => +galaxySpin.rotation.z.toFixed(4),
+        focusState: () => {
+          const wp = new THREE.Vector3(clusPos[1*3], clusPos[1*3+1], clusPos[1*3+2]).applyMatrix4(galaxySpin.matrixWorld);
+          return JSON.stringify({
+            tilt: [+galaxyTilt.position.x.toFixed(2), +galaxyTilt.position.y.toFixed(2), +galaxyTilt.position.z.toFixed(2)],
+            camZ: +camera.position.z.toFixed(2),
+            clusterFront: [+wp.x.toFixed(2), +wp.y.toFixed(2)],
+            spinRot: +galaxySpin.rotation.z.toFixed(3),
+          });
+        },
+        uMouseScreen: () => {
+          const m = dustMats.find((mm) => mm.uniforms && mm.uniforms.uMouse);
+          if (!m) return null;
+          const v = m.uniforms.uMouse.value;
+          // 局部 → 世界（spinInner 自转 + tilt 平移/旋转）→ 屏幕
+          const wp = new THREE.Vector3(v.x, v.y, 0).applyMatrix4(galaxySpin.matrixWorld);
+          const pr = wp.clone().project(camera);
+          return { local: [+v.x.toFixed(1), +v.y.toFixed(1)], screen: [Math.round((pr.x*0.5+0.5)*1440), Math.round((-pr.y*0.5+0.5)*900)] };
+        },
+        proj: (k: number) => {
+          const p = screenOf(clusPos, k);
+          return { x: Math.round(p.x - mount.getBoundingClientRect().left), y: Math.round(p.y - mount.getBoundingClientRect().top), z: +p.z.toFixed(3) };
+        },
+        starProj: (i: number) => {
+          const p = screenOf(starPos, i);
+          return { x: Math.round(p.x - mount.getBoundingClientRect().left), y: Math.round(p.y - mount.getBoundingClientRect().top), z: +p.z.toFixed(3) };
+        },
+        clusters: clusters.map((c) => c.title),
+        ns: NS,
+        dbgGlow: (o: any) => { GLOW_DBG = o; },
+        clusterInfo: (k: number) => JSON.stringify({
+          title: clusters[k]?.title,
+          count: clusters[k]?.count,
+          clusterRad: +clusterRadOf(k).toFixed(2),                  // 团的空间范围（半径）
+          fogDia: +(clusterRadOf(k) * 2).toFixed(2),                // 团色雾直径（sprite scale）
+          r: +Math.hypot(clusPos[k * 3], clusPos[k * 3 + 1]).toFixed(2), // 到银河中心的盘面半径
+          GR: +GR.toFixed(2),
+          pos: [+clusPos[k * 3].toFixed(2), +clusPos[k * 3 + 1].toFixed(2)],
+        }),
+        // 预览不同文章数下团半径的增长（回答「加文章后范围会不会自动变大」）
+        radPreview: (n: number) => {
+          const grow = Math.min(1.7, 0.8 + 0.2 * Math.sqrt(Math.max(1, n) / 2));
+          return +(Math.max(GR * 0.11, 2.4) * grow).toFixed(2);
+        },
+        starInfo: (i: number) => {
+          const k = starClusterIdx[i];
+          const dx = starPos[i*3] - clusPos[k*3];
+          const dy = starPos[i*3+1] - clusPos[k*3+1];
+          return JSON.stringify({
+            title: stars[i].title, clusterKey: stars[i].cluster,
+            cluster: clusters[k]?.title, k,
+            dist: +Math.hypot(dx, dy).toFixed(2), rad: +clusterRadOf(k).toFixed(2),
+            pos: [+starPos[i*3].toFixed(2), +starPos[i*3+1].toFixed(2)],
+            clus: [+clusPos[k*3].toFixed(2), +clusPos[k*3+1].toFixed(2)],
+          });
+        },
+        coreInfo: (k: number) => {
+          // clusCoreStars 每 cluster 2 个 sprite（glow/core），读实际状态 + 投影
+          const out: any = {};
+          clusCoreStars.slice(k * 2, k * 2 + 2).forEach((sp, j) => {
+            const m = sp.material as THREE.SpriteMaterial;
+            const wp = sp.position.clone().applyMatrix4(galaxySpin.matrixWorld);
+            const pr = wp.clone().project(camera);
+            out['s' + j] = { op: +m.opacity.toFixed(2), sc: +sp.scale.x.toFixed(2), vis: sp.visible, map: m.map === coreTex ? 'core' : m.map === bloomTex ? 'bloom' : m.map === glowHaloTex ? 'glowHalo' : m.map === haloTex ? 'halo' : '?', ndc: [+pr.x.toFixed(3), +pr.y.toFixed(3)], parentIsSpin: sp.parent === galaxySpin };
+          });
+          return JSON.stringify(out);
+        },
+        glowInfo: (i: number) => {
+          const gIn = starGlows[i * 2];
+          const gOut = starGlows[i * 2 + 1];
+          const w = new THREE.Vector3(starPos[i*3], starPos[i*3+1], starPos[i*3+2]).applyMatrix4(galaxySpin.matrixWorld);
+          const pr = w.clone().project(camera);
+          return JSON.stringify({
+            inOp: +(gIn.material as THREE.SpriteMaterial).opacity.toFixed(3),
+            inScale: +gIn.scale.x.toFixed(3),
+            outOp: +(gOut.material as THREE.SpriteMaterial).opacity.toFixed(3),
+            outScale: +gOut.scale.x.toFixed(3),
+            coreSize: +starSize[i].toFixed(3),
+            ndc: [+pr.x.toFixed(3), +pr.y.toFixed(3)],
+          });
+        },
+      };
+    }
   }
   }
 </script>

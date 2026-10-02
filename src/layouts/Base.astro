@@ -43,6 +43,30 @@ const pageTitle = title ? `${title} · ${SITE.title}` : SITE.title;
     <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body class:list={[{ "is-home": home }]}>
+    <script is:inline>
+      // 深空照片轮换：每日把 12 张洗成一个排列，子页面各占不同槽位
+      // → 主页面显式占槽（恒不重复），详情页哈希兜底；同日同页固定，隔天全站换血
+      // 首页不参与：星空由 3D 星图承担
+      (() => {
+        let seed = new Date().getDate() * 2654435761 >>> 0;
+        const deck = [...Array(12).keys()];
+        for (let i = 11; i > 0; i--) {
+          seed = (seed * 1664525 + 1013904223) >>> 0;
+          const j = seed % (i + 1);
+          [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        const FIXED = { '/notes/': 0, '/projects/': 1, '/about/': 2, '/search/': 3 };
+        const p = location.pathname;
+        if (p === '/') return;
+        let slot = FIXED[p];
+        if (slot === undefined) {
+          let h = 2166136261;
+          for (const c of p) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+          slot = h % 12;
+        }
+        document.body.dataset.sky = String(deck[slot]);
+      })();
+    </script>
     <StarField />
     <Header />
     <main class="site-main">

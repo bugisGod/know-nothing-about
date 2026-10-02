@@ -1,0 +1,118 @@
+---
+// 页头星云银河带：程序化绘制一次性静态画面（紫蓝星云斜带 + 星点 + 亮星）。
+// 参考知识库页头视觉：避免干扰阅读 → 静态不动画、中低亮度、向内容区渐隐。
+interface Props {
+  height?: number;
+}
+const height = 440;
+---
+<div class="nebula-band" style={`height:${height}px`} aria-hidden="true">
+  <canvas data-nebula data-height={height}></canvas>
+</div>
+
+<script>
+  // 确定性伪随机：每次加载同一画面
+  let seed = 20261001;
+  const rand = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  const PALETTE = ['#5f79c9', '#8a6fc9', '#b07a9e', '#6fb0c4', '#4a5fb8', '#9a7ac9'];
+
+  const draw = () => {
+    for (const cv of document.querySelectorAll<HTMLCanvasElement>('canvas[data-nebula]')) {
+      const h = Number(cv.dataset.height ?? 440);
+      const w = cv.clientWidth || innerWidth;
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      cv.width = w * dpr;
+      cv.height = h * dpr;
+      const g = cv.getContext('2d');
+      if (!g) continue;
+      g.scale(dpr, dpr);
+      g.clearRect(0, 0, w, h);
+
+      // 星云斜带：坐标旋转后沿带状高斯散布云团（加性叠加成紫蓝云絮）
+      g.save();
+      g.translate(w * 0.42, h * 0.42);
+      g.rotate(-0.13);
+      g.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 150; i++) {
+        // 沿带分布：横向均匀，纵向高斯（中心密边缘疏）
+        const bx = (rand() - 0.5) * w * 1.25;
+        const gauss = (rand() + rand() + rand()) / 3 - 0.5;
+        const by = gauss * h * 1.05;
+        const r = 28 + rand() * 130;
+        const col = PALETTE[Math.floor(rand() * PALETTE.length)];
+        const grad = g.createRadialGradient(bx, by, 0, bx, by, r);
+        grad.addColorStop(0, col + '26');
+        grad.addColorStop(0.55, col + '10');
+        grad.addColorStop(1, col + '00');
+        g.fillStyle = grad;
+        g.beginPath();
+        g.arc(bx, by, r, 0, Math.PI * 2);
+        g.fill();
+      }
+      // 亮核：右上一处更亮的星云核心（参考图右侧亮星云）
+      const cg = g.createRadialGradient(w * 0.3, -h * 0.08, 0, w * 0.3, -h * 0.08, 170);
+      cg.addColorStop(0, 'rgba(150, 170, 240, 0.30)');
+      cg.addColorStop(0.5, 'rgba(120, 140, 220, 0.12)');
+      cg.addColorStop(1, 'rgba(120, 140, 220, 0)');
+      g.fillStyle = cg;
+      g.beginPath();
+      g.arc(w * 0.3, -h * 0.08, 170, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+
+      // 星点：两层（碎星 + 亮星）
+      for (let i = 0; i < 230; i++) {
+        const x = rand() * w, y = rand() * h;
+        const rr = 0.3 + rand() * 0.9;
+        g.globalAlpha = 0.2 + rand() * 0.6;
+        g.fillStyle = rand() > 0.82 ? '#aebfff' : '#e8edff';
+        g.beginPath();
+        g.arc(x, y, rr, 0, Math.PI * 2);
+        g.fill();
+      }
+      for (let i = 0; i < 10; i++) {
+        const x = rand() * w, y = rand() * h * 0.8;
+        const rr = 1.1 + rand() * 1.6;
+        const gr = g.createRadialGradient(x, y, 0, x, y, rr * 3.5);
+        gr.addColorStop(0, 'rgba(240, 245, 255, 0.95)');
+        gr.addColorStop(0.3, 'rgba(200, 215, 255, 0.4)');
+        gr.addColorStop(1, 'rgba(200, 215, 255, 0)');
+        g.globalAlpha = 1;
+        g.fillStyle = gr;
+        g.beginPath();
+        g.arc(x, y, rr * 3.5, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalAlpha = 1;
+
+      // 向内容区渐隐：底部 45% 渐变到页面底色，左右 8% 轻微收边
+      g.globalCompositeOperation = 'source-over';
+      const fade = g.createLinearGradient(0, h * 0.45, 0, h);
+      fade.addColorStop(0, 'rgba(10, 12, 20, 0)');
+      fade.addColorStop(1, 'rgba(10, 12, 20, 0.92)');
+      g.fillStyle = fade;
+      g.fillRect(0, 0, w, h);
+    }
+  };
+  draw();
+  addEventListener('resize', draw);
+</script>
+
+<style>
+  .nebula-band {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .nebula-band canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+</style>

@@ -2,7 +2,7 @@
 // 性能：视口外/标签页隐藏自动暂停；prefers-reduced-motion 静态显示
 // 首页（data-sky=home）跳过：首页星空由 3D 星图承担，避免星层叠加显乱
 (function () {
-  if (document.body.dataset.sky === 'home') return;
+  if (!document.body.dataset.sky) return; // 首页无 data-sky：星空由 3D 星图承担
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const canvas = document.createElement('canvas');
   canvas.id = 'meteor-bg';

@@ -2,135 +2,209 @@
 import Base from '../layouts/Base.astro';
 import BrainGraph from '../components/BrainGraph.astro';
 import { getCollection } from 'astro:content';
-import { SITE, SERIES, CATEGORIES } from '../config';
+import { SITE, CATEGORIES } from '../config';
 
 const catOf = (id: string) => (id.includes('/') ? id.split('/')[0] : '未分类');
-
-// ===== 知识星图：节点 = 锚星（系列/分类星域中心）+ 文章星，边 = 归属 / 共享标签 =====
-// 同系列的文章向锚星凝聚成星座；文章越多，星座越大、星域越多
 const allNotes = await getCollection('notes', ({ data }) => !data.draft);
 const allProjects = await getCollection('projects', ({ data }) => !data.draft);
 
-type GNode = {
-  id: string; title: string; url: string; kind: string; group: string;
-  tags: string[]; desc: string; anchor?: boolean; color?: string; count?: number;
-  parent?: number;
+// ===== 银河星图：星团 = 分类，恒星 = 文章 / 项目 =====
+// 这是首页唯一的导航系统（旧的「知识星座」已废弃）：它既是背景宇宙，也是索引。
+// 恒星在哪由 slug 哈希决定，与这里的排列顺序无关 —— 新增内容不会让旧星搬家。
+type ClusterDef = {
+  key: string;
+  title: string;
+  url: string;
+  color?: string;
+  desc?: string;
+  count: number;
+  /** 星团形态语义：dense 密集结团 / spiral 规则螺旋 / scatter 分散广布 / natural 随机自然 */
+  form?: string;
+  /** 分类下不重复话题数（星团 hover 信息用） */
+  topics?: number;
+  /** 话题标签列表（按文章数排序，tip 卡展示前几个） */
+  topicList?: string[];
+};
+type StarDef = {
+  id: string;
+  title: string;
+  url: string;
+  kind: string;
+  group: string;
+  tags: string[];
+  desc?: string;
+  date?: string;
+  cluster: string;
+  /** 新星：最近发布的文章（视觉上更亮更暖） */
+  recent?: boolean;
+  /** 置顶 / 精选：银河里的「亮星」（最大最亮 + 光晕） */
+  pinned?: boolean;
+  /** 手工关联（frontmatter related），仅用于计算星际连线 */
+  related?: string[];
 };
 
-const gNodes: GNode[] = [];
-const gEdges: [number, number, number][] = [];
-const edgeMap = new Map<string, number>();
-const addEdge = (a: number, b: number, w: number) => {
-  if (a === b) return;
-  const key = `${Math.min(a, b)}-${Math.max(a, b)}`;
-  edgeMap.set(key, Math.max(edgeMap.get(key) ?? 0, w));
+const fmtDate = (d?: Date | string) => {
+  if (!d) return '';
+  const x = new Date(d);
+  return `${x.getFullYear()}.${String(x.getMonth() + 1).padStart(2, '0')}.${String(x.getDate()).padStart(2, '0')}`;
 };
+const isRecent = (d?: Date | string) => !!d && Date.now() - new Date(d).getTime() < 45 * 86400e3;
 
-// 锚星索引：系列优先，无系列的文章归到分类锚星
-const anchorOf = new Map<string, number>();
-const ensureAnchor = (key: string, title: string, color?: string) => {
-  let idx = anchorOf.get(key);
-  if (idx === undefined) {
-    idx = gNodes.length;
-    anchorOf.set(key, idx);
-    gNodes.push({
-      id: `anchor:${key}`, title, url: '', kind: '星域', group: title,
-      tags: [], desc: title, anchor: true, color, count: 0,
-    });
+const clusters: ClusterDef[] = [];
+const clusterIdx = new Map<string, number>();
+const ensureCluster = (key: string, init: Omit<ClusterDef, 'count'>) => {
+  let i = clusterIdx.get(key);
+  if (i === undefined) {
+    i = clusters.length;
+    clusterIdx.set(key, i);
+    clusters.push({ ...init, count: 0 });
   }
-  return idx;
+  return i;
 };
+
+const stars: StarDef[] = [];
 
 for (const n of allNotes) {
-  const series = n.data.series;
   const cat = catOf(n.id);
-  const domainColor = series
-    ? SERIES[series]?.color ?? CATEGORIES[cat]?.color
-    : CATEGORIES[cat]?.color;
-  const anchorTitle = series ? (SERIES[series]?.title ?? series) : (CATEGORIES[cat]?.label ?? cat);
-  const aIdx = ensureAnchor(series ? `series:${series}` : `cat:${cat}`, anchorTitle, domainColor);
-  const i = gNodes.length;
-  gNodes.push({
-    id: n.id, title: n.data.title, url: `/notes/${n.id}/`, kind: '笔记',
-    group: anchorTitle, tags: n.data.tags, desc: n.data.description ?? '',
-    color: domainColor, parent: aIdx,
+  const meta = CATEGORIES[cat];
+  const key = `cat:${cat}`;
+  const ci = ensureCluster(key, {
+    key,
+    title: meta?.label ?? cat,
+    // notes 索引页支持按 category 过滤
+    url: `/notes/?category=${encodeURIComponent(cat)}`,
+    color: meta?.color,
+    desc: meta?.desc,
+    // 星团形态语义：每个分类的结构不同，形态本身就是信息
+    form: meta?.form ?? (cat === 'study' ? 'dense' : cat === 'frontend' ? 'spiral' : 'natural'),
   });
-  gNodes[aIdx].count!++;
-  addEdge(aIdx, i, 2.2); // 归属边：把成员星拉向锚星
+  clusters[ci].count++;
+  stars.push({
+    id: n.id,
+    title: n.data.title,
+    url: `/notes/${n.id}/`,
+    kind: '笔记',
+    group: clusters[ci].title,
+    tags: n.data.tags,
+    desc: n.data.description ?? '',
+    date: fmtDate(n.data.date),
+    cluster: key,
+    recent: isRecent(n.data.date),
+    related: n.data.related,
+    pinned: n.data.pinned === true,
+  });
 }
 
 for (const p of allProjects) {
-  gNodes.push({
-    id: p.id, title: p.data.title, url: `/projects/${p.id}/`, kind: '项目',
-    group: p.data.status, tags: p.data.tags.length > 0 ? p.data.tags : p.data.tech,
-    desc: p.data.description,
-  });
-}
-
-// 共享标签的连线（跨星域的引力）
-for (let i = 0; i < gNodes.length; i++) {
-  if (gNodes[i].anchor) continue;
-  for (let j = i + 1; j < gNodes.length; j++) {
-    if (gNodes[j].anchor) continue;
-    const shared = gNodes[i].tags.filter((t) => gNodes[j].tags.includes(t)).length;
-    if (shared > 0) addEdge(i, j, Math.min(shared, 2));
-  }
-}
-
-gEdges.push(...[...edgeMap.entries()].map(([key, w]) => {
-  const [a, b] = key.split('-').map(Number);
-  return [a, b, w] as [number, number, number];
-}));
-
-// 列表视图数据：按星域（锚星）分组的文章清单，与星图同源
-const domainsData = gNodes
-  .filter((n) => n.anchor)
-  .map((a) => ({
-    title: a.title,
-    entries: gNodes
-      .filter((n) => !n.anchor && n.parent === gNodes.indexOf(a))
-      .map((n) => ({ title: n.title, url: n.url })),
-  }));
-// 游离星（项目等，无锚星归属）归入「项目」组
-const freeNodes = gNodes.filter((n) => !n.anchor && n.parent === undefined);
-if (freeNodes.length)
-  domainsData.push({
+  const ci = ensureCluster('projects', {
+    key: 'projects',
     title: '项目',
-    entries: freeNodes.map((n) => ({ title: n.title, url: n.url })),
+    url: '/projects/',
+    color: '#ffc46b',
+    desc: '做完的东西 · 复盘',
+    form: 'scatter',
   });
+  clusters[ci].count++;
+  stars.push({
+    id: p.id,
+    title: p.data.title,
+    url: `/projects/${p.id}/`,
+    kind: '项目',
+    group: '项目',
+    tags: p.data.tags.length ? p.data.tags : p.data.tech,
+    desc: p.data.description,
+    date: fmtDate(p.data.date),
+    cluster: 'projects',
+    recent: isRecent(p.data.date),
+  });
+}
+
+// 星际连线：文章之间共享标签的关联 —— 知识网络（方案图核心概念）。
+// 数据源两级：frontmatter 声明 related（slug 列表）的文章以手工为准，其余按
+// 「同分类 + 共同标签」自动连线（零维护成本）。跨星团的关联权重更高：
+// 不同领域被同一标签串起来，是更罕见也更有价值的联系。
+const links: { a: number; b: number; w: number }[] = [];
+{
+  const findStar = (slug: string) =>
+    stars.findIndex((s) => s.id === slug || s.id.endsWith('/' + slug));
+  const manualBy = new Map<number, number[]>();
+  stars.forEach((s, i) => {
+    const rel = (s as { related?: string[] }).related;
+    if (!rel?.length) return;
+    const targets = rel.map(findStar).filter((j) => j >= 0 && j !== i);
+    if (targets.length) manualBy.set(i, targets);
+  });
+  const hasManual = (i: number) => manualBy.has(i);
+  for (let i = 0; i < stars.length; i++) {
+    for (let j = i + 1; j < stars.length; j++) {
+      if (hasManual(i) || hasManual(j)) continue; // 手工声明的星不走自动连线
+      const shared = stars[i].tags.filter((t) => stars[j].tags.includes(t)).length;
+      if (shared > 0) {
+        const cross = stars[i].cluster !== stars[j].cluster ? 1 : 0;
+        links.push({ a: i, b: j, w: Math.min(shared, 2) + cross });
+      }
+    }
+  }
+  manualBy.forEach((targets, i) => {
+    for (const j of targets) links.push({ a: Math.min(i, j), b: Math.max(i, j), w: 3 });
+  });
+}
+
+// 每个分类的不重复话题（星团 hover 信息：N 篇 · M 个话题 + 标签列表）
+clusters.forEach((c) => {
+  const tally = new Map<string, number>();
+  stars.filter((st) => st.cluster === c.key).forEach((st) => st.tags.forEach((t) => tally.set(t, (tally.get(t) ?? 0) + 1)));
+  c.topics = tally.size;
+  c.topicList = [...tally.entries()].sort((x, y) => y[1] - x[1]).map(([t]) => t);
+});
+
+// 列表视图：与星图同源的数据（星团 → 恒星），降级 / 无 WebGL / SEO 都走这条路
+const listGroups = clusters.map((c) => ({
+  title: c.title,
+  url: c.url,
+  count: c.count,
+  entries: stars.filter((s) => s.cluster === c.key).map((s) => ({ title: s.title, url: s.url, date: s.date })),
+}));
 ---
 
-<Base>
-  <!-- 首页顶部：整块夜空（银河 + 星图）。星层克制：全站仅星图 + 远景星野两层 -->
+<Base home>
+  <!-- 首页顶部：整块夜空。银河既是背景，也是导航本体 -->
   <section class="night">
-    <div class="container">
+    <div class="container hero-wrap">
       <section class="hero">
         <h1>{SITE.tagline}</h1>
         <p class="origin">— SCIO ME NIHIL SCIRE</p>
+        <button type="button" class="explore" id="explore-btn">EXPLORE <span aria-hidden="true">→</span></button>
+        <p class="whisper">一片属于你的思想星系</p>
       </section>
 
-      <div class="view-switch" role="group" aria-label="浏览方式">
-        <button type="button" data-view="map" aria-pressed="true">星图</button>
-        <span aria-hidden="true">/</span>
-        <button type="button" data-view="list" aria-pressed="false">列表</button>
-      </div>
+      <BrainGraph clusters={clusters} stars={stars} links={links} bare />
+    </div>
 
-      <BrainGraph
-        nodes={gNodes}
-        edges={gEdges}
-        bare
-        caption={`已点亮 ${gNodes.filter((n) => !n.anchor).length} 颗 · 余下皆是未知`}
-        captionHint="拖拽旋转 · 点击星体进入"
-      />
+    <!-- 底部操作区锚定在整个夜空（而非 container）：container 只包住 hero，高度不足 -->
+    <p class="sky-hint" id="sky-hint">每一颗星，都是一篇文章 · 点击星团进入分类</p>
 
-      <!-- 列表视图：按星域分组的全部文章（与星图同一份数据） -->
+    <div class="view-switch" role="group" aria-label="浏览方式">
+      <button type="button" data-view="map" aria-pressed="true">星图</button>
+      <span aria-hidden="true">/</span>
+      <button type="button" data-view="list" aria-pressed="false">列表</button>
+    </div>
+
+    <div class="container">
+      <!-- 列表视图：星图的等价物（同样的目录结构），移动端与无 WebGL 时的降级视图 -->
       <div class="domain-index" hidden>
-        {domainsData.map((d) => (
+        {listGroups.map((g) => (
           <section class="di-group">
-            <h2 class="di-title">{d.title}<small>{d.entries.length}</small></h2>
+            <h2 class="di-title">
+              <a href={g.url}>{g.title}</a>
+              <small>{g.count}</small>
+            </h2>
             <ul>
-              {d.entries.map((e) => (
-                <li><a href={e.url}>{e.title}</a></li>
+              {g.entries.map((e) => (
+                <li>
+                  <a href={e.url}>{e.title}</a>
+                  {e.date && <time>{e.date}</time>}
+                </li>
               ))}
             </ul>
           </section>
@@ -138,21 +212,38 @@ if (freeNodes.length)
       </div>
     </div>
   </section>
-
 </Base>
 
 <script>
-  // 星图 / 列表视图切换（借鉴新版首页的浏览模式）
+  // EXPLORE：引导进入银河探索（飞向内容最多的星团）
+  document.getElementById('explore-btn')?.addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('galaxy:explore'));
+  });
+
+  // P1 一次性操作提示：出现 9 秒后淡出（会话内只提示一次，不破坏极简视觉）
+  {
+    const hint = document.getElementById('sky-hint');
+    if (hint && !sessionStorage.getItem('sky-hint-seen')) {
+      sessionStorage.setItem('sky-hint-seen', '1');
+      setTimeout(() => hint.classList.add('sky-hint-faded'), 9000);
+    } else if (hint) {
+      hint.classList.add('sky-hint-faded');
+    }
+  }
+
+  // 星图 / 列表视图切换
   const night = document.querySelector<HTMLElement>('.night');
   if (night) {
     const graphSec = night.querySelector<HTMLElement>('#graph');
     const domainIndex = night.querySelector<HTMLElement>('.domain-index');
+    const hint = night.querySelector<HTMLElement>('.sky-hint');
     const buttons = night.querySelectorAll<HTMLButtonElement>('.view-switch [data-view]');
     buttons.forEach((btn) =>
       btn.addEventListener('click', () => {
         const map = btn.dataset.view === 'map';
         if (graphSec) graphSec.hidden = !map; // 星图：map 视图显示
         if (domainIndex) domainIndex.hidden = map; // 列表：map 视图隐藏
+        if (hint) hint.hidden = !map;
         buttons.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
       }),
     );
@@ -160,48 +251,70 @@ if (freeNodes.length)
 </script>
 
 <style>
-  /* ===== 夜空区：Hero + 星图共处一块深空（星空基调的核心场景）===== */
-  /* 无实底：透出全局深空星野（body::before 的银河），仅叠顶部微晕 */
+  /* ===== 夜空区：Hero + 银河共处一块深空 ===== */
+  /* 首页整页正好一屏：header + 夜空 + 页脚 = 100svh，不再产生滚动条。
+     一旦能滚动，fixed 星空就会被滚动进度驱动 —— 滑到底星河会扭一下再飞出画面。
+     注意：main 在 Base.astro 里，选择器必须整体 :global，否则被 scope 化后不生效。 */
+  :global(body.is-home) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+  }
+
+  :global(body.is-home .site-main) {
+    display: flex; /* .night 的 flex:1 依赖父级是 flex 容器，否则夜空塌成内容高度 */
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
   .night {
-    margin-top: -40px; /* 抵消 main 顶边距，夜空直通页头 */
+    /* 高度交给 flex（body.is-home 是 flex 列，main flex:1）：不再写死 100svh-N。
+       写死就会漏算 footer（89px）+ main 底距，首页重新变成可滚动，
+       fixed 星空又会随滚动微扭。 */
     padding: 64px 0 40px;
-    background:
-      radial-gradient(60% 50% at 50% 0%, rgba(96, 118, 255, 0.06), transparent 70%);
+    flex: 1 1 auto;
+    min-height: 0;
     position: relative;
     overflow: hidden;
+    /* 方案图布局：银河在上、标语/操作沉底 */
+    display: flex;
+    flex-direction: column;
   }
 
-  /* 夜空无缝过渡到页面底色；页脚换成夜色发丝线 */
-  :global(main.site-main) {
-    padding-bottom: 24px;
+  :global(body.is-home main.site-main) {
+    padding-bottom: 0; /* 一屏布局：底部留白会让文档高过视口 */
   }
 
-  :global(.site-footer) {
+  :global(body.is-home .site-footer) {
     border-top: 1px solid rgba(232, 230, 223, 0.08);
   }
 
-  .night :global(.graph-frame) {
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    height: 540px;
-    margin-top: 0; /* 星图贴紧 hero，页眉与星群之间不留空档 */
-    margin-inline: calc(50% - 50vw); /* 星空铺满整屏宽 */
+  /* 方案图布局：银河占上部，hero 组（标语+星图挂载点）沉到画面下部 */
+  .night > .hero-wrap {
+    margin-top: auto;
   }
 
-  .night :global(.graph-sec) {
-    margin-top: 16px;
-  }
-
-  .night :global(.graph-caption) {
-    max-width: 932px;
-    margin-inline: auto;
-  }
-
-  /* ===== Hero：名言即主角 ===== */
+  /* 探索态：hero 文字块淡出（EXPLORE 进入与 EXIT 退出是互斥 CTA，不能同屏）。
+     只隐藏 .hero 文字块 —— hero-wrap 里还有星图挂载点，整块隐藏会把银河一起带走 */
   .hero {
-    padding: 88px 0 0;
+    transition: opacity 0.7s ease;
+  }
+  :global(body.explore-on) .hero {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* ===== Hero：名言即主角（必须压在 fixed 画布之上）===== */
+  .hero {
+    position: relative;
+    z-index: 1;
+    /* 方案图布局：银河占画面上部，标语沉到银河下方 */
+    margin-top: auto;
+    padding: 40px 0 12px;
     text-align: center;
+    pointer-events: none;
   }
 
   .hero h1 {
@@ -224,13 +337,75 @@ if (freeNodes.length)
     margin: 0;
   }
 
-  /* ===== 星图 / 列表切换（借鉴新版）===== */
+  /* EXPLORE：引导进入银河（描边胶囊，hover 点亮琥珀）；抬层避开 fixed 星空拦截点击 */
+  .explore {
+    position: relative;
+    z-index: 1;
+    pointer-events: auto; /* hero 整体事件穿透给星空，按钮单独恢复接收 */
+    margin-top: 22px;
+    padding: 9px 26px;
+    background: none;
+    border: 1px solid rgba(150, 160, 205, 0.28);
+    border-radius: 999px;
+    color: var(--text-2);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    cursor: pointer;
+    transition: color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  }
+  .explore:hover {
+    color: var(--accent);
+    border-color: rgba(217, 184, 121, 0.5);
+    box-shadow: 0 0 24px rgba(217, 184, 121, 0.12);
+  }
+  .explore span {
+    display: inline-block;
+    margin-left: 6px;
+    transition: transform 0.25s ease;
+  }
+  /* 引导语：非常淡的一句，用户即使不点也能欣赏这片活着的银河 */
+  .whisper {
+    margin: 18px 0 0;
+    font-family: var(--font-display);
+    font-size: 12.5px;
+    letter-spacing: 0.42em;
+    color: rgba(232, 230, 223, 0.34);
+  }
+  .explore:hover span {
+    transform: translateX(4px);
+  }
+
+  /* ===== 底部操作区：提示语 + 星图/列表切换（底部居中，避免与星团标签抢位）===== */
+  .sky-hint {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 44px;
+    z-index: 2;
+    margin: 0;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    color: rgba(232, 230, 223, 0.34);
+    pointer-events: none;
+  }
+  .sky-hint-faded {
+    opacity: 0;
+    transition: opacity 1.6s ease;
+  }
+
   .view-switch {
+    position: fixed; /* 视口定位：列表展开撑高文档时，切回按钮也永远在屏幕内可点 */
+    left: 0;
+    right: 0;
+    bottom: 14px;
+    z-index: 2;
     display: flex;
-    justify-content: flex-end;
+    justify-content: center;
     align-items: center;
     gap: 10px;
-    margin: 26px 20px 0;
     font-size: 11px;
     color: var(--muted);
   }
@@ -254,10 +429,13 @@ if (freeNodes.length)
     text-underline-offset: 6px;
   }
 
+  /* ===== 列表视图（降级）===== */
   .domain-index {
+    position: relative;
+    z-index: 1;
     max-width: 720px;
     margin: 30px auto 0;
-    padding: 0 20px;
+    padding: 0 20px 96px;
   }
 
   .di-group {
@@ -275,6 +453,14 @@ if (freeNodes.length)
     border-bottom: 1px solid var(--border);
   }
 
+  .di-title a {
+    color: inherit;
+  }
+
+  .di-title a:hover {
+    color: var(--accent);
+  }
+
   .di-title small {
     font: 10px var(--mono);
     color: var(--muted);
@@ -288,10 +474,17 @@ if (freeNodes.length)
     padding: 0;
   }
 
-  .di-group a {
-    display: block;
-    padding: 10px 0;
+  .di-group li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
     border-bottom: 1px solid var(--border);
+  }
+
+  .di-group a {
+    flex: 1 1 auto;
+    padding: 10px 0;
     font-size: 13.5px;
     color: var(--text-2);
     line-height: 1.6;
@@ -301,23 +494,50 @@ if (freeNodes.length)
     color: var(--accent);
   }
 
+  .di-group time {
+    flex: 0 0 auto;
+    font: 10.5px var(--mono);
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
   .domain-index[hidden],
-  .night :global(.graph-sec[hidden]) {
+  .night :global(.graph-sec[hidden]),
+  .sky-hint[hidden] {
     display: none;
   }
 
-  @media (max-width: 640px) {
-    .view-switch {
-      margin-top: 14px;
-    }
-  }
-
+  /* ===== 手机：字更小、净空更少，底部操作区要给 iOS 安全区让路 ===== */
   @media (max-width: 640px) {
     .night {
       padding-top: 40px;
     }
+
     .hero {
-      padding-top: 48px;
+      padding-top: 40px;
+    }
+
+    .hero h1 {
+      font-size: clamp(26px, 7.4vw, 34px);
+    }
+
+    .origin {
+      font-size: 10.5px;
+      letter-spacing: 0.22em;
+    }
+
+    .sky-hint {
+      bottom: 42px;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+    }
+
+    .view-switch {
+      bottom: max(10px, env(safe-area-inset-bottom));
+    }
+
+    .domain-index {
+      padding-bottom: 88px;
     }
   }
 </style>

@@ -9,6 +9,10 @@ const notes = defineCollection({
     description: z.string().optional(),
     date: z.coerce.date().optional(),
     tags: z.array(z.string()).default([]),
+    // 手工指定关联文章（slug 列表）：声明后首页星图的星际连线以手工为准，覆盖自动结果
+    related: z.array(z.string()).optional(),
+    // 置顶 / 精选：首页银河里作为「亮星」呈现（最大最亮 + 光晕）
+    pinned: z.boolean().default(false),
     // 专栏：同系列文章归组（如书名），详情页显示归属与序号
     series: z.string().optional(),
     draft: z.boolean().default(false),

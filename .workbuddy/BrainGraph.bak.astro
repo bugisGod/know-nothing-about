@@ -1,0 +1,1220 @@
+---
+// 知识图谱「夜空星图」：深空面板 + 发光星点 + 雾化纵深
+// 节点 = 页面（笔记暖白 / 项目琥珀），边 = 共享标签
+// 交互：拖拽旋转 / 滚轮缩放 / 点击进入；支持 prefers-reduced-motion
+interface GraphNode {
+  id: string;
+  title: string;
+  url: string;
+  kind: string;
+  group: string;
+  tags: string[];
+  /** 分类锚星（星域中心） */
+  anchor?: boolean;
+  /** 域色（恒星色温系） */
+  color?: string;
+  /** 悬停信息卡里的一句话描述 */
+  desc?: string;
+  /** 星域内的文章数（仅锚星） */
+  count?: number;
+}
+
+interface Props {
+  nodes: GraphNode[];
+  /** [i, j, weight] */
+  edges: [number, number, number][];
+  /** 夜空模式：去掉面板边框与底色，融入外部深色区块 */
+  bare?: boolean;
+  /** 整个星系在竖直方向的偏移（负值 = 下沉），hero 文字悬浮时给上方让出净空 */
+  offsetY?: number;
+  /** 图下方的说明文字（默认「拖拽 · 点击星体探索」） */
+  caption?: string;
+  /** 说明文字下的第二行小字提示 */
+  captionHint?: string;
+}
+
+const { nodes, edges, bare = false, offsetY = 0, caption, captionHint } = Astro.props;
+const dataJson = JSON.stringify({ nodes, edges }).replace(/</g, '\\u003c');
+---
+
+<section class="graph-sec" id="graph">
+  <div class:list={['graph-frame', { bare }]}>
+    <div id="brain-graph" class="graph-canvas" role="img" aria-label="三维知识图谱：每个节点对应一篇文章，连线表示共享标签。下方列表提供相同的导航。"></div>
+    <div id="graph-tip" class="graph-tip" aria-hidden="true">
+      <p class="tip-title"></p>
+      <p class="tip-meta"></p>
+      <p class="tip-go">再点一次进入 →</p>
+    </div>
+  </div>
+  {(caption || captionHint) && (
+    <p class="graph-caption">
+      {caption && <span class="cap-main">{caption}</span>}
+      {captionHint && <span class="cap-sub">{captionHint}</span>}
+    </p>
+  )}
+  <script type="application/json" id="graph-data" set:html={dataJson} />
+</section>
+
+<style>
+  /* 深空面板：两种主题下都是夜空底片 */
+  .graph-frame {
+    position: relative;
+    margin-top: 14px;
+    height: 500px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background:
+      radial-gradient(52% 42% at 18% 24%, rgba(96, 118, 255, 0.13), transparent 70%),
+      radial-gradient(46% 40% at 78% 72%, rgba(168, 122, 255, 0.1), transparent 72%),
+      radial-gradient(120% 90% at 50% 0%, #131524 0%, #0b0c15 58%, #07080e 100%);
+  }
+
+  .graph-canvas {
+    position: absolute;
+    inset: 0;
+    cursor: grab;
+    touch-action: pan-y; /* 手机竖向滑动交给页面滚动，横向拖拽仍可旋转 */
+  }
+
+  /* 夜空模式：无框无底，fixed 铺满整个视口——不管页面多长、滚到哪里，星空永远铺底 */
+  .graph-frame.bare {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    height: 100%;
+    margin: 0;
+  }
+
+  .graph-sec {
+    margin-top: 40px;
+  }
+
+  .graph-list {
+    max-width: 720px;
+    margin: 10px auto 0;
+    font-size: 13px;
+  }
+
+  .graph-list summary {
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    text-align: center;
+    list-style: none;
+  }
+
+  .graph-list summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .graph-list ul {
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+    columns: 2;
+  }
+
+  .graph-list a {
+    color: var(--text-2);
+    line-height: 1.9;
+  }
+
+  .graph-list a:hover {
+    color: var(--accent);
+  }
+
+  .graph-canvas.grabbing {
+    cursor: grabbing;
+  }
+
+  .graph-canvas.pointing {
+    cursor: pointer;
+  }
+
+  .graph-tip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, calc(-100% - 14px));
+    background: rgba(18, 20, 32, 0.92);
+    border: 1px solid rgba(129, 140, 190, 0.35);
+    border-radius: 8px;
+    padding: 9px 13px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    max-width: 250px;
+    text-align: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .graph-tip.show {
+    opacity: 1;
+  }
+
+  /* 触屏选中态：卡片可点按进入 */
+  .graph-tip.tap {
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  .tip-go {
+    display: none;
+    margin: 7px 0 0;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    color: #ffc46b;
+  }
+
+  .graph-tip.tap .tip-go {
+    display: block;
+  }
+
+  .tip-title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 15px;
+    line-height: 1.4;
+    color: #f2efe6;
+  }
+
+  .tip-meta {
+    margin: 3px 0 0;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: #8d95b8;
+  }
+
+  .graph-frame :global(.star-label) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    opacity: 0.9;
+    text-shadow: 0 1px 6px rgba(7, 8, 14, 0.9);
+    will-change: transform;
+    transition: opacity 0.45s ease; /* 转入背面淡出、漂回正面淡入 */
+  }
+
+  .graph-caption {
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin: 14px 0 0;
+  }
+
+  .cap-main {
+    color: rgba(232, 230, 223, 0.6);
+    letter-spacing: 0.2em;
+  }
+
+  .cap-sub {
+    display: block;
+    margin-top: 7px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    opacity: 0.72;
+  }
+
+  @media (max-width: 640px) {
+    .graph-frame {
+      height: 58vh;
+      min-height: 360px;
+    }
+  }
+</style>
+
+<script>
+  // 懒加载：图进入视口（含 300px 预加载余量）才拉取 three.js；
+  // prefers-reduced-motion 直接渲染静态一帧，跳过动画
+  const bootEl = document.getElementById('brain-graph');
+  const bootData = document.getElementById('graph-data');
+  if (bootEl && bootData && bootEl.parentElement) {
+    const boot = () =>
+      init(bootEl as HTMLElement, bootData, bootEl.parentElement as HTMLElement).catch((e) => console.error('[BrainGraph] init failed:', e));
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      boot();
+    } else {
+      const spy = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((e) => e.isIntersecting)) {
+            spy.disconnect();
+            boot();
+          }
+        },
+        { rootMargin: '300px' }
+      );
+      spy.observe(bootEl);
+    }
+  }
+
+  async function init(mount: HTMLElement, dataEl: HTMLElement, frame: HTMLElement) {
+  const THREE = await import('three');
+
+  type GraphNode = {
+    id: string;
+    title: string;
+    url: string;
+    kind: string;
+    group: string;
+    tags: string[];
+    anchor?: boolean;
+    color?: string;
+    desc?: string;
+    count?: number;
+    parent?: number;
+  };
+
+  const tip = document.getElementById('graph-tip') as HTMLElement;
+
+  if (mount && dataEl && frame) {
+    const { nodes, edges } = JSON.parse(dataEl.textContent!) as {
+      nodes: GraphNode[];
+      edges: [number, number, number][];
+    };
+
+    // 固定种子：每次加载布局一致
+    const mulberry32 = (a: number) => () => {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const rand = mulberry32(20260912);
+
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    } catch {
+      mount.remove();
+      throw new Error('WebGL unavailable');
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // 画布就绪后淡入：懒加载完成不再突然弹出
+    renderer.domElement.style.opacity = '0';
+    renderer.domElement.style.transition = 'opacity 0.6s ease';
+    mount.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    // 雾化纵深：远处的星沉入夜空（密度偏高 → 深邃感）
+    scene.fog = new THREE.FogExp2(0x060709, 0.062); // 与页面底色一致
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+    // 相机按视口【对角线】取距：环长轴（投影半长 ~30.5）两端伸向画面角部，贯穿整条对角线；
+    // 距离钳制 [38,46]：过近会挤爆主角星图，过窄屏装不下整环（弧段贯穿）
+    const fitZ = () => {
+      const aspect = mount.clientWidth / Math.max(mount.clientHeight, 1);
+      const T = Math.tan((45 / 2) * Math.PI / 180);
+      const dist = 32.5 / (T * Math.sqrt(aspect * aspect + 1));
+      return Math.max(8, Math.min(dist, 46) - 30); // 环心在 z=-30
+    };
+    // 环长轴屏幕角对齐视口对角线角：tan(屏幕角)=tan(rz)·cos(rx) → 解出 rz 基角
+    let rzBase = 0.58;
+    const fitRZ = () => {
+      const aspect = mount.clientWidth / Math.max(mount.clientHeight, 1);
+      rzBase = Math.atan(1 / (aspect * Math.cos(0.75)));
+    };
+    let camZ = fitZ();
+    let camZTarget = camZ;
+    let userZoomed = false;
+    camera.position.set(0, 0, camZ);
+
+    // 滚动进度：星空是整个页面的铺底，环随页面滚动沿对角线缓缓转动下沉
+    let scrollP = 0, scrollPSmooth = 0;
+    const readScroll = () => {
+      const max = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+      scrollP = Math.min(1, Math.max(0, (window.scrollY || 0) / max));
+    };
+    addEventListener('scroll', readScroll, { passive: true });
+    readScroll();
+
+    const group = new THREE.Group();
+    group.position.y = -1.4; // 画布铺满后原点=屏幕中心：星图压到下半区，避开标语，又不至于贴到视口底缘
+    scene.add(group);
+
+    // ===== 初始位置：锚星布在球面（彼此远离），成员星落在锚星近旁 =====
+    const N = nodes.length;
+    const pos = new Float32Array(N * 3);
+    const vel = new Float32Array(N * 3);
+    const R0 = 2.7;
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    const anchorIdx = nodes.map((n, i) => (n.anchor ? i : -1)).filter((i) => i >= 0);
+    anchorIdx.forEach((ai, k) => {
+      const M = Math.max(anchorIdx.length, 1);
+      const y = M === 1 ? 0.2 : 1 - (k / (M - 1)) * 1.6;
+      const r = Math.sqrt(Math.max(1 - y * y, 0));
+      const th = golden * k * 2;
+      pos[ai * 3] = Math.cos(th) * r * R0;
+      pos[ai * 3 + 1] = y * R0;
+      pos[ai * 3 + 2] = Math.sin(th) * r * R0;
+    });
+    let fib = 0;
+    for (let i = 0; i < N; i++) {
+      if (nodes[i].anchor) continue;
+      const p = nodes[i].parent;
+      if (p !== undefined && p >= 0) {
+        // 成员星：锚星近旁成团
+        pos[i * 3] = pos[p * 3] + (rand() - 0.5) * 1.7;
+        pos[i * 3 + 1] = pos[p * 3 + 1] + (rand() - 0.5) * 1.7;
+        pos[i * 3 + 2] = pos[p * 3 + 2] + (rand() - 0.5) * 1.7;
+      } else {
+        // 游离星（如项目）：球面散布
+        const y = 1 - (fib / Math.max(N - 1, 1)) * 2;
+        const r = Math.sqrt(1 - y * y);
+        const th = golden * fib * 3;
+        fib++;
+        pos[i * 3] = Math.cos(th) * r * R0 + (rand() - 0.5) * 0.8;
+        pos[i * 3 + 1] = y * R0 + (rand() - 0.5) * 0.8;
+        pos[i * 3 + 2] = Math.sin(th) * r * R0 + (rand() - 0.5) * 0.8;
+      }
+    }
+
+    // ===== 贴图：发光星点 / 柔和圆点 / 圆环 =====
+    function glowTexture(stops: [number, string][]) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const g = c.getContext('2d')!;
+      const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+      for (const [o, col] of stops) grad.addColorStop(o, col);
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 128, 128);
+      return new THREE.CanvasTexture(c);
+    }
+    // 星点贴图：核心锐利、晕极短——光晕拖太长会把星读成「雾」
+    const starTex = glowTexture([
+      [0, '#ffffff'],
+      [0.1, '#ffffff'],
+      [0.17, 'rgba(255,255,255,0.62)'],
+      [0.24, 'rgba(255,255,255,0.1)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
+    const dotTex = glowTexture([
+      [0, '#ffffff'],
+      [0.5, 'rgba(255,255,255,0.6)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
+    const ringTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 96;
+      const g = c.getContext('2d')!;
+      g.strokeStyle = '#ffffff';
+      g.lineWidth = 3.5;
+      g.beginPath();
+      g.arc(48, 48, 34, 0, Math.PI * 2);
+      g.stroke();
+      return new THREE.CanvasTexture(c);
+    })();
+
+    // ===== 节点：发光星点（分类锚星带域色，成员星染淡色）=====
+    const degree = new Array(N).fill(0);
+    for (const [a, b] of edges) degree[a]++, degree[b]++;
+
+    const white = new THREE.Color(0xf3efe2);
+    const amber = new THREE.Color(0xffc46b);
+    const nodeColor: THREE.Color[] = [];
+    for (let i = 0; i < N; i++) {
+      const n = nodes[i];
+      if (n.anchor) {
+        nodeColor.push(new THREE.Color(n.color || '#f3efe2'));
+      } else if (n.kind === '项目') {
+        nodeColor.push(amber.clone());
+      } else {
+        // 成员星：域色调淡，融入夜空
+        nodeColor.push(new THREE.Color(n.color || '#f3efe2').lerp(white, 0.55));
+      }
+    }
+
+    const sprites: THREE.Sprite[] = [];
+    const baseScale: number[] = [];
+    for (let i = 0; i < N; i++) {
+      const mat = new THREE.SpriteMaterial({
+        map: starTex, color: nodeColor[i], transparent: true, fog: true, depthWrite: false,
+      });
+      // 星点直径收小：同心晕变小之后，同尺寸下才更像「星」而不是「光斑」
+      const s = nodes[i].anchor
+        ? 0.28 + Math.min(degree[i], 6) * 0.024
+        : (nodes[i].kind === '项目' ? 0.25 : 0.2) + Math.min(degree[i], 5) * 0.03 + rand() * 0.04;
+      const sp = new THREE.Sprite(mat);
+      sp.position.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+      sp.scale.setScalar(s);
+      baseScale.push(s);
+      group.add(sp);
+      sprites.push(sp);
+    }
+
+    // 锚星名字标签（HTML 覆盖层，跟随投影位置）；w 供标签避让算屏宽
+    const _lv = new THREE.Vector3();
+    const labels: { el: HTMLDivElement; i: number; w: number }[] = [];
+    let labelGuard: DOMRect | null = null, frameNo = 0;
+    nodes.forEach((n, i) => {
+      if (!n.anchor) return;
+      const el = document.createElement('div');
+      el.className = 'star-label';
+      el.textContent = n.title;
+      if (n.color) el.style.color = n.color;
+      frame.appendChild(el);
+      labels.push({ el, i, w: el.offsetWidth });
+    });
+
+    // ===== 边：星尘轨迹（点连线，全图只有光点、没有笔画）=====
+    // 星尘：每条弧线按长度布点，两端渐隐、微微闪烁
+    const dotsPerEdge = new Int16Array(edges.length);
+    let totalDots = 0;
+    for (let e = 0; e < edges.length; e++) {
+      const [a, b] = edges[e];
+      const len = Math.hypot(
+        pos[b * 3] - pos[a * 3],
+        pos[b * 3 + 1] - pos[a * 3 + 1],
+        pos[b * 3 + 2] - pos[a * 3 + 2]
+      );
+      dotsPerEdge[e] = Math.max(4, Math.min(16, Math.round(len / 0.33)));
+      totalDots += dotsPerEdge[e];
+    }
+    const dotOffsets = new Int32Array(edges.length + 1);
+    for (let e = 0; e < edges.length; e++) dotOffsets[e + 1] = dotOffsets[e] + dotsPerEdge[e];
+
+    const dustGeo = new THREE.BufferGeometry();
+    const dustPos = new Float32Array(totalDots * 3);
+    const dustCol = new Float32Array(totalDots * 3);
+    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+    dustGeo.setAttribute('color', new THREE.BufferAttribute(dustCol, 3));
+    const dust = new THREE.Points(
+      dustGeo,
+      new THREE.PointsMaterial({
+        map: dotTex, size: 0.095, sizeAttenuation: true, vertexColors: true,
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
+      })
+    );
+    group.add(dust);
+
+    const dimColor = new THREE.Color(0x39446e);
+    const hiColor = new THREE.Color(0xffc46b);
+    // 每条边的基色：连到锚星的边继承域色（压暗避免光污染），跨域边用暗蓝
+    const edgeBase = edges.map(([a, b]) => {
+      const src = nodes[a].anchor ? nodes[a] : nodes[b].anchor ? nodes[b] : null;
+      return src?.color
+        ? new THREE.Color(src.color).multiplyScalar(0.55)
+        : dimColor.clone();
+    });
+
+    // 每条边固定相位（形态稳定），弓起幅度随时间轻微呼吸
+    const edgePhase = new Float32Array(edges.length);
+    for (let e = 0; e < edges.length; e++) edgePhase[e] = rand() * Math.PI * 2;
+    const ctrl = new Float32Array(edges.length * 3); // 二次贝塞尔控制点
+
+    const _d = new THREE.Vector3(), _mid = new THREE.Vector3(),
+      _centroid = new THREE.Vector3(), _out = new THREE.Vector3(), _p = new THREE.Vector3();
+
+    function updateCtrl(t) {
+      // 全图质心：所有弧线统一向外弓 → 饱满的有机形态（不会内凹）
+      _centroid.set(0, 0, 0);
+      for (let i = 0; i < N; i++) {
+        _centroid.x += pos[i * 3]; _centroid.y += pos[i * 3 + 1]; _centroid.z += pos[i * 3 + 2];
+      }
+      _centroid.multiplyScalar(1 / Math.max(N, 1));
+
+      for (let e = 0; e < edges.length; e++) {
+        const [a, b] = edges[e];
+        _mid.set((pos[a * 3] + pos[b * 3]) / 2, (pos[a * 3 + 1] + pos[b * 3 + 1]) / 2, (pos[a * 3 + 2] + pos[b * 3 + 2]) / 2);
+        _out.copy(_mid).sub(_centroid);
+        if (_out.lengthSq() < 1e-6) _out.set(Math.sin(e * 2.3), Math.cos(e * 1.7), 0.3);
+        _out.normalize();
+        const mag = Math.min(_d.set(pos[b * 3] - pos[a * 3], pos[b * 3 + 1] - pos[a * 3 + 1], pos[b * 3 + 2] - pos[a * 3 + 2]).length() * 0.13, 0.7)
+          * (1 + 0.2 * Math.sin(t * 0.35 + edgePhase[e]));
+        ctrl[e * 3] = _mid.x + _out.x * mag;
+        ctrl[e * 3 + 1] = _mid.y + _out.y * mag;
+        ctrl[e * 3 + 2] = _mid.z + _out.z * mag;
+      }
+    }
+
+    // 二次贝塞尔取点
+    function bez(out, e, t01) {
+      const [a, b] = edges[e];
+      const u = 1 - t01;
+      const w0 = u * u, w1 = 2 * u * t01, w2 = t01 * t01;
+      out.x = w0 * pos[a * 3] + w1 * ctrl[e * 3] + w2 * pos[b * 3];
+      out.y = w0 * pos[a * 3 + 1] + w1 * ctrl[e * 3 + 1] + w2 * pos[b * 3 + 1];
+      out.z = w0 * pos[a * 3 + 2] + w1 * ctrl[e * 3 + 2] + w2 * pos[b * 3 + 2];
+    }
+
+    function syncCurves(t, hovered) {
+      updateCtrl(t);
+      for (let e = 0; e < edges.length; e++) {
+        const [a, b] = edges[e];
+        const active = hovered >= 0 && (a === hovered || b === hovered);
+        const base = dotOffsets[e], n = dotsPerEdge[e];
+        for (let k = 0; k < n; k++) {
+          const u = (k + 0.5) / n;
+          bez(_p, e, 0.08 + 0.84 * u); // 两端留白，不顶到星星
+          const i = (base + k) * 3;
+          dustPos[i] = _p.x; dustPos[i + 1] = _p.y; dustPos[i + 2] = _p.z;
+          const endFade = Math.sin(Math.PI * u); // 两端渐隐
+          const shimmer = 0.9 + 0.1 * Math.sin(t * 1.4 + edgePhase[e] + k * 0.9);
+          const c = active ? hiColor : edgeBase[e];
+          const f = endFade * shimmer * (active ? 1 : 0.38);
+          dustCol[i] = c.r * f; dustCol[i + 1] = c.g * f; dustCol[i + 2] = c.b * f;
+        }
+      }
+      dustGeo.attributes.position.needsUpdate = true;
+      dustGeo.attributes.color.needsUpdate = true;
+    }
+
+    // ===== 悬停圆环 =====
+    const ring = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: ringTex, color: 0xffc46b, transparent: true, depthWrite: false })
+    );
+    ring.scale.setScalar(1.15);
+    ring.visible = false;
+    group.add(ring);
+
+    // ===== 远景银河：对角椭圆环（星沿整环流动、环心偏少、近亮远暗）=====
+    const dustMats = [];
+    const galaxyGroup = new THREE.Group();
+    galaxyGroup.rotation.set(0.75, 0, 0.58); // x: 环面后仰出椭圆透视与远近；z: 长轴摆到左下→右上对角
+    // 环心在画面中部：背景层穿标语后方（锚点星图在 group，不受影响）
+    // z=-30 是「整环落进画面」的关键：此处视锥可见 ±30.5×±19.1，而环投影约 ±27.6×±14.6 →
+    // 环完整可见、四周留边，曲率读得出 = 环。拉近到 -20 可见区缩到 ±23.8×±14.9，
+    // 环左右出画只剩两条对称弧 → 那就成了「带」，失去了环。
+    galaxyGroup.position.set(0, 0.5, -30);
+    scene.add(galaxyGroup);
+
+    function makeDust(count, rMin, rMax, ySigma, size, opacity, arms) {
+      const arr = new Float32Array(count * 3);
+      const col = new Float32Array(count * 3);
+      const cWhite = new THREE.Color(0xe6e8ee);
+      const cBlue = new THREE.Color(0xaebbdd);
+      const cGold = new THREE.Color(0xffd9a0);
+      for (let i = 0; i < count; i++) {
+        let x, y, z;
+        if (arms >= 2) {
+          // 对角宽带：星沿 local x 轴（group 转 z 后 = 屏幕左下→右上对角线）均匀分布，
+          // ySigma = 带宽 σ（高斯），纵深分层；星在着色器里沿 x 流动（流动的星河）
+          x = (rand() * 2 - 1) * 32;
+          y = (rand() + rand() + rand() - 1.5) * ySigma;
+          z = -18 - rand() * 16;
+        } else {
+          const th = rand() * Math.PI * 2;
+          const rr = rMin + rand() * (rMax - rMin);
+          x = Math.cos(th) * rr;
+          y = (rand() * 2 - 1) * ySigma;
+          z = Math.sin(th) * rr;
+        }
+        arr[i * 3] = x;
+        arr[i * 3 + 1] = y;
+        arr[i * 3 + 2] = z;
+        const pick = rand();
+        const c = pick < 0.52 ? cWhite : pick < 0.8 ? cBlue : cGold;
+        col[i * 3] = c.r;
+        col[i * 3 + 1] = c.g;
+        col[i * 3 + 2] = c.b;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      const pha = new Float32Array(count);
+      for (let i = 0; i < count; i++) pha[i] = rand() * Math.PI * 2;
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uTex: { value: dotTex },
+          uSize: { value: size },
+          uOpacity: { value: opacity },
+          uScale: { value: 450 },
+          uFlow: { value: 0 },
+          uMax: { value: 5.5 },
+        },
+        vertexShader: `
+          attribute vec3 aColor;
+          attribute float aPhase;
+          uniform float uTime;
+          uniform float uScale;
+          uniform float uSize;
+          uniform float uFlow;
+          uniform float uMax;
+          varying vec3 vColor;
+          varying float vTw;
+          void main() {
+            vColor = aColor;
+            vTw = 0.58 + 0.42 * sin(uTime * (0.5 + fract(aPhase * 7.31) * 1.7) + aPhase * 41.0);
+            // 沿带（local x）流动：平移 + wrap 循环 —— 星河在流
+            vec3 p = position;
+            p.x = mod(p.x + uTime * uFlow + 32.0, 64.0) - 32.0;
+            vec4 mv = modelViewMatrix * vec4(p, 1.0);
+            // 软钳：远处线性保留近远大小梯度，近处不炸成光斑（硬 min 会把近星全拉平 → 深度感消失）
+            float s = uSize * (uScale / -mv.z) * (0.84 + 0.16 * vTw);
+            gl_PointSize = uMax * s / (uMax + s);
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: `
+          uniform sampler2D uTex;
+          uniform float uOpacity;
+          varying vec3 vColor;
+          varying float vTw;
+          void main() {
+            vec4 tex = texture2D(uTex, gl_PointCoord);
+            gl_FragColor = vec4(vColor * tex.rgb, tex.a * uOpacity * vTw);
+          }`,
+        transparent: true, depthWrite: false,
+      });
+      dustMats.push(mat);
+      mat.userData.baseMax = 5.5; // resize 时按 pixelRatio 同步软上限（物理像素）
+      const pts = new THREE.Points(geo, mat);
+      galaxyGroup.add(pts);
+      return pts;
+    }
+
+    // 椭圆环生成：星按参数角 θ 分布在椭圆周上（径向高斯聚在线上，环心大部分剔除 → 中间偏少）。
+    // position = (θ, 径向因子 k, 纵深)，着色器里 θ + uTime·uFlow 重算位置 → 星真正沿整环流动
+    function makeRing(count, aR, bR, spread, holeK, size, opacity, flow, maxPx = 7) {
+      const arr = new Float32Array(count * 3);
+      const col = new Float32Array(count * 3);
+      const sz = new Float32Array(count);
+      const cWhite = new THREE.Color(0xe6e8ee);
+      const cBlue = new THREE.Color(0xaebbdd);
+      const cGold = new THREE.Color(0xffd9a0);
+      for (let i = 0; i < count; i++) {
+        let k;
+        do {
+          k = 1 + (rand() + rand() + rand() - 1.5) * spread * 2;
+        } while (k < holeK && rand() < 0.94); // 环心强力抽空（只留 6%）：空洞够干净才读作「环」而非「饼」
+        arr[i * 3] = rand() * Math.PI * 2; // θ
+        arr[i * 3 + 1] = k;
+        arr[i * 3 + 2] = (rand() + rand() + rand() - 1.5) * 3.4; // 环体纵深：给环厚壁，透视下才不是一张纸体纵深（窄 → 环更像线）
+        // 粒度幂律：绝大多数是 1px 级微星（融成连续辉光带），极少数大星（深邃 = 大小跨度大，而非星星多）
+        const g = 0.35 + 0.65 * Math.pow(rand(), 3);
+        sz[i] = g;
+        const pick = rand();
+        // 金色只给大星（小微星一律白/蓝 → 冷色底 + 暖色高光，避免满屏黄点）
+        const c = g > 0.68
+          ? (pick < 0.6 ? cWhite : pick < 0.88 ? cBlue : cGold)
+          : (pick < 0.62 ? cWhite : cBlue);
+        col[i * 3] = c.r;
+        col[i * 3 + 1] = c.g;
+        col[i * 3 + 2] = c.b;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      const pha = new Float32Array(count);
+      for (let i = 0; i < count; i++) pha[i] = rand() * Math.PI * 2;
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      // θ/k 不是真实坐标，包围球手动给大，防止视锥误剔除
+      geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Math.max(aR, bR) * 1.7);
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uTex: { value: dotTex },
+          uSize: { value: size },
+          uOpacity: { value: opacity },
+          uScale: { value: 450 },
+          uFlow: { value: flow },
+          uA: { value: aR },
+          uB: { value: bR },
+          uMax: { value: maxPx },
+        },
+        vertexShader: `
+          attribute vec3 aColor;
+          attribute float aSize;
+          attribute float aPhase;
+          uniform float uTime;
+          uniform float uScale;
+          uniform float uSize;
+          uniform float uFlow;
+          uniform float uA;
+          uniform float uB;
+          uniform float uMax;
+          varying vec3 vColor;
+          varying float vTw;
+          varying float vFade;
+          void main() {
+            vColor = aColor;
+            vTw = 0.58 + 0.42 * sin(uTime * (0.5 + fract(aPhase * 7.31) * 1.7) + aPhase * 41.0);
+            // θ 随时间推进 → 星沿椭圆环流；k = 径向因子，z = 环体纵深
+            float th = position.x + uTime * uFlow;
+            vec3 p = vec3(cos(th) * uA * position.y, sin(th) * uB * position.y, position.z);
+            vec4 mv = modelViewMatrix * vec4(p, 1.0);
+            // 远暗近亮：近:远 ≈ 2.3:1 —— 亮度对比收敛（原来 5:1 会把环远半压没，形状读不出），
+            // 立体感主要交给【大小梯度】（软钳保真）+ 下方 fragment 的空气透视（远处偏冷蓝）
+            vFade = clamp(1.9 - (-mv.z) * 0.022, 0.5, 1.3);
+            float s = uSize * aSize * (uScale / -mv.z) * (0.84 + 0.16 * vTw);
+            gl_PointSize = uMax * s / (uMax + s);
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: `
+          uniform sampler2D uTex;
+          uniform float uOpacity;
+          varying vec3 vColor;
+          varying float vTw;
+          varying float vFade;
+          void main() {
+            vec4 tex = texture2D(uTex, gl_PointCoord);
+            // 空气透视：越远越沉入夜空色（偏冷蓝）—— 深邃感的第二条线索
+            vec3 col = mix(vColor, vec3(0.60, 0.70, 0.94), clamp((1.0 - vFade) * 0.45, 0.0, 0.22));
+            gl_FragColor = vec4(col * tex.rgb, tex.a * uOpacity * vTw * vFade);
+          }`,
+        transparent: true, depthWrite: false,
+      });
+      dustMats.push(mat);
+      mat.userData.baseMax = maxPx;
+      const pts = new THREE.Points(geo, mat);
+      galaxyGroup.add(pts);
+      return pts;
+    }
+
+    // 窄屏密度降级：同样数量的星星挤进小画面，单位面积密度会暴涨（手机端是桌面的 4 倍）→
+    // 实测：同星数 + 同像素尺寸的星，在 375×812 上密度是 1440×900 的 4 倍（面积仅 23.5%）。
+    // 要维持与桌面相同的疏密观感，星数须接近等比缩小 → 指数取 0.85（而非更保守的线性偏移）。
+    const areaK = (mount.clientWidth * mount.clientHeight) / (1440 * 900);
+    const DN = Math.max(0.25, Math.min(1, Math.pow(areaK, 0.85))); // 375×812 → 0.29
+
+    // 竖屏上环会横向撑破画面只剩一段弧。解决办法是【缩放环本身】而不是拉远相机 ——
+    // 拉远会把前景星座一起缩小。以桌面 (aspect 1.6) 为基准 1.0，手机收到 0.59。
+    const aspect0 = mount.clientWidth / Math.max(mount.clientHeight, 1);
+    const gScale = 0.42 + 0.58 * Math.min(1, aspect0 / 1.6);
+    const GA = 25 * gScale;
+    const GB = 9.5 * gScale;
+
+    // ===== 银河：一个有纵深的三维椭圆环（不是实心盘/带）=====
+    // 质感配方 = 粒度金字塔：海量 1px 级微星融成连续辉光带（Core 细腻化），
+    // 少量大星勾轮廓（Bright 减量提亮），Glow 只留极淡的雾底。
+    // 「深邃」来自大小跨度（0.35~1.0 × 幂律），不是星星数量。
+    const ringCore   = makeRing(Math.round(13000 * DN), GA, GB, 0.12, 0.5, 0.17, 0.85, 0.05, 9);
+    const ringSoft   = makeRing(Math.round(3400 * DN), GA, GB, 0.22, 0.42, 0.11, 0.24, 0.028, 8);
+    // 大光斑层：只留「环上有雾」而非「棉花团」（雾度元凶，已大幅收敛）
+    const ringGlow   = makeRing(Math.round(460 * DN), GA, GB, 0.26, 0.55, 1.3, 0.04, 0.04, 20);
+    // 亮星层 spread 最小 → 紧贴环线，这是「环」的轮廓担当；减量+提亮 → 轮廓更干净
+    const ringBright = makeRing(Math.round(900 * DN), GA, GB, 0.07, 0.62, 0.5, 0.75, 0.075, 10);
+    // 全天晕：退回配角（小屏上它就是「满屏乱星」的来源）
+    const dustHalo = makeDust(Math.round(400 * DN), 26, 72, 58, 0.23, 0.26, 0);
+
+    // ===== 背景星幕：两个不同深度的微星层 =====
+    // 远层（z=-46）小、暗、偏蓝 → 宇宙深处；近层（z=-28）稍大稍亮。
+    // 相机游移时两层错位 → 最便宜的「无限深」。同一平面只会得到「墙纸」。
+    function makeBackdrop(n, z, size, opacity, bluish) {
+      const dist = camZ0 - z;
+      const W2 = 0.58 * dist; // fov45 需 tan(22.5°)≈0.414，取 0.58 留余量（含竖屏）
+      const arr = new Float32Array(n * 3);
+      const col = new Float32Array(n * 3);
+      const pha = new Float32Array(n);
+      const cW = new THREE.Color(0xe4e6ec);
+      const cB = new THREE.Color(0xaebbdd);
+      const cG = new THREE.Color(0xd8c290);
+      for (let i = 0; i < n; i++) {
+        arr[i * 3] = (rand() * 2 - 1) * W2 * 2;
+        arr[i * 3 + 1] = (rand() * 2 - 1) * W2 * 2;
+        arr[i * 3 + 2] = z + (rand() * 2 - 1) * 4; // 轻微厚度：不是一张纸
+        const pick = rand();
+        const c = pick < bluish ? cB : pick < bluish + (1 - bluish) * 0.8 ? cW : cG;
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        pha[i] = rand() * Math.PI * 2;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 }, uTex: { value: dotTex },
+          uSize: { value: size }, uOpacity: { value: opacity }, uScale: { value: 450 },
+          uMax: { value: 5 },
+        },
+        vertexShader: `
+          attribute vec3 aColor;
+          attribute float aPhase;
+          uniform float uTime;
+          uniform float uScale;
+          uniform float uSize;
+          uniform float uMax;
+          varying vec3 vColor;
+          varying float vTw;
+          varying float vY;
+          void main() {
+            vColor = aColor;
+            vTw = 0.58 + 0.42 * sin(uTime * (0.5 + fract(aPhase * 7.31) * 1.7) + aPhase * 41.0);
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            float s = uSize * (uScale / -mv.z) * (0.84 + 0.16 * vTw);
+            gl_PointSize = uMax * s / (uMax + s);
+            gl_Position = projectionMatrix * mv;
+            vY = gl_Position.y / gl_Position.w;
+          }`,
+        fragmentShader: `
+          uniform sampler2D uTex;
+          uniform float uOpacity;
+          varying vec3 vColor;
+          varying float vTw;
+          varying float vY;
+          void main() {
+            vec4 tex = texture2D(uTex, gl_PointCoord);
+            // 上浓下淡（vY 负值=画面下半 0.55）：底部留给页脚/标语呼吸
+            float band = mix(0.55, 1.0, smoothstep(-0.85, 0.2, vY));
+            gl_FragColor = vec4(vColor * tex.rgb, tex.a * uOpacity * vTw * band);
+          }`,
+        transparent: true, depthWrite: false,
+      });
+      dustMats.push(mat);
+      mat.userData.baseMax = 5;
+      const pts = new THREE.Points(geo, mat);
+      pts.position.set(0, 2, 0);
+      scene.add(pts);
+      return pts;
+    }
+    const backFar  = makeBackdrop(Math.round(260 * DN), -46, 0.15, 0.40, 0.55);
+    const backNear = makeBackdrop(Math.round(200 * DN), -28, 0.19, 0.50, 0.30);
+
+    // ===== 近景浮尘：相机与星图之间的稀疏大暗星 =====
+    // 距相机仅 4~10 单位，相机游移时位移最大 → 全画面视差的「锚」。极暗，只提供深度不抢戏。
+    const fgGroup = new THREE.Group();
+    scene.add(fgGroup);
+    (() => {
+      const n = Math.round(90 * DN);
+      const arr = new Float32Array(n * 3);
+      const col = new Float32Array(n * 3);
+      const pha = new Float32Array(n);
+      const cW = new THREE.Color(0xdfe4ee);
+      const cB = new THREE.Color(0xaebbdd);
+      for (let i = 0; i < n; i++) {
+        let x, y;
+        do { x = (rand() * 2 - 1) * 17; y = (rand() * 2 - 1) * 10; }
+        while (Math.abs(x) < 5.5 && Math.abs(y) < 4); // 避开标语中心
+        arr[i * 3] = x;
+        arr[i * 3 + 1] = y;
+        arr[i * 3 + 2] = 2 + rand() * 6;
+        const c = rand() < 0.7 ? cW : cB;
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        pha[i] = rand() * Math.PI * 2;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 }, uTex: { value: dotTex },
+          uSize: { value: 0.055 }, uOpacity: { value: 0.16 }, uScale: { value: 450 },
+          uMax: { value: 9 },
+        },
+        vertexShader: `
+          attribute vec3 aColor;
+          attribute float aPhase;
+          uniform float uTime;
+          uniform float uScale;
+          uniform float uSize;
+          uniform float uMax;
+          varying vec3 vColor;
+          varying float vTw;
+          void main() {
+            vColor = aColor;
+            vTw = 0.58 + 0.42 * sin(uTime * (0.5 + fract(aPhase * 7.31) * 1.7) + aPhase * 41.0);
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            float s = uSize * (uScale / -mv.z) * (0.84 + 0.16 * vTw);
+            gl_PointSize = uMax * s / (uMax + s);
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: `
+          uniform sampler2D uTex;
+          uniform float uOpacity;
+          varying vec3 vColor;
+          varying float vTw;
+          void main() {
+            vec4 tex = texture2D(uTex, gl_PointCoord);
+            gl_FragColor = vec4(vColor * tex.rgb, tex.a * uOpacity * vTw);
+          }`,
+        transparent: true, depthWrite: false,
+      });
+      dustMats.push(mat);
+      mat.userData.baseMax = 9;
+      fgGroup.add(new THREE.Points(geo, mat));
+    })();
+
+
+    // ===== 力导向模拟（带边界钳制）=====
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let alpha = 1;
+    const BOUND = 3.4;
+    // 每条边的自然长度与劲度：归属边（连着锚星）短而强 → 成员凝聚成团；标签边松而弱
+    const isAnchorEdge = (e: number) => {
+      const [a, b] = edges[e];
+      return !!(nodes[a].anchor || nodes[b].anchor);
+    };
+    const restOf = (e: number) => (isAnchorEdge(e) ? 1.5 : 2.2);
+    const stiffOf = (e: number) => (isAnchorEdge(e) ? 0.055 : 0.03);
+    function tick(t) {
+      for (let i = 0; i < N; i++)
+        for (let j = i + 1; j < N; j++) {
+          let dx = pos[i * 3] - pos[j * 3],
+            dy = pos[i * 3 + 1] - pos[j * 3 + 1],
+            dz = pos[i * 3 + 2] - pos[j * 3 + 2];
+          let d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 < 1e-4) d2 = 1e-4;
+          const f = (12 / d2) * alpha;
+          const d = Math.sqrt(d2);
+          dx /= d; dy /= d; dz /= d;
+          vel[i * 3] += dx * f; vel[i * 3 + 1] += dy * f; vel[i * 3 + 2] += dz * f;
+          vel[j * 3] -= dx * f; vel[j * 3 + 1] -= dy * f; vel[j * 3 + 2] -= dz * f;
+        }
+      for (let e = 0; e < edges.length; e++) {
+        const [a, b, w] = edges[e];
+        let dx = pos[b * 3] - pos[a * 3],
+          dy = pos[b * 3 + 1] - pos[a * 3 + 1],
+          dz = pos[b * 3 + 2] - pos[a * 3 + 2];
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-4;
+        const f = (d - restOf(e)) * stiffOf(e) * w * alpha;
+        dx /= d; dy /= d; dz /= d;
+        vel[a * 3] += dx * f; vel[a * 3 + 1] += dy * f; vel[a * 3 + 2] += dz * f;
+        vel[b * 3] -= dx * f; vel[b * 3 + 1] -= dy * f; vel[b * 3 + 2] -= dz * f;
+      }
+      for (let i = 0; i < N; i++) {
+        const ix = i * 3, iy = i * 3 + 1, iz = i * 3 + 2;
+        vel[ix] -= pos[ix] * 0.032;
+        vel[iy] -= pos[iy] * 0.032;
+        vel[iz] -= pos[iz] * 0.032;
+        for (const idx of [ix, iy, iz]) {
+          vel[idx] *= 0.86;
+          pos[idx] += Math.max(-0.35, Math.min(0.35, vel[idx]));
+        }
+        const r = Math.sqrt(pos[ix] ** 2 + pos[iy] ** 2 + pos[iz] ** 2);
+        if (r > BOUND) {
+          const s = BOUND / r;
+          pos[ix] *= s; pos[iy] *= s; pos[iz] *= s;
+          vel[ix] *= 0.7; vel[iy] *= 0.7; vel[iz] *= 0.7;
+        }
+        sprites[i].position.set(pos[ix], pos[iy], pos[iz]);
+      }
+      alpha = Math.max(alpha * 0.9943, reduced ? 0 : 0.04);
+      syncCurves(t, hovered);
+    }
+
+    // ===== 交互 =====
+    let rotX = 0.2, rotY = 0.5, tRotX = rotX, tRotY = rotY;
+    let dragging = false, moved = 0, lastX = 0, lastY = 0, hovered = -1;
+    const tmp = new THREE.Vector3();
+
+    function pick(cx: number, cy: number): number {
+      const rect = mount.getBoundingClientRect();
+      let best = -1, bestD = Infinity;
+      for (let i = 0; i < N; i++) {
+        const thresh = nodes[i].anchor ? 34 : 26; // 锚星更大，拾取半径放宽
+        tmp.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(group.matrixWorld).project(camera);
+        const sx = (tmp.x * 0.5 + 0.5) * rect.width + rect.left;
+        const sy = (-tmp.y * 0.5 + 0.5) * rect.height + rect.top;
+        const dx = sx - cx, dy = sy - cy, d = dx * dx + dy * dy;
+        if (d < thresh * thresh && d < bestD) { bestD = d; best = i; }
+      }
+      return best;
+    }
+
+    function showTip(i: number) {
+      const rect = mount.getBoundingClientRect();
+      tmp.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(group.matrixWorld).project(camera);
+      const sx = (tmp.x * 0.5 + 0.5) * rect.width;
+      const sy = (-tmp.y * 0.5 + 0.5) * rect.height;
+      tip.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, calc(-100% - 12px))`;
+      (tip.querySelector('.tip-title') as HTMLElement).textContent = nodes[i].title;
+      const n = nodes[i];
+      const meta = n.anchor
+        ? `${n.desc || n.group} · ${n.count ?? ''} 篇`
+        : `${n.kind} · ${n.group}${n.desc ? ' — ' + n.desc : ''}`;
+      (tip.querySelector('.tip-meta') as HTMLElement).textContent = meta;
+      tip.classList.add('show');
+    }
+
+    mount.addEventListener('pointerdown', (e) => {
+      dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
+      mount.classList.add('grabbing');
+      mount.setPointerCapture(e.pointerId);
+    });
+    mount.addEventListener('pointermove', (e) => {
+      if (dragging) {
+        const dx = e.clientX - lastX, dy = e.clientY - lastY;
+        moved += Math.abs(dx) + Math.abs(dy);
+        tRotY += dx * 0.0052;
+        tRotX = Math.max(-1.2, Math.min(1.2, tRotX + dy * 0.0042));
+        lastX = e.clientX; lastY = e.clientY;
+      } else if (e.pointerType === 'mouse') {
+        hovered = pick(e.clientX, e.clientY);
+        mount.classList.toggle('pointing', hovered >= 0);
+        ring.visible = hovered >= 0;
+        if (hovered >= 0) showTip(hovered); else tip.classList.remove('show');
+      }
+    });
+    // 触屏两段式：首点选中并弹卡，再点（或点卡片）进入；鼠标保持点击直达
+    let selected = -1;
+    function clearSelection() {
+      selected = -1;
+      tip.classList.remove('show', 'tap');
+    }
+    mount.addEventListener('pointerup', (e) => {
+      dragging = false;
+      mount.classList.remove('grabbing');
+      if (moved >= 8) return;
+      const i = pick(e.clientX, e.clientY);
+      if (e.pointerType === 'mouse') {
+        if (i >= 0 && nodes[i].url) location.href = nodes[i].url;
+        return;
+      }
+      if (i >= 0) {
+        if (i === selected) {
+          if (nodes[i].url) location.href = nodes[i].url;
+        } else {
+          selected = i;
+          hovered = i;
+          ring.visible = true;
+          showTip(i);
+          tip.classList.add('tap');
+        }
+      } else {
+        clearSelection();
+        ring.visible = false;
+      }
+    });
+    tip.addEventListener('click', () => {
+      if (selected >= 0 && nodes[selected].url) location.href = nodes[selected].url;
+    });
+    mount.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse') {
+        hovered = -1; ring.visible = false; tip.classList.remove('show');
+        mount.classList.remove('pointing');
+      }
+    });
+    mount.addEventListener('wheel', (e) => {
+      // 普通滚轮放行给页面滚动；Ctrl/Cmd + 滚轮才缩放
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      userZoomed = true;
+      camZTarget = Math.max(7.2, Math.min(16, camZTarget + e.deltaY * 0.006));
+    }, { passive: false });
+
+    // ===== 尺寸与可见性 =====
+    function resize() {
+      const w = mount.clientWidth, h = mount.clientHeight;
+      renderer.setSize(w, h);
+      dustMats.forEach((m) => (m.uniforms.uScale.value = h * renderer.getPixelRatio() * 0.5));
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      fitRZ();
+      userZoomed = false; // 视口变了：旧的手动缩放失效，重新自适应
+      camZTarget = fitZ();
+    }
+    new ResizeObserver(resize).observe(mount);
+    resize();
+
+    // 滚出视口或切走标签页时暂停渲染循环，滚动性能零损耗
+    let inView = true, rafId = 0;
+    new IntersectionObserver(([entry]) => {
+      inView = entry.isIntersecting;
+      if (inView && !rafId) loop();
+    }).observe(mount);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { cancelAnimationFrame(rafId); rafId = 0; }
+      else if (inView && !rafId) loop();
+    });
+
+    // ===== 主循环：多轴漂移 + 呼吸，制造纵深 =====
+    // 预跑模拟到收敛（alpha 衰减至下限）：首帧即成形星座，
+    // 每次跳回主页不再看到星星从散点「快速复位」地乱飞
+    for (let i = 0; i < 700; i++) tick(0);
+    const t0 = performance.now();
+    function loop() {
+      rafId = requestAnimationFrame(loop);
+      if (!inView) { cancelAnimationFrame(rafId); rafId = 0; return; }
+      const t = (performance.now() - t0) * 0.001;
+      if (!reduced) tick(t);
+      if (!dragging) tRotY += 0.0018;
+      const wob = reduced ? 0 : Math.sin(t * 0.22) * 0.05; // 轻微俯仰呼吸
+      rotX += (tRotX - rotX) * 0.07;
+      rotY += (tRotY - rotY) * 0.07;
+      camZ += (camZTarget - camZ) * 0.1;
+      group.rotation.set(rotX + wob, rotY, 0);
+      camera.position.z = camZ;
+      // 差速自转：内环快、外环慢 → 群星之间产生相对流动（立体感的来源）
+      // 环面绕基角微幅摆动（周期 ~80s）+ 随页面滚动沿对角线转动下沉：整页共享同一片星空
+      // 首页（bare：canvas fixed 铺满视口）例外——星空不随滚动走，否则一滑就扭、到底就飞出画面，
+      // 只保留极微弱的联动（约 1/20）以防移动端地址栏收缩带来的残余滚动。
+      const scrollK = frame.classList.contains('bare') ? 0.05 : 1;
+      scrollPSmooth += (scrollP - scrollPSmooth) * 0.06;
+      galaxyGroup.rotation.x = 0.75 + Math.sin(t * 0.078) * 0.045 + scrollPSmooth * 0.08 * scrollK;
+      galaxyGroup.rotation.y = Math.sin(t * 0.062 + 1.4) * 0.045;
+      galaxyGroup.rotation.z = rzBase + scrollPSmooth * 0.22 * scrollK;
+      galaxyGroup.position.y = 0.5 - scrollPSmooth * 9 * scrollK;
+      // 沿环差速流动：主环中速、柔晕慢、亮星快 → 环上产生剪切流动
+      ringCore.material.uniforms.uFlow.value = 0.05;
+      ringSoft.material.uniforms.uFlow.value = 0.028;
+      ringGlow.material.uniforms.uFlow.value = 0.04;
+      ringBright.material.uniforms.uFlow.value = 0.075;
+      dustMats.forEach((m) => (m.uniforms.uTime.value = t));
+      ringCore.material.opacity = 0.7 + Math.sin(t * 0.35) * 0.07;
+      ringSoft.material.opacity = 0.3 + Math.sin(t * 0.28 + 1.1) * 0.06;
+      ringGlow.material.opacity = 0.055 + Math.sin(t * 0.3 + 0.6) * 0.014;
+      ringBright.material.opacity = 0.6 + Math.sin(t * 0.5 + 1.6) * 0.09;
+
+      // 相机极缓游移：近远景错动出视差（静谧的立体感）
+      camera.position.x = Math.sin(t * 0.042) * 0.5;
+      camera.position.y = Math.sin(t * 0.031 + 1.2) * 0.32;
+
+      if (ring.visible && hovered >= 0)
+        ring.position.set(pos[hovered * 3], pos[hovered * 3 + 1], pos[hovered * 3 + 2]);
+
+      // 锚星标签：投影后先剔除出界/贴边/落入标语禁区的，剩下的按视深取最靠前的 K 个
+      //（2 颗→全亮、6 颗→2、封顶 4）；星空缓转时排名自然轮换 → 「漂到正面才显示」
+      if (labels.length) {
+        const w = mount.clientWidth, h = mount.clientHeight;
+        const K = labels.length <= 2 ? labels.length : Math.min(4, Math.max(2, Math.round(labels.length / 3)));
+        // 标语禁区：hero 文字块膨胀 12px（fixed 画布下标语会随滚动移动，定期刷新矩形）
+        frameNo++;
+        if (frameNo % 20 === 0 || !labelGuard) {
+          const heroEl = document.querySelector('.hero');
+          labelGuard = heroEl ? heroEl.getBoundingClientRect() : null;
+        }
+        const proj = labels.map((L) => {
+          _lv.set(pos[L.i * 3], pos[L.i * 3 + 1], pos[L.i * 3 + 2]).applyMatrix4(group.matrixWorld);
+          const z = _lv.z;
+          tmp.set(pos[L.i * 3], pos[L.i * 3 + 1], pos[L.i * 3 + 2])
+            .applyMatrix4(group.matrixWorld)
+            .project(camera);
+          const x = (tmp.x * 0.5 + 0.5) * w;
+          const y = (-tmp.y * 0.5 + 0.5) * h;
+          // 完整落在画面内才算候选：贴边/出界的一律不显示（避免压到页面文字或被裁一半）
+          const inGuard = labelGuard && x > labelGuard.left - 12 && x < labelGuard.right + 12
+            && y + 16 > labelGuard.top - 12 && y + 16 < labelGuard.bottom + 12;
+          return { L, z, x, y, ok: z > -1.6 && tmp.z < 1 && !inGuard && x > 60 && x < w - 60 && y > 50 && y < h - 46 };
+        });
+        const taken: { x: number; y: number; w: number }[] = [];
+        const ranked = proj.filter((p) => p.ok).sort((a, b) => b.z - a.z);
+        ranked.forEach((p, rank) => {
+          const busy = rank >= K || taken.some((r) => Math.abs(p.x - r.x) < (r.w + p.L.w) / 2 + 10 && Math.abs(p.y - r.y) < 18);
+          if (!busy) taken.push({ x: p.x, y: p.y, w: p.L.w });
+          p.L.el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, 16px)`;
+          p.L.el.style.opacity = busy ? '0' : '';
+        });
+        proj.forEach((p) => {
+          if (p.ok) return;
+          p.L.el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, 16px)`;
+          p.L.el.style.opacity = '0';
+        });
+      }
+      renderer.render(scene, camera);
+    }
+    if (!rafId) loop();
+    // 首帧已渲染：淡入显形（初始化时置 0，此处必须拉回 1，否则画布永久透明）
+    requestAnimationFrame(() => { renderer.domElement.style.opacity = '1'; });
+  }
+  }
+</script>

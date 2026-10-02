@@ -4,6 +4,7 @@ description: Agent = LLM + 上下文 + 工具：大脑、眼睛、手脚与 Harn
 date: 2026-09-21
 tags: [AI, ZCode]
 series: ai-agent-book
+pinned: true
 ---
 
 > 书：《深入理解 AI Agent：设计原理与工程实践》 · 第 1 章

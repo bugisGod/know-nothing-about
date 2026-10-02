@@ -1,0 +1,68 @@
+---
+// 迷你星团图：轨道环 + 中心亮核 + 沿轨散点 —— 知识库「专题入口（知识星团）」的视觉主体。
+// 静态 SVG（不引 three.js，保页面性能）；点位用确定性伪随机，SSR 输出稳定。
+interface Props {
+  size?: number;
+  color?: string;
+}
+const { size = 150, color = '#9db8ff' } = Astro.props;
+
+// 确定性伪随机（线性同余），点位稳定不闪
+let seed = 20260930;
+const rand = () => {
+  seed = (seed * 1103515245 + 12345) % 2147483648;
+  return seed / 2147483648;
+};
+
+// 轨道环：三条不同倾角的椭圆
+const orbits = [
+  { rx: 62, ry: 24, rot: -14, op: 0.5 },
+  { rx: 46, ry: 30, rot: 24, op: 0.35 },
+  { rx: 30, ry: 34, rot: -40, op: 0.25 },
+];
+// 沿轨散点：集中在轨道附近
+const dots: { x: number; y: number; r: number; o: number }[] = [];
+for (let i = 0; i < 26; i++) {
+  const o = orbits[i % orbits.length];
+  const a = rand() * Math.PI * 2;
+  const rr = (0.82 + rand() * 0.36) * (o.rx * 0.6 + rand() * o.rx * 0.5);
+  const x = Math.cos(a) * rr;
+  const y = Math.sin(a) * rr * 0.55 + (rand() - 0.5) * 10;
+  dots.push({ x, y, r: 0.7 + rand() * 1.5, o: 0.3 + rand() * 0.6 });
+}
+const C = size / 2;
+---
+
+<svg
+  width={size}
+  height={size}
+  viewBox={`0 0 ${size} ${size}`}
+  aria-hidden="true"
+  class="mini-galaxy"
+>
+  <defs>
+    <radialGradient id={`mg-core-${size}-${color.replace('#', '')}`}>
+      <stop offset="0%" stop-color="#ffffff"></stop>
+      <stop offset="30%" stop-color={color}></stop>
+      <stop offset="100%" stop-color="transparent"></stop>
+    </radialGradient>
+  </defs>
+  <g transform={`translate(${C} ${C})`}>
+    {orbits.map((o) => (
+      <ellipse
+        rx={o.rx}
+        ry={o.ry}
+        transform={`rotate(${o.rot})`}
+        fill="none"
+        stroke={color}
+        stroke-width="0.8"
+        opacity={o.op}
+      />
+    ))}
+    {dots.map((d) => (
+      <circle cx={d.x} cy={d.y} r={d.r} fill={color} opacity={d.o} />
+    ))}
+    <circle r={size * 0.19} fill={`url(#mg-core-${size}-${color.replace('#', '')})`} />
+    <circle r={size * 0.045} fill="#ffffff" />
+  </g>
+</svg>

@@ -4,10 +4,10 @@
    ============================================================ */
 :root {
   color-scheme: dark;
-  --bg: #090d15;
-  --bg-inset: #111925;
-  --card: #101722;
-  --header-bg: rgba(9, 13, 21, 0.86);
+  --bg: #060709;
+  --bg-inset: #0d0f13;
+  --card: #0e1014;
+  --header-bg: rgba(6, 7, 9, 0.86);
   --text: #e8e6df;
   --text-2: #a7a9b8;
   --muted: #8992a6;
@@ -155,6 +155,16 @@ button {
 
 .site-header nav a:hover {
   color: var(--text);
+  /* P2 导航反馈：淡细线 + 轻微上移，提示可交互 */
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(217, 184, 121, 0.45);
+  text-underline-offset: 7px;
+  transform: translateY(-1px);
+}
+
+.site-header nav a {
+  transition: color 0.2s ease, transform 0.2s ease;
 }
 
 .site-header nav a.active {
@@ -744,18 +754,52 @@ body {
   position: relative;
   isolation: isolate;
 }
+
+/* 深空照片层：子页面每日轮换 12 张（data-sky 由 Base 内联脚本写入），
+   带暗角收边；首页不参与（body 无 data-sky），星空由 3D 星图承担 */
+body[data-sky]::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(125% 95% at 50% 32%, transparent 42%, rgba(2, 3, 7, 0.45) 100%),
+    var(--sky-img);
+  background-size: cover;
+  background-position: var(--sky-x, 50%) center;
+  background-repeat: no-repeat;
+}
+body[data-sky='0']::before { --sky-img: url('/images/deep-sky-0.webp'); --sky-x: 77%; }
+body[data-sky='1']::before { --sky-img: url('/images/deep-sky-1.webp'); --sky-x: 25%; }
+body[data-sky='2']::before { --sky-img: url('/images/deep-sky-2.webp'); --sky-x: 18%; }
+body[data-sky='3']::before { --sky-img: url('/images/deep-sky-3.webp'); --sky-x: 76%; }
+body[data-sky='4']::before { --sky-img: url('/images/deep-sky-4.webp'); --sky-x: 20%; }
+body[data-sky='5']::before { --sky-img: url('/images/deep-sky-5.webp'); --sky-x: 77%; }
+body[data-sky='6']::before { --sky-img: url('/images/deep-sky-6.webp'); --sky-x: 76%; }
+body[data-sky='7']::before { --sky-img: url('/images/deep-sky-7.webp'); --sky-x: 23%; }
+body[data-sky='8']::before { --sky-img: url('/images/deep-sky-8.webp'); --sky-x: 84%; }
+body[data-sky='9']::before { --sky-img: url('/images/deep-sky-9.webp'); --sky-x: 27%; }
+body[data-sky='10']::before { --sky-img: url('/images/deep-sky-10.webp'); --sky-x: 74%; }
+body[data-sky='11']::before { --sky-img: url('/images/deep-sky-11.webp'); --sky-x: 23%; }
+
+/* 照片自带星点，点阵层在有照片的页面压到极淡，避免双重曝光 */
+body[data-sky] .sky-background svg {
+  opacity: 0.15;
+}
+
 .sky-background {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   overflow: hidden;
-  background: radial-gradient(ellipse at 82% 8%, #23344b24, transparent 55%);
+  background: radial-gradient(ellipse at 82% 8%, #26282e1a, transparent 55%);
 }
 .sky-background svg {
   width: 100%;
   height: 100%;
-  fill: #cbd9ed;
+  fill: #d8d9dc;
   opacity: 0.45;
   mask-image: linear-gradient(
     90deg,
@@ -767,12 +811,13 @@ body {
 }
 .is-home .sky-background {
   background:
-    radial-gradient(ellipse at 65% 35%, #2d456226, transparent 58%),
-    linear-gradient(145deg, transparent 36%, #263a5214 47%, transparent 57%);
+    radial-gradient(ellipse at 65% 35%, #2b2d341a, transparent 58%),
+    linear-gradient(145deg, transparent 36%, #26272e10 47%, transparent 57%);
 }
 .is-home .sky-background svg {
   opacity: 0.9;
-  mask-image: linear-gradient(#000 65%, transparent);
+  /* 全屏铺满：底部不再渐隐，否则下 1/4 会塌成纯黑（星图缺「浩瀚」的主因） */
+  mask-image: linear-gradient(#000 100%, #000 100%);
 }
 .is-home .galactic-dust {
   animation: sky-breathe 14s ease-in-out infinite alternate;
@@ -851,7 +896,7 @@ body {
   min-width: 90px;
 }
 .prose pre {
-  background: #0e1520 !important;
+  background: #0b0d11 !important;
 }
 .prose pre:focus-within .code-copy {
   opacity: 1;

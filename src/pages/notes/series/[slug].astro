@@ -1,0 +1,221 @@
+---
+import Base from "../../../layouts/Base.astro";
+import SkyBand from "../../../components/SkyBand.astro";
+import MiniGalaxy from "../../../components/MiniGalaxy.astro";
+import { SERIES } from "../../../config";
+import { getCollection } from "astro:content";
+
+export async function getStaticPaths() {
+  const notes = (await getCollection("notes", ({ data }) => !data.draft)).sort(
+    (a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0),
+  );
+  return Object.entries(SERIES)
+    .map(([id, s]) => ({
+      params: { slug: id },
+      props: {
+        ...s,
+        entries: notes.filter((n) => n.data.series === id),
+      },
+    }))
+    .filter(({ props }) => (props as any).entries.length);
+}
+
+const { title, color, desc, entries } = Astro.props as {
+  title: string;
+  color?: string;
+  desc?: string;
+  entries: any[];
+};
+const fmt = (date?: Date) =>
+  date?.toISOString().slice(0, 10).replaceAll("-", ".") ?? "";
+---
+<Base title={`${title} · 知识库`} description={desc ?? title}>
+  <SkyBand>
+    <a class="back" href="/notes/">← 返回知识库</a>
+    <div class="series-hero">
+      <div class="series-galaxy">
+        <MiniGalaxy size={190} color={color ?? '#9db8ff'} />
+      </div>
+      <div class="series-head">
+        <small>专题</small>
+        <h1>{title}</h1>
+        {desc && <p class="series-desc">{desc}</p>}
+        <span class="series-count">{entries.length} 篇文章</span>
+      </div>
+    </div>
+  </SkyBand>
+  <div class="container series-page">
+    <ol class="kb-timeline">
+      {entries.map((n) => (
+        <li class="kb-entry">
+          <a href={`/notes/${n.id}/`}>
+            <p class="kb-meta">
+              <time datetime={n.data.date?.toISOString()}>{fmt(n.data.date)}</time>
+              {(n.data.tags ?? []).slice(0, 2).map((t) => (
+                <span class="kb-meta-tag">{t}</span>
+              ))}
+            </p>
+            <h2>{n.data.title}</h2>
+            {n.data.description && <p class="kb-desc">{n.data.description}</p>}
+            <p class="kb-tags">
+              {(n.data.tags ?? []).slice(0, 3).map((t) => (
+                <span class="kb-tag-pill">{t}</span>
+              ))}
+            </p>
+            <span class="kb-arrow" aria-hidden="true">→</span>
+          </a>
+        </li>
+      ))}
+    </ol>
+  </div>
+</Base>
+
+<style>
+  .back {
+    display: inline-block;
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-bottom: 26px;
+    transition: color 0.25s ease;
+  }
+  .back:hover {
+    color: var(--text);
+  }
+  .series-hero {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+  }
+  .series-galaxy {
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 24px rgba(120, 150, 230, 0.3));
+  }
+  .series-head small {
+    display: block;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.18em;
+    margin-bottom: 10px;
+  }
+  .series-head h1 {
+    margin: 0 0 12px;
+    font-size: clamp(30px, 3.6vw, 46px);
+  }
+  .series-desc {
+    margin: 0 0 14px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--muted);
+    max-width: 560px;
+  }
+  .series-count {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+  }
+  .series-page {
+    max-width: 1040px;
+  }
+  /* 时间线样式与知识库页共用（.kb-timeline 系列在 index.astro 定义为页面作用域，
+     这里按同规格复制 —— 页面级作用域样式不跨页共享，保持各自独立可调） */
+  .kb-timeline {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0 4px 34px;
+    position: relative;
+  }
+  .kb-timeline::before {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 14px;
+    bottom: 14px;
+    width: 1px;
+    background: linear-gradient(180deg, rgba(150, 170, 230, 0.3), rgba(150, 170, 230, 0.08));
+  }
+  .kb-entry {
+    position: relative;
+    margin-bottom: 14px;
+  }
+  .kb-entry::before {
+    content: '';
+    position: absolute;
+    left: -33px;
+    top: 22px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(150, 170, 230, 0.6);
+  }
+  .kb-entry > a {
+    display: block;
+    position: relative;
+    padding: 16px 44px 18px 4px;
+    border-bottom: 1px solid rgba(150, 170, 230, 0.09);
+  }
+  .kb-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 9px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  .kb-meta-tag::before {
+    content: '·';
+    margin-right: 10px;
+  }
+  .kb-entry h2 {
+    margin: 0 0 8px;
+    font: 400 21px var(--font-display);
+    transition: color 0.25s ease;
+  }
+  .kb-entry > a:hover h2 {
+    color: var(--accent);
+  }
+  .kb-desc {
+    margin: 0 0 12px;
+    font-size: 13.5px;
+    line-height: 1.8;
+    color: var(--muted);
+    max-width: 720px;
+  }
+  .kb-tags {
+    display: flex;
+    gap: 6px;
+    margin: 0;
+  }
+  .kb-tag-pill {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 10px;
+  }
+  .kb-arrow {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .kb-entry > a:hover .kb-arrow {
+    opacity: 1;
+    transform: translateY(-50%) translateX(3px);
+    color: var(--accent);
+  }
+
+  @media (max-width: 760px) {
+    .series-hero {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+    }
+  }
+</style>
