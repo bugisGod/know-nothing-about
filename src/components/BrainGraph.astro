@@ -772,8 +772,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     const fitZ = () => {
       const T = Math.tan((45 / 2) * Math.PI / 180);
       // 俯瞰圆盘：直径占视口高 ~92%（圆盘各向同宽，竖屏自然出画成弧带）
-      const dist = (20 * 2) / 0.98 / (2 * T);
-      return Math.max(6, Math.min(dist, 46) - 30); // 盘心在 z=-30
+      const dist = (21 * 2) / 0.98 / (2 * T);
+      return Math.max(6, Math.min(dist, 54) - 30); // ~92% 视口高：全屏不再糊脸
     };
     // 环长轴屏幕角对齐视口对角线角：tan(屏幕角)=tan(rz)·cos(rx) → 解出 rz 基角
     let rzBase = 0.58;
@@ -835,6 +835,31 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       [0.5, 'rgba(255,255,255,0.6)'],
       [1, 'rgba(255,255,255,0)'],
     ]);
+    // 锐点纹理（用户：全屏粒子蒙蒙的不清晰）：亮核平台 + 快速衰减，粒子是「星点」不是「光斑」
+    const crispTex = glowTexture([
+      [0, '#ffffff'],
+      [0.32, '#ffffff'],
+      [0.52, 'rgba(255,255,255,0.5)'],
+      [0.75, 'rgba(255,255,255,0.12)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
+    // 环形发光纹理（用户：中心核要中空）：中心透、中环最亮、外缘渐隐
+    const ringGlowTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const g = c.getContext('2d')!;
+      const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+      grad.addColorStop(0, 'rgba(255,255,255,0.02)');
+      grad.addColorStop(0.35, 'rgba(255,255,255,0.08)');
+      grad.addColorStop(0.52, 'rgba(255,255,255,0.45)');
+      grad.addColorStop(0.62, 'rgba(255,255,255,0.95)');
+      grad.addColorStop(0.72, 'rgba(255,255,255,0.35)');
+      grad.addColorStop(0.85, 'rgba(255,255,255,0.06)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 128, 128);
+      return new THREE.CanvasTexture(c);
+    })();
     // （星芒贴图已删：用户对照视觉图明确「文章星就是明亮的圆点，没有星芒」——锐核短晕的 starTex 即正确形态）
     const ringTex = (() => {
       const c = document.createElement('canvas');
@@ -928,7 +953,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     function galaxyMat(size, opacity, maxPx, opt = {}) {
       const mat = new THREE.ShaderMaterial({
         uniforms: {
-          uTime: { value: 0 }, uTex: { value: dotTex },
+          uTime: { value: 0 }, uTex: { value: crispTex },
           uSize: { value: size }, uOpacity: { value: opacity },
           uScale: { value: 450 }, uMax: { value: maxPx },
           uDrift: { value: opt.drift || 0 },   // 个体星相对图案的角速度（>0 = 恒星在自己的轨道上跑）
@@ -1043,13 +1068,26 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         // 星族点缀：主角星（橙红巨星/蓝白年轻星）—— 用户反馈红粒偏多：橙巨星概率 1.2%→0.5%
         const giantK = rand();
         let c;
-        if (giantK < 0.005) c = cGiant.clone();
-        else if (giantK < 0.013) c = cYoung.clone();
+        if (giantK < 0.002) c = cGiant.clone();
+        else if (giantK < 0.009) c = cYoung.clone();
         else c = cCool.clone().lerp(cWarm, warm).lerp(cOuter, outK);
+        if (opt.coolShift) c = c.clone().lerp(cYoung, opt.coolShift); // 臂层冷色温：年轻星族
         col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
         // 粒度幂律：海量 1px 级微星融成连续星海，极少数大星 —— 深邃 = 大小跨度，不是星星多
-        sz[i] = (0.35 + 0.65 * Math.pow(rand(), 4)) * bright;
-        if (giantK < 0.013) sz[i] *= 2.1 + rand() * 1.1; // 主角星比背景星大 2~3 倍
+        // 美化②⑤：内盘粒子稍大（叠加成光）、盘外缘渐隐（四周收进黑夜）
+        // gapCull：臂间隙清理——离臂脊最暗带的散点直接隐没（用户：臂间隙杂星尘乱）
+        let cullK = 1;
+        if (opt.gapCull) {
+          const dwv = 0.5 + 0.5 * Math.cos(ARMS * (th - SWEEP * rr / GR));
+          if (dwv < opt.gapCull) cullK = 0.12; // 近零：视觉上清走，密度/相位体系不动
+        if (opt.centerClean) {
+          const cr = rr / GR;
+          if (cr < 0.32) cullK = Math.min(cullK, 0.02);                      // 中心区：白色散点清到近零
+          else if (cr < 0.46) cullK = Math.min(cullK, 0.03 + (cr - 0.32) / 0.14 * 0.97); // 羽化过渡：内缘不出现锐利亮边
+        }
+        }
+        sz[i] = (0.35 + 0.65 * Math.pow(rand(), 4)) * bright * cullK * (1.12 - 0.12 * (rr / GR)) * Math.max(0.3, 1 - Math.max(0, rr / GR - 0.85) / 0.15 * 0.7);
+        if (giantK < 0.009) sz[i] *= 1.7 + rand() * 0.8; // 主角星收敛：亮点不抢戏
         pha[i] = rand() * Math.PI * 2;
       }
       const geo = new THREE.BufferGeometry();
@@ -1069,7 +1107,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       const col = new Float32Array(count * 3);
       const sz = new Float32Array(count);
       const pha = new Float32Array(count);
-      const cWarm = new THREE.Color(0xffeccf);
+      const cWarm = new THREE.Color(0xfff0d8); // 提白一档：暗奶油读作卡其脏
       const cCore = new THREE.Color(0xfffaf0);
       for (let i = 0; i < count; i++) {
         const rb = Math.abs(gj()) * GR * 0.10;
@@ -1128,10 +1166,10 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     //   drift = 真正的个体漂移（只在 tracer 层给，数量少，长期变形不可见）
     //   dw    = 密度波亮度调制（0 = 亮度与臂无关；1 = 完全由「是否在臂上」决定亮度）
     //   warp  = 盘外缘翘曲：旋转时边缘此起彼伏，是「三维空间中的运动」最强的廉价线索
-    const galDisk  = makeDisk(Math.round(20000 * DN), 0.07, 0.31, 0.95, 9, 0.5, 1, // 银色粒子稍加重：0.28→0.31
-      { churn: 0.012, warp: 0.6, dw: 0.6 });
-    const galArms  = makeDisk(Math.round(4000 * DN), 0.11, 0.55, 0.92, 12, 0.35, 1.6, // 散布 0.055→0.11：旋臂棱角软化（用户：不要那么规则）
-      { churn: 0.014, warp: 0.6, dw: 0.9 });
+    const galDisk  = makeDisk(Math.round(20000 * DN), 0.055, 0.24, 0.72, 9, 0.62, 1, // size 0.27：颗粒细化（用户：全屏大颗粒粗糙）
+      { churn: 0.012, warp: 0.6, dw: 0.8, gapCull: 0.3, centerClean: 0.35 });
+    const galArms  = makeDisk(Math.round(9000 * DN), 0.085, 0.38, 0.9, 12, 0.35, 1.5, // 臂脊银星加量+细化
+      { churn: 0.014, warp: 0.6, dw: 0.9, centerClean: 0.32, coolShift: 0.35 }); // 冷蓝白年轻星族
     // 臂隙填充（用户：旋臂中间别那么空）：dw=0 的均匀银尘层——不受密度波调制，
     // 淡淡铺满整个盘面（含臂隙），旋臂亮、臂隙淡，不再「臂外全黑」
     let galFill: THREE.Points;
@@ -1139,7 +1177,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // 絮状填充（用户：絮状 = 顺流向拉长的短弧丝，不是圆球团）：
       // 短弧丝（总量 30000×DN），每条沿旋臂流向弯曲、切向拉长，粒数 8~33，疏密随机；
       // 角度分槽+抖动：丝缕覆盖所有方位角，抹平臂隙的整片空区；亮度均值上调更可见
-      const N_TOTAL = Math.round(30000 * DN);
+      const N_TOTAL = Math.round(14000 * DN); // 减半：清澈=絮间见纯黑
       const arrF = new Float32Array(N_TOTAL * 3);
       const colF = new Float32Array(N_TOTAL * 3);
       const szF = new Float32Array(N_TOTAL);
@@ -1150,24 +1188,24 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       let slot = 0;
       const NSLOTS = 24;
       while (w < N_TOTAL) {
-        const r0 = GR * (0.26 + 0.78 * Math.sqrt(rngF()));
+        const r0 = GR * (0.34 + 0.72 * Math.sqrt(rngF())); // 内界外推：中心区不留絮
         const th0 = (((slot++) % NSLOTS) + rngF() * 0.9) / NSLOTS * Math.PI * 2;
         const arc = 0.08 + rngF() * 0.38;                   // 弧丝长短差异拉开
         const n = Math.min(N_TOTAL - w, 8 + Math.floor(rngF() * 26));
         const thDir = rngF() > 0.5 ? 1 : -1;
-        const jit = 0.15 + rngF() * 0.7;                    // 每条丝自己的松散度
+        const jit = 0.12 + rngF() * 0.5;                    // 每条丝自己的松散度（收紧：缕更明确）
         const bow = 0.02 + rngF() * 0.09;                   // 每条丝自己的弯曲度
         for (let i = 0; i < n && w < N_TOTAL; i++, w++) {
           const t = n > 1 ? i / (n - 1) : 0.5;
           const th = th0 + thDir * t * arc;
-          const rr = Math.max(r0, GR * 0.22) * (1 + Math.sin(t * Math.PI) * bow * thDir); // 弧丝微弯（沿流向鼓一点）；整体抬到核心光海之外（主星禁入）
+          const rr = Math.max(r0, GR * 0.34) * (1 + Math.sin(t * Math.PI) * bow * thDir); // 弧丝微弯（沿流向鼓一点）；整体抬到核心光海之外（主星禁入）
           const px = Math.cos(th) * rr;
           const py = Math.sin(th) * rr * 0.9;
           const perp = (rngF() - 0.5) * 2 * jit;             // 细垂直抖动：丝而不绳，宽窄随机
           arrF[w * 3] = px + (-Math.sin(th)) * perp;
           arrF[w * 3 + 1] = py + Math.cos(th) * perp * 0.9;
           arrF[w * 3 + 2] = (rngF() - 0.5) * 1.3;
-          const f = 0.3 + rngF() * 0.66;
+          const f = 0.34 + rngF() * 0.62;
           colF[w * 3] = cFill.r * f; colF[w * 3 + 1] = cFill.g * f; colF[w * 3 + 2] = cFill.b * f;
           szF[w] = 0.2 + rngF() * 0.42;
           phaF[w] = rngF() * Math.PI * 2;
@@ -1179,16 +1217,166 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       geoF.setAttribute('aSize', new THREE.BufferAttribute(szF, 1));
       geoF.setAttribute('aPhase', new THREE.BufferAttribute(phaF, 1));
       geoF.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
-      galFill = new THREE.Points(geoF, galaxyMat(0.5, 0.75, 10, { churn: 0.01, warp: 0.7 }));
+      galFill = new THREE.Points(geoF, galaxyMat(0.42, 0.45, 9, { churn: 0.01, warp: 0.7 })); // 絮粒细化
       galFill.material.blending = THREE.AdditiveBlending;
       galaxySpin.add(galFill);
     }
-    const galBulge = makeBulge(Math.round(3600 * DN), 0.34, 0.96, 10, 0.75, spinCore);
-    const galCore  = makeCoreGlow(Math.round(60 * DN), GR * 0.10, 5.0, 0.11, 36, spinCore);
-    const galSheen = makeDisk(Math.round(1800 * DN), 0.075, 2.2, 0.05, 24, 0.55, 1,
+    const galBulge = makeBulge(Math.round(3200 * DN), 0.5, 0.96, 16, 0.75, spinCore); // 美化①：更大更软，中心融成光
+    const galCore  = makeCoreGlow(Math.round(70 * DN), GR * 0.10, 6, 0.13, 80, spinCore); // 暖核收敛：提气不抢戏
+    const galSheen = makeDisk(Math.round(400 * DN), 0.075, 1.9, 0.03, 20, 0.55, 1, // 减量：中心白点退场
       { churn: 0.010, warp: 0.6, dw: 0.85 });
-    const galHalo  = makeDisk(Math.round(500 * DN), 0.09, 1.30, 0.04, 20, 0.5, 1,
+    const galHalo  = makeDisk(Math.round(280 * DN), 0.09, 1.30, 0.03, 20, 0.5, 1, // 减量
       { churn: 0.008, warp: 2.4, dw: 0.3, parent: spinOuter });
+
+    // ===== 中心巨星（用户：中间收成一颗发光的巨星）=====
+    // 核球/微光/辉光/四芒碎粒全部退场，换成三层叠出的干净发光巨星：
+    // 白热核 + 暖光内晕 + 大范围暖色外晕。挂在 galaxyTilt 上（跟随盘心与滚动位移）。
+    galBulge.visible = false;
+    galCore.visible = false;
+    galSheen.visible = false;
+    galHalo.visible = false;
+    {
+      const star = new THREE.Group();
+      const mkStar = (tex: THREE.Texture, scale: number, opacity: number, color: number) => {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: tex, color: new THREE.Color(color), transparent: true, opacity,
+          depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+        }));
+        sp.scale.setScalar(scale);
+        star.add(sp);
+      };
+      // 全高斯无平台：任何一层都没有「实心盘」，透明感来自低透明度+平滑衰减
+      mkStar(haloTex, 5, 0.06, 0xe8d4ac);       // 奶油外层大气：极淡
+      mkStar(ringGlowTex, 3.6, 0.1, 0xc9a6e8); // 紫晕：与金环叠成紫金
+      mkStar(ringGlowTex, 2.8, 0.38, 0xfaeed2); // 环形主体：提亮提白
+      mkStar(dotTex, 0.42, 0.05, 0xfdf6e6);     // 中心微光：近零
+      galaxyTilt.add(star);
+    }
+
+    // ===== 中心彩色微尘（用户：穿过中核加点别的颜色，淡淡的）=====
+    {
+      const N = Math.round(320 * DN);
+      const arr = new Float32Array(N * 3);
+      const col = new Float32Array(N * 3);
+      const sz = new Float32Array(N);
+      const pha = new Float32Array(N);
+      // 紫金主调（用户：记住是紫金色）：紫 + 金双主色
+      const palette = ['#c9a6e8', '#e8c476', '#b892e8', '#f0d080', '#9a6fd0'].map((h) => new THREE.Color(h));
+      const rngA = mulberry32(314159);
+      for (let i = 0; i < N; i++) {
+        const rr = 0.15 + 2.3 * Math.pow(rngA(), 1.2); // 环内：中空区+环带（环径 2.8）
+        const th = rngA() * Math.PI * 2;
+        arr[i * 3] = Math.cos(th) * rr;
+        arr[i * 3 + 1] = Math.sin(th) * rr * 0.9;
+        arr[i * 3 + 2] = (rngA() - 0.5) * 0.6;
+        const c = palette[Math.floor(rngA() * palette.length)].clone();
+        const f = 0.5 + rngA() * 0.45; // 紫金：独立亮点
+        col[i * 3] = c.r * f; col[i * 3 + 1] = c.g * f; col[i * 3 + 2] = c.b * f;
+        sz[i] = (0.3 + rngA() * 0.4) * (rngA() < 0.14 ? 2.2 : 1); // 14% 金紫亮粒（更大更醒目）
+        pha[i] = rngA() * Math.PI * 2;
+      }
+      const geoA = new THREE.BufferGeometry();
+      geoA.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geoA.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geoA.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      geoA.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      geoA.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR);
+      const ptsA = new THREE.Points(geoA, galaxyMat(0.6, 0.65, 14, { fadeLo: 0.9 }));
+      galaxySpin.add(ptsA);
+    }
+
+    // ===== 旋臂金色星尘点缀（用户：金色星尘加到旋臂中）=====
+    // 金色细尘沿臂脊撒布（龙散作金尘并入旋臂）：与银色臂星交织成对比色层次
+    {
+      const N = Math.round(3200 * DN); // 加量（用户：多加一些金色细尘）
+      const arr = new Float32Array(N * 3);
+      const col = new Float32Array(N * 3);
+      const sz = new Float32Array(N);
+      const pha = new Float32Array(N);
+      const cG1 = new THREE.Color(0xf0d080);
+      const cG2 = new THREE.Color(0xfff0c0);
+      const rngG = mulberry32(991199);
+      for (let i = 0; i < N; i++) {
+        const r0 = Math.pow(rngG(), 0.72) * GR;
+        const branch = Math.floor(rngG() * ARMS);
+        const th = branch * ((Math.PI * 2) / ARMS) + SWEEP * (r0 / GR) + (rngG() - 0.5) * 0.16;
+        arr[i * 3] = Math.cos(th) * r0;
+        arr[i * 3 + 1] = Math.sin(th) * r0;
+        arr[i * 3 + 2] = (rngG() - 0.5) * 1.1;
+        const c = (rngG() < 0.3 ? cG2 : cG1).clone();
+        const f = 0.45 + rngG() * 0.5;
+        col[i * 3] = c.r * f; col[i * 3 + 1] = c.g * f; col[i * 3 + 2] = c.b * f;
+        sz[i] = 0.26 + rngG() * 0.4;
+        pha[i] = rngG() * Math.PI * 2;
+      }
+      const geoG = new THREE.BufferGeometry();
+      geoG.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geoG.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geoG.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      geoG.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      geoG.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
+      const ptsG = new THREE.Points(geoG, galaxyMat(0.5, 0.55, 9, { fadeLo: 0.9 }));
+      galaxySpin.add(ptsG);
+    }
+
+    // ===== 臂间金色薄尘（用户：间隙铺些金尘不至于空洞）=====
+    // 撒在两臂之间的暗隙方位（臂脊方程 + π/2 中角），极淡——填空不抢戏
+    {
+      const N = Math.round(2600 * DN); // 密度翻倍
+      const arr = new Float32Array(N * 3);
+      const col = new Float32Array(N * 3);
+      const sz = new Float32Array(N);
+      const pha = new Float32Array(N);
+      const cG = new THREE.Color(0xa8823c); // 暗金色
+      const rngG2 = mulberry32(445566);
+      for (let i = 0; i < N; i++) {
+        const r0 = Math.pow(rngG2(), 0.72) * GR;
+        const half = rngG2() < 0.5 ? 0 : Math.PI;               // 两条隙各分一半
+        const th = half + Math.PI / ARMS + SWEEP * (r0 / GR) + (rngG2() - 0.5) * 0.5;
+        arr[i * 3] = Math.cos(th) * r0;
+        arr[i * 3 + 1] = Math.sin(th) * r0;
+        arr[i * 3 + 2] = (rngG2() - 0.5) * 1.2;
+        const c = cG.clone();
+        const f = 0.38 + rngG2() * 0.4;                          // 暗金：若隐若现但可见
+        col[i * 3] = c.r * f; col[i * 3 + 1] = c.g * f; col[i * 3 + 2] = c.b * f;
+        sz[i] = 0.22 + rngG2() * 0.34;
+        pha[i] = rngG2() * Math.PI * 2;
+      }
+      const geoG2 = new THREE.BufferGeometry();
+      geoG2.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geoG2.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geoG2.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      geoG2.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      geoG2.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
+      const ptsG2 = new THREE.Points(geoG2, galaxyMat(0.45, 0.42, 8, { fadeLo: 0.9 }));
+      galaxySpin.add(ptsG2);
+    }
+
+
+
+    // ===== 前景亮星（画面纵深感）：盘外近景的几颗稍大星 + 小光晕 =====
+    {
+      const mkFg = (x: number, y: number, z: number, s: number, tint: number) => {
+        const g = new THREE.Group();
+        const core = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: starTex, color: new THREE.Color(tint), transparent: true, opacity: 0.95,
+          depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+        }));
+        core.scale.setScalar(s);
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowHaloTex, color: new THREE.Color(tint).lerp(new THREE.Color(0xffffff), 0.3), transparent: true, opacity: 0.22,
+          depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+        }));
+        glow.scale.setScalar(s * 3.2);
+        g.add(core); g.add(glow);
+        g.position.set(x, y, z);
+        scene.add(g);
+      };
+      mkFg(-16.5, 7.5, -8, 0.85, 0xdfe8ff);   // 左上近景
+      mkFg(15.2, -8.5, -6, 0.6, 0xdfe8ff);    // 右下
+      mkFg(-13.5, -9.5, -4, 0.5, 0xfff2dc);   // 左下（暖色近星）
+      mkFg(17.5, 8.8, -7, 0.7, 0xdfe8ff);     // 右上
+    }
     // tracer：少数「能看出在流动」的星。它们不跟图案同步（drift），且被密度波完整调制
     // （dw=1）→ 流入旋臂时被点亮、流出时暗下去。数量少，长期漂移不伤结构。
     const galStream = makeDisk(Math.round(900 * DN), 0.035, 0.42, 0.55, 13, 0.55, 1.4,
@@ -1264,7 +1452,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // 视觉上就像「这团不属于银河」；同时最内圈仍离核球光海足够远。
       const rr = GR * (0.5 + 0.22 * ((k + 0.5) / Math.max(NC, 1)));
       const branch = k % ARMS;
-      const th = branch * ((Math.PI * 2) / ARMS) + SWEEP * (rr / GR) + (rand() - 0.5) * 0.5;
+      const th = branch * ((Math.PI * 2) / ARMS) + SWEEP * (rr / GR) + (rand() - 0.5) * 0.24; // 抖动收紧：团心贴臂脊，不落暗隙边缘
       clusPos[k * 3] = Math.cos(th) * rr;
       clusPos[k * 3 + 1] = Math.sin(th) * rr;
       clusPos[k * 3 + 2] = gj() * 0.5;
@@ -1278,6 +1466,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       const safeX = Math.min(140, w0 * 0.16), safeY = Math.min(110, h0 * 0.14);
       // 与渲染时保持一致：主循环不调 lookAt（相机默认朝 -z），这里也不能调，否则投影错位；
       // camera 不是 scene 的子对象，必须自己 updateMatrixWorld()，否则用的是旧矩阵。
+      camera.aspect = w0 / Math.max(h0, 1);   // ★ 相机构造默认 aspect=1，resize 回调在布局之后才跑——
+      camera.updateProjectionMatrix();        //   不修正则投影 x 被拉伸 ~1.78 倍，避让/安全区全部错位
       camera.position.set(0, 0, camZ);
       camera.updateMatrixWorld();
       scene.updateMatrixWorld();
@@ -1294,12 +1484,24 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       //        且不进边缘安全区，彼此屏幕间距 ≥150px。
       const R_MIN = Math.min(260, Math.min(w0, h0) * 0.3);
       const R_MAX = Math.min(430, Math.min(w0, h0) * 0.5);
+      // hero 文字 / EXPLORE / 标语 / 页脚 / 视图切换的屏幕矩形：团不得压在上面（含光晕外扩）
+      const heroRects: { x1: number; y1: number; x2: number; y2: number }[] = [];
+      document.querySelectorAll('.hero h1, .hero .origin, .hero .explore, .hero .whisper, footer, .sky-hint, .view-switch').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0) heroRects.push({ x1: r.left - 40, y1: r.top - 34, x2: r.right + 40, y2: r.bottom + 52 });
+      });
       const cost = (k: number) => {
         const p = sy(k);
         const d = Math.hypot(p.x - core.x, p.y - core.y);
         let c = Math.max(0, R_MIN - d) + Math.max(0, d - R_MAX);
         c += Math.max(0, safeY - p.y) + Math.max(0, p.y - (h0 - safeY));
         c += Math.max(0, safeX - p.x) + Math.max(0, p.x - (w0 - safeX));
+        // ★ 罚「进入矩形缓冲区的穿透深度」×2（写反了会把团吸进矩形——历史坑）
+        for (const hr of heroRects) {
+          if (p.x > hr.x1 && p.x < hr.x2 && p.y > hr.y1 && p.y < hr.y2) {
+            c += Math.min(p.x - hr.x1, hr.x2 - p.x, p.y - hr.y1, hr.y2 - p.y) * 2;
+          }
+        }
         for (let j = 0; j < NC; j++) {
           if (j === k) continue;
           const q = sy(j);
@@ -1337,6 +1539,60 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
             if (!best || best.c >= c0) break;
             clusPos[k * 3] += best.dx; clusPos[k * 3 + 1] += best.dy;
           }
+        }
+      }
+      // ★ hero 是硬约束：两轮沿臂优化后若仍有团压在文字/按钮上（臂正好从 UI 底下穿过时
+      //   沿臂滑动出不来），先 8 向贪心驱逐；贪心困进 UI 夹缝再沿臂重扫兜底
+      const heroPen = (k: number) => {
+        const p = sy(k);
+        let pen = 0;
+        for (const hr of heroRects) {
+          const x1 = hr.x1 - 30, y1 = hr.y1 - 30, x2 = hr.x2 + 30, y2 = hr.y2 + 30;
+          if (p.x > x1 && p.x < x2 && p.y > y1 && p.y < y2) {
+            pen = Math.max(pen, Math.min(p.x - x1, x2 - p.x, p.y - y1, y2 - p.y));
+          }
+        }
+        return pen;
+      };
+      for (let k = 0; k < NC; k++) {
+        for (let it = 0; it < 40; it++) {
+          const pen = heroPen(k);
+          if (pen <= 0) break;
+          const ox = clusPos[k * 3], oy = clusPos[k * 3 + 1];
+          let bestDx = 0, bestDy = 0, bestPen = pen;
+          for (let a = 0; a < 8; a++) {
+            const ang = (a / 8) * Math.PI * 2;
+            const nx = ox + Math.cos(ang) * 1.3, ny = oy + Math.sin(ang) * 1.3;
+            if (Math.hypot(nx, ny) > GR * 0.95) continue;
+            clusPos[k * 3] = nx; clusPos[k * 3 + 1] = ny;
+            const pen2 = heroPen(k);
+            if (pen2 < bestPen) { bestPen = pen2; bestDx = nx - ox; bestDy = ny - oy; }
+          }
+          clusPos[k * 3] = ox; clusPos[k * 3 + 1] = oy;
+          if (bestPen >= pen) break;   // 8 向都减不了穿透：贪心到顶，交给重扫
+          clusPos[k * 3] += bestDx; clusPos[k * 3 + 1] += bestDy;
+        }
+        if (heroPen(k) > 0 || cost(k) > 40) {
+          const branch = k % ARMS, baseTh = branch * ((Math.PI * 2) / ARMS);
+          let bestTh = 0, bestRr = 0, bestScore = Infinity;
+          for (let i = 0; i < 26; i++) {
+            const rr = GR * (0.34 + 0.6 * (i / 25));
+            const th = baseTh + SWEEP * (rr / GR);
+            clusPos[k * 3] = Math.cos(th) * rr;
+            clusPos[k * 3 + 1] = Math.sin(th) * rr;
+            const p = heroPen(k);
+            const pd = Math.hypot(sy(k).x - core.x, sy(k).y - core.y);
+            let sp = 0;
+            for (let j2 = 0; j2 < NC; j2++) {
+              if (j2 === k) continue;
+              const q = sy(j2);
+              sp += Math.max(0, 150 - Math.hypot(sy(k).x - q.x, sy(k).y - q.y));
+            }
+            const score = p * 1000 + Math.max(0, R_MIN - pd) + Math.max(0, pd - R_MAX) + sp;
+            if (score < bestScore) { bestScore = score; bestTh = th; bestRr = rr; }
+          }
+          clusPos[k * 3] = Math.cos(bestTh) * bestRr;
+          clusPos[k * 3 + 1] = Math.sin(bestTh) * bestRr;
         }
       }
     }
@@ -1429,8 +1685,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         // 亮度再提一档（用户：文章星还能更亮）—— 只动亮度不动尺寸：
         //   HSL 亮度 0.60→0.66、饱和度补满、白混入 0.12→0.16（色相仍是团色，不洗成白点）
         const c = base.clone()
-          .setHSL(hslS.h, Math.min(1, hslS.s * 1.0), 0.66)
-          .lerp(new THREE.Color(0xffffff), 0.16);
+          .setHSL(hslS.h, Math.min(1, hslS.s * 1.15), 0.62); // 浓彩本体：黄就是黄，不掺白
         starCol[i * 3] = c.r; starCol[i * 3 + 1] = c.g; starCol[i * 3 + 2] = c.b;
         // 恒星层级（方案图「恒星的层级与状态」）：置顶亮星(大亮晕) > 新星(稍亮) > 普通文章。
         // ★ 文章少时整体提一档：星团的视觉主体必须是文章星本身，而不是那层背景云。
@@ -1594,7 +1849,9 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       geo.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
       geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
       geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 8);
-            galaxySpin.add(new THREE.Points(geo, galaxyMat(3.6, 0.06, 60))); // 微妙区域光，非大光斑
+            const homeSparkle = new THREE.Points(geo, galaxyMat(3.6, 0.06, 60)); // 中心四芒碎粒
+            homeSparkle.visible = false; // 中心巨星化后碎粒退场
+            galaxySpin.add(homeSparkle);
       // （中心入口光环已删除：用户「中间 scio. 的圈，加这些干嘛」—— 银河中心的星芒粒子团本身就是入口标识）
     }
 
@@ -1619,11 +1876,13 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // ★ 密度场要能「读出边界」就必须够密：成员星太少时轮廓是噪点，不是一团星。
       //   460 颗 / 团在 3 团规模下开销可忽略（总 ~1400 点），换来连续可辨的密度梯度。
       const BG = 460;
+      const SKIRT = 260;      // 银色星云裙（见循环尾）：团外围的银河色过渡星
+      const NALL = BG + SKIRT;
       for (let k = 0; k < NC; k++) {
-        const arr = new Float32Array(BG * 3);
-        const col = new Float32Array(BG * 3);
-        const sz = new Float32Array(BG);
-        const pha = new Float32Array(BG);
+        const arr = new Float32Array(NALL * 3);
+        const col = new Float32Array(NALL * 3);
+        const sz = new Float32Array(NALL);
+        const pha = new Float32Array(NALL);
         const rngB = mulberry32(hash32('bgstar:' + clusters[k].key));
         // 域色与分类标识色一致（列表页/全站同色系），星海里适度增艳
         const base = vivid(clusters[k]?.color || '#9db8ff');
@@ -1690,6 +1949,23 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           sz[j] = (0.35 + rngB() * 0.45) * sMul;
           pha[j] = rngB() * Math.PI * 2;
         }
+        // 银色星云裙：团外围 0.9~1.6×半径的银河色细星，内密外疏、向外渐隐——
+        // 无论团落在亮臂还是臂间暗隙，脚下都有衔接银河的星光底座，不再「悬空突兀」
+        const cSk = new THREE.Color(0xdde1ea);
+        for (let i = 0; i < SKIRT; i++) {
+          const j = BG + i;
+          const th = rngB() * Math.PI * 2;
+          const u = rngB();
+          const dr = rad * (0.9 + 0.7 * u * u);
+          arr[j * 3] = clusPos[k * 3] + Math.cos(th) * dr;
+          arr[j * 3 + 1] = clusPos[k * 3 + 1] + Math.sin(th) * dr * 0.75;
+          arr[j * 3 + 2] = clusPos[k * 3 + 2] + (rngB() - 0.5) * 1.0;
+          const fade = 1 - u * 0.72;
+          const f = (0.3 + rngB() * 0.4) * fade;
+          col[j * 3] = cSk.r * f; col[j * 3 + 1] = cSk.g * f; col[j * 3 + 2] = cSk.b * f;
+          sz[j] = 0.3 + rngB() * 0.4;
+          pha[j] = rngB() * Math.PI * 2;
+        }
         const geoB = new THREE.BufferGeometry();
         geoB.setAttribute('position', new THREE.BufferAttribute(arr, 3));
         geoB.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
@@ -1726,10 +2002,10 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // 光晕色 = 同款饱和团色（与星体同源）——叠出鲜艳的色光而不是白雾
       const hslG = { h: 0, s: 0, l: 0 };
       new THREE.Color(clusters[k]?.color || '#9db8ff').getHSL(hslG);
-      const c0 = new THREE.Color().setHSL(hslG.h, Math.min(1, hslG.s * 2.2 + 0.15), 0.5); // 同上：l=0.5 拉满色度
-      // 内圈亮光：小而炽的饱和团色（锐）—— 透明度压低：它是「色相」，不是「白球」
+      const c0 = new THREE.Color().setHSL(hslG.h, Math.min(1, hslG.s * 1.5 + 0.1), 0.66); // 浓彩提亮：像霓虹，不脏不白
+      // 内圈亮光：浓彩炽光
       const inner = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: bloomTex, color: c0.clone(),
+        map: bloomTex, color: c0.clone(), // 内圈亮光：浓彩
         transparent: true, opacity: GLOW_IN_OP, depthWrite: false,
         blending: THREE.AdditiveBlending,
         fog: false,
@@ -1743,7 +2019,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // 规范的「Halo opacity 0.08~0.18」指的是最终叠加亮度，贴图峰值要按 1.0 算。
       const spMat = new THREE.SpriteMaterial({
         // 外晕也是团色：只混 10% 白（用户：文章星要发团色的光，不要白色亮点）
-        map: glowHaloTex, color: c0.clone().lerp(new THREE.Color(0xffffff), 0.1),
+        map: glowHaloTex, color: c0.clone(), // 外晕：亮彩色大气
         transparent: true, opacity: GLOW_OP * 1.3, depthWrite: false,
         blending: THREE.AdditiveBlending,
         fog: false,
@@ -1766,43 +2042,45 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         // 半径比例随机：0.9~1.3 倍团半径 —— 贴着密度云外缘转，不同星团弧圈大小不同
         const rad = clusterRadOf(k) * (0.9 + rngO() * 0.4);
         const base = vivid(clusters[k]?.color || '#9db8ff').lerp(new THREE.Color(0xdfe6ff), 0.35);
-        // ★ 立体感（用户：轨道弧立体一点）+ 每团随机：
-        //   第一层永远贴盘（近水平扁椭圆），其余层大角度倾斜、朝向随机 ——
-        //   「水平椭圆 × 倾斜椭圆交叉」才是立体感的来源；半径逐层放大形成圈层。
-        const nSys = 2 + Math.floor(rngO() * 2);
-        for (let si = 0; si < nSys; si++) {
-          const flat = si === 0;
-          const rx = flat ? (rngO() - 0.5) * 0.25 : 0.45 + rngO() * 0.75;  // 倾斜层最大 ~1.2rad（近立起）
-          const rz = (rngO() - 0.5) * (flat ? 0.8 : 1.7);                  // 倾斜层朝向随机 → 与盘面椭圆交叉
-          const radL = rad * (0.72 + (flat ? 0 : 0.12 + rngO() * 0.55));   // 半径逐层放大
-          const squash = 0.55 + rngO() * 0.4;                              // 每层扁率独立
-          const zAmp = flat ? 0.15 : 0.3 + rngO() * 0.5;                   // 倾斜层 z 起伏更大
-          const segs = 1 + Math.floor(rngO() * 2);                         // 每层 1~2 段：保持断续
-          let a0 = rngO() * Math.PI * 2;
+        // ★ 有序立体轨道系（用户：要立体感，不要乱）+ 每团自己的轨道性格：
+        //   每团一套「共轴轨道系」——平面圆轨道 + 微倾同心圆轨道，倾角绕同一根轴
+        //   逐层递进、半径同心放大：像土星环系，立体而秩序井然。全部平面真圆，
+        //   相机倾斜自然投成椭圆（不再用 z 起伏把弧拧成空间扭线）。
+        const az = rngO() * Math.PI;                 // 本团轨道系的公共倾轴方向（团内共享）
+        const layers = 2 + Math.floor(rngO() * 3);   // 2~4 道
+        const inclBase = rngO() * 0.3;               // 有的团整体自带一点基础倾角
+        const fanStep = 0.14 + rngO() * 0.3;         // 逐层倾角步长
+        const zigzag = rngO() < 0.4;                 // 有的团正反交替扇（更活泼）
+        const grow = 0.08 + rngO() * 0.14;           // 半径同心增幅
+        let a0 = rngO() * Math.PI * 2;
+        for (let si = 0; si < layers; si++) {
+          const radL = rad * (1 + si * grow);        // 同心放大
+          const incl = inclBase + (zigzag && si % 2 === 1 ? -1 : 1) * si * fanStep; // 递进或交替扇
+          const segs = 1 + Math.floor(rngO() * 2);   // 断续风格保留
           for (let s = 0; s < segs; s++) {
-            const span = (0.55 + rngO() * 1.05);           // 弧段 30~90°
+            const span = (0.55 + rngO() * 1.05);     // 弧段 30~90°
             const SEG = 48;
             const pts: THREE.Vector3[] = [];
             for (let i = 0; i <= SEG; i++) {
               const th = a0 + (i / SEG) * span;
-              const r2 = radL * (1 + Math.sin(th * 2 + s * 1.7) * 0.05); // 极缓的半径起伏（光滑、非锯齿）
-              pts.push(new THREE.Vector3(Math.cos(th) * r2, Math.sin(th) * r2 * squash, Math.sin(th * 1.6 + a0) * zAmp));
+              pts.push(new THREE.Vector3(Math.cos(th) * radL, Math.sin(th) * radL, 0)); // 平面真圆
             }
-            a0 += span + (0.35 + rngO() * 0.6);            // 段间缺口：断断续续
+            a0 += span + (0.35 + rngO() * 0.6);      // 段间缺口：断断续续
             const geo = new THREE.BufferGeometry().setFromPoints(pts);
             const m = new THREE.LineBasicMaterial({
               color: base, transparent: true, opacity: 0, depthWrite: false,
               blending: THREE.AdditiveBlending,
               fog: false,
             });
-            m.userData.opMul = 0.55 + rngO() * 0.45;       // 段亮度随机：有明有暗（下限保证探索态都可见）
+            m.userData.opMul = 0.55 + rngO() * 0.45; // 段亮度随机：有明有暗
             const line = new THREE.Line(geo, m);
-            line.rotation.set(rx, 0, rz);
+            line.rotation.set(Math.cos(az) * incl, Math.sin(az) * incl, (rngO() - 0.5) * 0.08);
             line.position.set(clusPos[k * 3], clusPos[k * 3 + 1], clusPos[k * 3 + 2]);
             line.renderOrder = 5;
             galaxySpin.add(line);
             mats.push(m);
           }
+          a0 += 0.4 + rngO() * 0.6; // 层间起点错开
         }
         clusterArcMats.push(mats);
       }
@@ -1846,9 +2124,11 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       clusCorePts.push(pts);
       // 包裹光核的柔光：不是「一颗大星」，而是一小团雾 —— 参考图星团中心的辉光
       // ★ 用户：星团带点团色的光晕（视觉图上的雾状光晕）—— 基线 0.04 → 0.1，凝视可见、hover 更明确
+      const hslF = { h: 0, s: 0, l: 0 };
+      base.getHSL(hslF);
       const spMat = new THREE.SpriteMaterial({
-        map: clusFogTex, color: base.clone(), // 范围雾 = 纯域色（用户：包裹晕与星团同色）
-        transparent: true, opacity: 0.36, depthWrite: false,
+        map: clusFogTex, color: base.clone().setHSL(hslF.h, Math.min(1, hslF.s * 1.2), 0.62), // 范围雾：亮彩薄雾
+        transparent: true, opacity: 0.3, depthWrite: false,
         blending: THREE.AdditiveBlending,
         fog: false,
       });
@@ -1871,7 +2151,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       const base = vivid(c.color || '#9db8ff');
       const hslM = { h: 0, s: 0, l: 0 };
       base.getHSL(hslM);
-      const mainCol = base.clone().setHSL(hslM.h, Math.min(1, hslM.s * 0.92), 0.55);
+      const mainCol = base.clone().setHSL(hslM.h, Math.min(1, hslM.s * 1.1), 0.7); // 主星：浓彩亮色
       const mk = (tex: THREE.Texture, scale: number, opacity: number, color: THREE.Color) => {
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({
           map: tex, color, transparent: true, opacity, depthWrite: false,
@@ -1884,7 +2164,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         clusCoreStars.push(sp);
         return sp;
       };
-      mk(glowHaloTex, 0.6, 0.2, base.clone());                                     // ② 团色辉光（14px，与星团同色）
+      mk(glowHaloTex, 0.6, 0.2, base.clone().setHSL(hslM.h, Math.min(1, hslM.s * 1.4), 0.62)); // ② 团色辉光：浓彩
       mk(coreTex, 0.52, 0.85, mainCol);                                            // ① 团色主星（12px sprite → ~5.4px 实核：比文章星略大，不抢戏）
     });
 
@@ -1943,7 +2223,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         return cores[cores.length - 1];
       };
       const N_CLOUD = Math.round(2600 * DN); // 云雾层：中大柔斑，重叠成雾
-      const N_DUST = Math.round(6600 * DN);  // 微尘层：小粒子撒在云上
+      const N_DUST = Math.round(2600 * DN);  // 微尘层：大幅清理（用户：间隙杂星尘乱死了）
       const build = (n: number, big: boolean) => {
         const arr = new Float32Array(n * 3), col = new Float32Array(n * 3);
         const sz = new Float32Array(n), pha = new Float32Array(n);
@@ -1999,12 +2279,12 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       };
       // ① 云雾层：中大柔斑、单粒极淡，靠重叠成雾
         fog: false,
-      nebCloud = new THREE.Points(build(N_CLOUD, true), galaxyMat(1.5, 0.26, 30, { churn: 0.0009 }));
+      nebCloud = new THREE.Points(build(N_CLOUD, true), galaxyMat(1.5, 0.08, 30, { churn: 0.0009 })); // 彩雾近退
       // ★ 加性混合：雾只能「加光」。普通混合下暗粒子会把背景压黑（暗色覆盖亮底）
       nebCloud.material.blending = THREE.AdditiveBlending;
       galaxyTilt.add(nebCloud);
       // ② 微尘层：小粒子撒在云上；churn 更慢 → 层间错动，看不出「整片一起转」
-      nebDust = new THREE.Points(build(N_DUST, false), galaxyMat(0.55, 0.85, 9, { churn: 0.0005 }));
+      nebDust = new THREE.Points(build(N_DUST, false), galaxyMat(0.48, 0.2, 8, { churn: 0.0005 })); // 0.3→0.2：带旁散点再退
       nebDust.material.blending = THREE.AdditiveBlending;
       galaxyTilt.add(nebDust);
     }
@@ -2648,7 +2928,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       const pr = renderer.getPixelRatio();
       // uScale/uMax 都是「物理像素」语义：乘 pixelRatio 后真机（dpr 2/3）上的星点尺寸才与桌面观感一致
       dustMats.forEach((m) => {
-        m.uniforms.uScale.value = h * pr * 0.5;
+        m.uniforms.uScale.value = h * pr * 0.38; // 0.42→0.38：全屏粒子再细一档
         if (m.userData.baseMax !== undefined) m.uniforms.uMax.value = m.userData.baseMax * pr;
       });
       camera.aspect = w / h;
