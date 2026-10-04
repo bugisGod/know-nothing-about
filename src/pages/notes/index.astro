@@ -2,27 +2,46 @@
 import Base from "../../layouts/Base.astro";
 import NebulaBand from "../../components/NebulaBand.astro";
 import MiniGalaxy from "../../components/MiniGalaxy.astro";
-import { SERIES } from "../../config";
+import { SERIES, CATEGORIES } from "../../config";
 import { getCollection } from "astro:content";
 
 const notes = (await getCollection("notes", ({ data }) => !data.draft)).sort(
   (a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0),
 );
 
-// 专题（知识星团）：series → 条目
+// 专题 = 首页星团：按目录分类分组，与首页星团一一对应
+const catOf = (id: string) => (id.includes("/") ? id.split("/")[0] : "未分类");
+interface Topic {
+  key: string;
+  label: string;
+  desc: string;
+  color: string;
+  form: string;
+  entries: typeof notes;
+}
+const clusterMap = new Map<string, Topic>();
+for (const n of notes) {
+  const cat = catOf(n.id);
+  if (!clusterMap.has(cat)) {
+    const meta = CATEGORIES[cat];
+    clusterMap.set(cat, {
+      key: cat,
+      label: meta?.label ?? cat,
+      desc: meta?.desc ?? "",
+      color: meta?.color ?? "#9db8ff",
+      form: cat === "study" ? "dense" : cat === "frontend" ? "spiral" : "natural",
+      entries: [],
+    });
+  }
+  clusterMap.get(cat)!.entries.push(n);
+}
+const topics = [...clusterMap.values()].sort((a, b) => b.entries.length - a.entries.length);
+
+// 专栏（系列）：如「深入理解 AI Agent」读书系列
 const series = Object.entries(SERIES)
-  .map(([id, s]) => ({
-    ...s,
-    id,
-    entries: notes.filter((n) => n.data.series === id),
-  }))
+  .map(([id, s]) => ({ ...s, id, entries: notes.filter((n) => n.data.series === id) }))
   .filter((s) => s.entries.length)
   .sort((a, b) => b.entries.length - a.entries.length);
-
-// 标签聚合：全站笔记标签按热度排序（分类筛选已废除，标签是唯一组织维度）
-const tagCount = new Map<string, number>();
-for (const n of notes) for (const t of n.data.tags ?? []) tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
-const hotTags = [...tagCount.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
 
 const fmt = (date?: Date) =>
   date?.toISOString().slice(0, 10).replaceAll("-", ".") ?? "";
@@ -36,151 +55,141 @@ const fmt = (date?: Date) =>
       <div class="kb-head">
         <div class="kb-head-main">
           <h1>知识库</h1>
-          <p class="kb-sub">
-            记录我学习、阅读与思考留下的东西。<br />
-            在这里，你可以找到我积累的知识、笔记和思考。
-          </p>
+          <p class="kb-sub">记录学习、实践与思考。</p>
         </div>
         <span class="kb-motto" aria-hidden="true">Knowledge<br />is a galaxy.</span>
       </div>
     </div>
   </div>
   <div class="container library">
-    {series.length > 0 && (
-      <section class="series-list" aria-label="专题（知识星团）">
-        {series.map((s) => (
-          <a class="series" href={`/notes/series/${s.id}/`}>
-            <div class="series-galaxy">
-              <MiniGalaxy size={150} color={s.color ?? '#9db8ff'} />
-            </div>
-            <div class="series-info">
-              <small>专题</small>
-              <strong>{s.title}</strong>
-              {s.desc && <p class="series-desc">{s.desc}</p>}
-              <span class="series-count">{s.entries.length} 篇文章 <span aria-hidden="true">→</span></span>
-            </div>
-          </a>
-        ))}
+    {topics.length > 0 && (
+      <section class="topic-section" aria-label="专题（与首页星团一一对应）">
+        <h2 class="lib-h2">专题</h2>
+        <div class="topic-grid">
+          {topics.map((t) => (
+            <a class="topic-card" href={`/notes/topic/${t.key}/`} style={`--tc: ${t.color}`}>
+              <div class="topic-galaxy">
+                <MiniGalaxy size={132} color={t.color} form={t.form} seed={t.key} />
+              </div>
+              <div class="topic-info">
+                <strong>{t.label}</strong>
+                {t.desc && <p class="topic-desc">{t.desc}</p>}
+                <span class="topic-count">{t.entries.length} 篇文章</span>
+              </div>
+            </a>
+          ))}
+        </div>
       </section>
     )}
 
-    <div class="kb-toolbar">
-      <nav class="tag-nav" aria-label="按标签筛选">
-        <button type="button" class="tag-pill" data-tag="" aria-pressed="true">全部</button>
-        {hotTags.map((t) => (
-          <button type="button" class="tag-pill" data-tag={t} aria-pressed="false">{t}</button>
-        ))}
-      </nav>
-      <label class="sort-box">
-        <select id="kb-sort" aria-label="排序">
-          <option value="latest">最新发布</option>
-          <option value="earliest">最早发布</option>
-        </select>
-      </label>
-    </div>
+    {series.length > 0 && (
+      <section class="series-section" aria-label="专栏（系列）">
+        <h2 class="lib-h2">专栏</h2>
+        <div class="series-list">
+          {series.map((s) => (
+            <a class="series" href={`/notes/series/${s.id}/`}>
+              <div class="series-galaxy">
+                <MiniGalaxy size={116} color={s.color ?? '#9db8ff'} />
+              </div>
+              <div class="series-info">
+                <small>专栏</small>
+                <strong>{s.title}</strong>
+                {s.desc && <p class="series-desc">{s.desc}</p>}
+                <span class="series-count">{s.entries.length} 篇文章 <span aria-hidden="true">→</span></span>
+              </div>
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
 
-    <ol class="kb-timeline" id="kb-list">
-      {notes.map((n) => (
-        <li
-          class="kb-entry"
-          data-date={n.data.date?.toISOString() ?? ""}
-          data-tags={(n.data.tags ?? []).join(",")}
-        >
-          <a href={`/notes/${n.id}/`}>
-            <p class="kb-meta">
-              <time datetime={n.data.date?.toISOString()}>{fmt(n.data.date)}</time>
-              {(n.data.tags ?? []).slice(0, 2).map((t) => (
-                <span class="kb-meta-tag">{t}</span>
-              ))}
-            </p>
-            <h2>{n.data.title}</h2>
-            {n.data.description && <p class="kb-desc">{n.data.description}</p>}
-            <p class="kb-tags">
-              {(n.data.tags ?? []).slice(0, 3).map((t) => (
-                <span class="kb-tag-pill">{t}</span>
-              ))}
-            </p>
-            <span class="kb-arrow" aria-hidden="true">→</span>
-          </a>
-        </li>
-      ))}
-    </ol>
-    {notes.length === 0 && <p class="empty">暂无笔记</p>}
+    <section class="all-articles" aria-label="全部文章">
+      <h2 class="lib-h2">全部文章</h2>
+      <div class="kb-toolbar">
+        <nav class="cat-nav" aria-label="按专题筛选">
+          <button type="button" class="cat-pill" data-cat="" aria-pressed="true">全部</button>
+          {topics.map((t) => (
+            <button type="button" class="cat-pill" data-cat={t.key} aria-pressed="false">{t.label}</button>
+          ))}
+        </nav>
+        <label class="search-box">
+          <input id="kb-search" type="search" placeholder="搜索文章..." aria-label="搜索文章" />
+        </label>
+      </div>
+
+      <ol class="kb-timeline" id="kb-list">
+        {notes.map((n) => {
+          const cat = catOf(n.id);
+          const meta = CATEGORIES[cat];
+          const label = meta?.label ?? cat;
+          const searchText = `${n.data.title} ${n.data.description ?? ''} ${(n.data.tags ?? []).join(' ')}`.toLowerCase();
+          return (
+            <li
+              class="kb-entry"
+              data-date={n.data.date?.toISOString() ?? ""}
+              data-cat={cat}
+              data-search={searchText}
+            >
+              <a href={`/notes/${n.id}/`}>
+                <p class="kb-meta">
+                  <time datetime={n.data.date?.toISOString()}>{fmt(n.data.date)}</time>
+                  <span class="kb-meta-cat">{label}</span>
+                  {(n.data.tags ?? []).slice(0, 2).map((t) => (
+                    <span class="kb-meta-tag">{t}</span>
+                  ))}
+                </p>
+                <h2>{n.data.title}</h2>
+                {n.data.description && <p class="kb-desc">{n.data.description}</p>}
+                <span class="kb-arrow" aria-hidden="true">→</span>
+              </a>
+            </li>
+          );
+        })}
+      </ol>
+      {notes.length === 0 && <p class="empty">暂无笔记</p>}
+    </section>
+    <p class="kb-note">简洁、清晰，便于快速阅读。</p>
   </div>
 </Base>
 
 <script>
-  // 标签筛选 + 排序（客户端，无框架）
+  // 专题筛选 + 搜索（客户端，无框架）
   const list = document.getElementById('kb-list') as HTMLElement | null;
-  const pills = [...document.querySelectorAll<HTMLButtonElement>('.tag-pill')];
-  const sort = document.getElementById('kb-sort') as HTMLSelectElement | null;
+  const pills = [...document.querySelectorAll<HTMLButtonElement>('.cat-pill')];
+  const search = document.getElementById('kb-search') as HTMLInputElement | null;
   const entries = list ? [...list.querySelectorAll<HTMLElement>('.kb-entry')] : [];
-  let curTag = new URLSearchParams(location.search).get('tag') ?? '';
+  let curCat = new URLSearchParams(location.search).get('category') ?? '';
 
   const apply = () => {
+    const q = (search?.value ?? '').trim().toLowerCase();
     for (const el of entries) {
-      const tags = (el.dataset.tags ?? '').split(',');
-      const show = !curTag || tags.includes(curTag);
-      el.style.display = show ? '' : 'none';
+      const okCat = !curCat || el.dataset.cat === curCat;
+      const okSearch = !q || (el.dataset.search ?? '').includes(q);
+      el.style.display = okCat && okSearch ? '' : 'none';
     }
-    for (const b of pills) b.setAttribute('aria-pressed', String(b.dataset.tag === curTag));
-    if (list) {
-      const order = sort?.value === 'earliest' ? 1 : -1;
-      [...list.children]
-        .sort((a, b) =>
-          order * (((a as HTMLElement).dataset.date ?? '').localeCompare((b as HTMLElement).dataset.date ?? '')))
-        .forEach((el) => list.appendChild(el));
-    }
+    for (const b of pills) b.setAttribute('aria-pressed', String(b.dataset.cat === curCat));
   };
   for (const b of pills) b.addEventListener('click', () => {
-    curTag = b.dataset.tag ?? '';
+    curCat = b.dataset.cat ?? '';
     const url = new URL(location.href);
-    if (curTag) url.searchParams.set('tag', curTag); else url.searchParams.delete('tag');
+    if (curCat) url.searchParams.set('category', curCat); else url.searchParams.delete('category');
     history.replaceState(null, '', url);
     apply();
   });
-  sort?.addEventListener('change', apply);
-  if (curTag && pills.some((b) => b.dataset.tag === curTag)) apply();
+  search?.addEventListener('input', apply);
+  if (curCat) apply();
 </script>
 
 <style>
-  /* ===== 页头：星云银河带 + 标题压在其上 ===== */
-  .kb-hero {
-    position: relative;
-    padding: 84px 0 26px;
-  }
-  .kb-nebula {
-    position: absolute;
-    inset: 0 0 auto 0;
-    pointer-events: none;
-  }
-  .kb-nebula :global(.nebula-band) {
-    height: auto !important;
-  }
-  .kb-nebula :global(canvas) {
-    width: 100% !important;
-  }
-  .kb-hero-inner {
-    position: relative;
-    z-index: 1;
-  }
-  /* ===== 页头：标题 + 副标题 + 英文点缀 ===== */
-  .kb-head {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 32px;
-  }
-  .kb-head h1 {
-    margin: 0 0 14px;
-    font-size: clamp(34px, 4vw, 52px);
-  }
-  .kb-sub {
-    margin: 0;
-    font-size: 13.5px;
-    line-height: 1.9;
-    color: var(--muted);
-  }
+  /* ===== 页头 ===== */
+  .kb-hero { position: relative; padding: 84px 0 26px; }
+  .kb-nebula { position: absolute; inset: 0 0 auto 0; pointer-events: none; }
+  .kb-nebula :global(.nebula-band) { height: auto !important; }
+  .kb-nebula :global(canvas) { width: 100% !important; }
+  .kb-hero-inner { position: relative; z-index: 1; }
+  .kb-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
+  .kb-head h1 { margin: 0 0 14px; font-size: clamp(34px, 4vw, 52px); }
+  .kb-sub { margin: 0; font-size: 13.5px; line-height: 1.9; color: var(--muted); }
   .kb-motto {
     flex-shrink: 0;
     font-family: var(--font-display);
@@ -193,71 +202,91 @@ const fmt = (date?: Date) =>
     text-align: right;
     letter-spacing: 0.04em;
   }
-  @media (max-width: 760px) {
-    .kb-motto { display: none; }
+  @media (max-width: 760px) { .kb-motto { display: none; } }
+
+  /* ===== 小节标题 ===== */
+  .lib-h2 {
+    margin: 0 0 18px;
+    font: 400 20px var(--font-display);
+    color: var(--text);
+    letter-spacing: 0.06em;
   }
 
-  /* ===== 专题入口（知识星团）===== */
-  .series-list {
-    margin-bottom: 48px;
+  /* ===== 专题网格卡（首页星团入口）===== */
+  .topic-section { margin-bottom: 52px; }
+  .topic-grid {
     display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 18px;
   }
-  .series {
+  .topic-card {
     display: flex;
     align-items: center;
-    gap: 28px;
-    padding: 22px 30px;
+    gap: 20px;
+    padding: 20px 22px;
     border: 1px solid var(--border);
     border-radius: 12px;
     background:
-      radial-gradient(ellipse 60% 90% at 18% 50%, rgba(120, 140, 220, 0.07), transparent),
+      radial-gradient(ellipse 65% 90% at 16% 50%, color-mix(in srgb, var(--tc) 9%, transparent), transparent),
       linear-gradient(120deg, #141d3088, transparent 65%);
     transition: border-color 0.3s ease, transform 0.3s ease;
   }
-  .series:hover {
-    border-color: rgba(150, 170, 230, 0.35);
+  .topic-card:hover {
+    border-color: color-mix(in srgb, var(--tc) 45%, transparent);
     transform: translateY(-2px);
   }
-  .series-galaxy {
+  .topic-galaxy {
     flex-shrink: 0;
-    filter: drop-shadow(0 0 18px rgba(120, 150, 230, 0.25));
+    filter: drop-shadow(0 0 16px color-mix(in srgb, var(--tc) 30%, transparent));
   }
+  .topic-info strong {
+    display: block;
+    font: 400 19px var(--font-display);
+    margin-bottom: 6px;
+  }
+  .topic-desc {
+    margin: 0 0 10px;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--muted);
+  }
+  .topic-count {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--tc);
+    letter-spacing: 0.04em;
+  }
+
+  /* ===== 专栏（系列）===== */
+  .series-section { margin-bottom: 52px; }
+  .series-list { display: grid; gap: 18px; }
+  .series {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    padding: 20px 28px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: linear-gradient(120deg, #141d3088, transparent 65%);
+    transition: border-color 0.3s ease, transform 0.3s ease;
+  }
+  .series:hover { border-color: rgba(150, 170, 230, 0.35); transform: translateY(-2px); }
+  .series-galaxy { flex-shrink: 0; filter: drop-shadow(0 0 16px rgba(120, 150, 230, 0.25)); }
   .series-info small {
     display: block;
     font-size: 10px;
-    font-weight: 400;
     color: var(--accent);
     letter-spacing: 0.18em;
-    margin-bottom: 7px;
+    margin-bottom: 6px;
   }
-  .series-info strong {
-    display: block;
-    font: 400 25px var(--font-display);
-    margin-bottom: 8px;
-  }
-  .series-desc {
-    margin: 0 0 12px;
-    font-size: 13px;
-    line-height: 1.8;
-    color: var(--muted);
-    max-width: 560px;
-  }
-  .series-count {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--accent);
-    letter-spacing: 0.04em;
-  }
-  .series-count span {
-    margin-left: 8px;
-    transition: transform 0.25s ease;
-  }
-  .series:hover .series-count span {
-    transform: translateX(4px);
-  }
+  .series-info strong { display: block; font: 400 22px var(--font-display); margin-bottom: 7px; }
+  .series-desc { margin: 0 0 10px; font-size: 12.5px; line-height: 1.7; color: var(--muted); max-width: 560px; }
+  .series-count { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 0.04em; }
+  .series-count span { margin-left: 8px; transition: transform 0.25s ease; }
+  .series:hover .series-count span { transform: translateX(4px); }
 
-  /* ===== 工具栏：标签筛选 + 排序 ===== */
+  /* ===== 工具栏：专题筛选 + 搜索 ===== */
+  .all-articles { margin-bottom: 20px; }
   .kb-toolbar {
     display: flex;
     align-items: center;
@@ -266,12 +295,8 @@ const fmt = (date?: Date) =>
     margin-bottom: 34px;
     flex-wrap: wrap;
   }
-  .tag-nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 6px;
-  }
-  .tag-pill {
+  .cat-nav { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+  .cat-pill {
     font: 400 13px var(--font-sans, sans-serif);
     color: var(--muted);
     background: none;
@@ -281,25 +306,21 @@ const fmt = (date?: Date) =>
     cursor: pointer;
     transition: color 0.25s ease, background 0.25s ease;
   }
-  .tag-pill:hover {
-    color: var(--text);
-  }
-  .tag-pill[aria-pressed="true"] {
-    color: var(--text);
-    background: rgba(150, 170, 230, 0.14);
-  }
-  .sort-box select {
+  .cat-pill:hover { color: var(--text); }
+  .cat-pill[aria-pressed="true"] { color: var(--text); background: rgba(150, 170, 230, 0.14); }
+  .search-box input {
     font: 400 12.5px var(--font-sans, sans-serif);
-    color: var(--muted);
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 7px 10px;
-    cursor: pointer;
-  }
-  .sort-box select:hover {
     color: var(--text);
+    background: rgba(150, 170, 230, 0.06);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 16px;
+    width: 200px;
+    transition: border-color 0.25s ease, width 0.3s ease;
+    outline: none;
   }
+  .search-box input:focus { border-color: rgba(150, 170, 230, 0.45); width: 240px; }
+  .search-box input::placeholder { color: var(--muted); }
 
   /* ===== 时间线列表 ===== */
   .kb-timeline {
@@ -317,10 +338,7 @@ const fmt = (date?: Date) =>
     width: 1px;
     background: linear-gradient(180deg, rgba(150, 170, 230, 0.3), rgba(150, 170, 230, 0.08));
   }
-  .kb-entry {
-    position: relative;
-    margin-bottom: 14px;
-  }
+  .kb-entry { position: relative; margin-bottom: 14px; }
   .kb-entry::before {
     content: '';
     position: absolute;
@@ -348,38 +366,12 @@ const fmt = (date?: Date) =>
     color: var(--muted);
     letter-spacing: 0.05em;
   }
-  .kb-meta-tag::before {
-    content: '·';
-    margin-right: 10px;
-  }
-  .kb-entry h2 {
-    margin: 0 0 8px;
-    font: 400 21px var(--font-display);
-    transition: color 0.25s ease;
-  }
-  .kb-entry > a:hover h2 {
-    color: var(--accent);
-  }
-  .kb-desc {
-    margin: 0 0 12px;
-    font-size: 13.5px;
-    line-height: 1.8;
-    color: var(--muted);
-    max-width: 720px;
-  }
-  .kb-tags {
-    display: flex;
-    gap: 6px;
-    margin: 0;
-  }
-  .kb-tag-pill {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 3px 10px;
-  }
+  .kb-meta-cat { color: var(--accent); }
+  .kb-meta-cat::before { content: '·'; margin-right: 10px; }
+  .kb-meta-tag::before { content: '·'; margin-right: 10px; }
+  .kb-entry h2 { margin: 0 0 8px; font: 400 21px var(--font-display); transition: color 0.25s ease; }
+  .kb-entry > a:hover h2 { color: var(--accent); }
+  .kb-desc { margin: 0; font-size: 13.5px; line-height: 1.8; color: var(--muted); max-width: 720px; }
   .kb-arrow {
     position: absolute;
     right: 6px;
@@ -394,19 +386,19 @@ const fmt = (date?: Date) =>
     transform: translateY(-50%) translateX(3px);
     color: var(--accent);
   }
-  .empty {
+  .empty { color: var(--muted); }
+  .kb-note {
+    margin: 26px 0 0;
+    font-size: 12px;
     color: var(--muted);
+    opacity: 0.7;
+    text-align: center;
+    letter-spacing: 0.08em;
   }
 
   @media (max-width: 760px) {
-    .series {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 20px;
-    }
-    .kb-entry > a {
-      padding-right: 20px;
-    }
+    .series { flex-direction: column; align-items: flex-start; gap: 12px; padding: 20px; }
+    .topic-card { flex-direction: column; align-items: flex-start; gap: 14px; padding: 20px; }
+    .kb-entry > a { padding-right: 20px; }
   }
 </style>

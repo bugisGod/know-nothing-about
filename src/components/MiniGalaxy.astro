@@ -1,36 +1,75 @@
 ---
-// 迷你星团图：轨道环 + 中心亮核 + 沿轨散点 —— 知识库「专题入口（知识星团）」的视觉主体。
-// 静态 SVG（不引 three.js，保页面性能）；点位用确定性伪随机，SSR 输出稳定。
+// 迷你星团图 v3：按首页星团形态渲染（dense/spiral/scatter/natural，Plummer 密度模型）
+// 每个专题卡 = 对应首页星团的迷你版：同形态、同色系、同性格（种子 = 团 key 哈希）
 interface Props {
   size?: number;
   color?: string;
+  form?: string;  // dense 密集结团 / spiral 规则螺旋 / scatter 分散广布 / natural 随机自然
+  seed?: string;  // 团 key：同团恒定同图
 }
-const { size = 150, color = '#9db8ff' } = Astro.props;
+const { size = 150, color = '#9db8ff', form = 'natural', seed = 'c' } = Astro.props;
 
-// 确定性伪随机（线性同余），点位稳定不闪
-let seed = 20260930;
+// 字符串哈希 → 确定性伪随机（同 key 恒定同图，不同团不同性格）
+let seedState = 2166136261;
+for (let i = 0; i < seed.length; i++) {
+  seedState = Math.imul(seedState ^ seed.charCodeAt(i), 16777619) >>> 0;
+}
+seedState = seedState || 88;
 const rand = () => {
-  seed = (seed * 1103515245 + 12345) % 2147483648;
-  return seed / 2147483648;
+  seedState = (seedState * 1103515245 + 12345) % 2147483648;
+  return seedState / 2147483648;
 };
 
-// 轨道环：三条不同倾角的椭圆
-const orbits = [
-  { rx: 62, ry: 24, rot: -14, op: 0.5 },
-  { rx: 46, ry: 30, rot: 24, op: 0.35 },
-  { rx: 30, ry: 34, rot: -40, op: 0.25 },
-];
-// 沿轨散点：集中在轨道附近
-const dots: { x: number; y: number; r: number; o: number }[] = [];
-for (let i = 0; i < 26; i++) {
-  const o = orbits[i % orbits.length];
-  const a = rand() * Math.PI * 2;
-  const rr = (0.82 + rand() * 0.36) * (o.rx * 0.6 + rand() * o.rx * 0.5);
-  const x = Math.cos(a) * rr;
-  const y = Math.sin(a) * rr * 0.55 + (rand() - 0.5) * 10;
-  dots.push({ x, y, r: 0.7 + rand() * 1.5, o: 0.3 + rand() * 0.6 });
+// Plummer 密度模型（与首页星团背景星同款）：中心富集、外围 r^-4 衰减
+const rad = size * 0.36;
+const RC = rad * (form === 'dense' ? 0.3 : form === 'scatter' ? 0.55 : 0.32);
+const xT = rad / RC;
+const mT = Math.pow(xT, 3) / Math.pow(1 + xT * xT, 1.5);
+const plummer = (u: number) => {
+  const m = Math.min(mT * 0.9999, Math.max(mT * 1e-6, u * mT));
+  let lo = 0, hi = xT;
+  for (let it = 0; it < 20; it++) {
+    const mid = (lo + hi) * 0.5;
+    const mm = Math.pow(mid, 3) / Math.pow(1 + mid * mid, 1.5);
+    if (mm < m) lo = mid; else hi = mid;
+  }
+  return RC * (lo + hi) * 0.5;
+};
+
+const golden = Math.PI * (3 - Math.sqrt(5));
+const stars: { x: number; y: number; r: number; o: number; w: boolean }[] = [];
+const N = 64;
+for (let i = 0; i < N; i++) {
+  let th: number, dr: number;
+  if (form === 'spiral') {
+    th = i * 0.55 + (rand() - 0.5) * 0.5;       // 规则双螺旋带
+    dr = plummer(rand());
+    th += Math.log(dr + 1) * 1.35;
+  } else if (form === 'natural') {
+    th = golden * i + (rand() - 0.5) * 0.8;     // 黄金角自然铺开
+    dr = plummer(rand());
+  } else {
+    th = rand() * Math.PI * 2;                  // dense/scatter：随机
+    dr = plummer(rand());
+  }
+  stars.push({
+    x: Math.cos(th) * dr,
+    y: Math.sin(th) * dr * 0.72,
+    r: 0.5 + rand() * 1.3,
+    o: 0.25 + rand() * 0.7,
+    w: rand() < 0.15,
+  });
 }
+// 亮星：4 颗带微光晕
+const bright: { x: number; y: number; r: number }[] = [];
+for (let i = 0; i < 4; i++) {
+  const a = rand() * Math.PI * 2;
+  const rr = (0.2 + rand() * 0.6) * rad;
+  bright.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr * 0.75, r: 1.4 + rand() * 1.0 });
+}
+
 const C = size / 2;
+const gid = `mgc-${size}-${color.replace('#', '')}-${seedState.toString(36)}`;
 ---
 
 <svg
@@ -41,28 +80,33 @@ const C = size / 2;
   class="mini-galaxy"
 >
   <defs>
-    <radialGradient id={`mg-core-${size}-${color.replace('#', '')}`}>
+    <radialGradient id={`mg-core-${gid}`}>
       <stop offset="0%" stop-color="#ffffff"></stop>
-      <stop offset="30%" stop-color={color}></stop>
+      <stop offset="28%" stop-color={color}></stop>
       <stop offset="100%" stop-color="transparent"></stop>
+    </radialGradient>
+    <radialGradient id={`mg-amb-${gid}`}>
+      <stop offset="0%" stop-color={color} stop-opacity="0.3"></stop>
+      <stop offset="55%" stop-color={color} stop-opacity="0.09"></stop>
+      <stop offset="100%" stop-color={color} stop-opacity="0"></stop>
     </radialGradient>
   </defs>
   <g transform={`translate(${C} ${C})`}>
-    {orbits.map((o) => (
-      <ellipse
-        rx={o.rx}
-        ry={o.ry}
-        transform={`rotate(${o.rot})`}
-        fill="none"
-        stroke={color}
-        stroke-width="0.8"
-        opacity={o.op}
-      />
+    <!-- 弥散环境光晕 -->
+    <circle r={size * 0.48} fill={`url(#mg-amb-${gid})`}></circle>
+    <!-- 向心星点（按形态分布）-->
+    {stars.map((d) => (
+      <circle cx={d.x} cy={d.y} r={d.r} fill={d.w ? '#ffffff' : color} opacity={d.o} />
     ))}
-    {dots.map((d) => (
-      <circle cx={d.x} cy={d.y} r={d.r} fill={color} opacity={d.o} />
+    <!-- 亮星：微光晕 + 亮核 -->
+    {bright.map((b) => (
+      <g>
+        <circle cx={b.x} cy={b.y} r={b.r * 2.4} fill={color} opacity="0.2"></circle>
+        <circle cx={b.x} cy={b.y} r={b.r} fill="#ffffff" opacity="0.92"></circle>
+      </g>
     ))}
-    <circle r={size * 0.19} fill={`url(#mg-core-${size}-${color.replace('#', '')})`} />
-    <circle r={size * 0.045} fill="#ffffff" />
+    <!-- 主星：团心亮核（对应首页星团主星）-->
+    <circle r={size * 0.16} fill={`url(#mg-core-${gid})`}></circle>
+    <circle r={size * 0.045} fill="#ffffff"></circle>
   </g>
 </svg>

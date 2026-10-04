@@ -1,0 +1,191 @@
+---
+import Base from "../../../layouts/Base.astro";
+import NebulaBand from "../../../components/NebulaBand.astro";
+import MiniGalaxy from "../../../components/MiniGalaxy.astro";
+import { CATEGORIES } from "../../../config";
+import { getCollection } from "astro:content";
+
+export async function getStaticPaths() {
+  const notes = await getCollection("notes", ({ data }) => !data.draft);
+  const catOf = (id: string) => (id.includes("/") ? id.split("/")[0] : "未分类");
+  const cats = new Map<string, typeof notes>();
+  for (const n of notes) {
+    const cat = catOf(n.id);
+    if (!cats.has(cat)) cats.set(cat, []);
+    cats.get(cat)!.push(n);
+  }
+  return [...cats.entries()].map(([cat, entries]) => ({
+    params: { cat },
+    props: {
+      form: cat === "study" ? "dense" : cat === "frontend" ? "spiral" : "natural",
+      entries: entries.sort(
+        (a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0),
+      ),
+    },
+  }));
+}
+
+const { cat } = Astro.params;
+const { entries, form } = Astro.props;
+const meta = CATEGORIES[cat];
+const label = meta?.label ?? cat;
+const desc = meta?.desc ?? "";
+const color = meta?.color ?? "#9db8ff";
+const fmt = (date?: Date) =>
+  date?.toISOString().slice(0, 10).replaceAll("-", ".") ?? "";
+---
+<Base title={`${label} · 知识库`} description={desc || `${label} 专题下的全部文章。`}>
+  <div class="tp-hero">
+    <div class="tp-nebula" aria-hidden="true">
+      <NebulaBand height={360} />
+    </div>
+    <div class="container tp-hero-inner">
+      <a class="tp-back" href="/notes/">← 返回知识库</a>
+      <div class="tp-banner" style={`--tc: ${color}`}>
+        <div class="tp-galaxy">
+          <MiniGalaxy size={130} color={color} form={form} seed={cat} />
+        </div>
+        <div class="tp-head">
+          <small>⭐ 专题</small>
+          <h1>{label}</h1>
+          {desc && <p class="tp-desc">{desc}</p>}
+          <span class="tp-count">{entries.length} 篇文章</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container tp-body">
+    <ol class="kb-timeline">
+      {entries.map((n) => (
+        <li class="kb-entry">
+          <a href={`/notes/${n.id}/`}>
+            <p class="kb-meta">
+              <time datetime={n.data.date?.toISOString()}>{fmt(n.data.date)}</time>
+              <span class="kb-pill">{label}</span>
+            </p>
+            <h2>{n.data.title}</h2>
+            {n.data.description && <p class="kb-desc">{n.data.description}</p>}
+            <span class="kb-arrow" aria-hidden="true">→</span>
+          </a>
+        </li>
+      ))}
+    </ol>
+    {entries.length === 0 && <p class="empty">该专题下暂无文章</p>}
+  </div>
+</Base>
+
+<style>
+  .tp-hero { position: relative; padding: 84px 0 30px; }
+  .tp-nebula { position: absolute; inset: 0 0 auto 0; pointer-events: none; }
+  .tp-nebula :global(.nebula-band) { height: auto !important; }
+  .tp-nebula :global(canvas) { width: 100% !important; }
+  .tp-hero-inner { position: relative; z-index: 1; }
+  .tp-back {
+    display: inline-block;
+    margin-bottom: 22px;
+    font-size: 12.5px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.25s ease;
+  }
+  .tp-back:hover { color: var(--text); }
+  .tp-banner {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    padding: 26px 34px;
+    border: 1px solid color-mix(in srgb, var(--tc) 28%, var(--border));
+    border-radius: 14px;
+    background:
+      radial-gradient(ellipse 60% 100% at 14% 50%, color-mix(in srgb, var(--tc) 10%, transparent), transparent),
+      linear-gradient(120deg, #141d3088, transparent 70%);
+  }
+  .tp-galaxy {
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 20px color-mix(in srgb, var(--tc) 35%, transparent));
+  }
+  .tp-head small {
+    display: block;
+    font-size: 10.5px;
+    color: var(--tc);
+    letter-spacing: 0.2em;
+    margin-bottom: 8px;
+  }
+  .tp-head h1 {
+    margin: 0 0 8px;
+    font: 400 30px var(--font-display);
+  }
+  .tp-desc { margin: 0 0 10px; font-size: 13px; line-height: 1.8; color: var(--muted); }
+  .tp-count { font-family: var(--mono); font-size: 12px; color: var(--tc); letter-spacing: 0.04em; }
+
+  .tp-body { padding-top: 8px; }
+  .kb-timeline {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0 4px 34px;
+    position: relative;
+  }
+  .kb-timeline::before {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 14px;
+    bottom: 14px;
+    width: 1px;
+    background: linear-gradient(180deg, rgba(150, 170, 230, 0.3), rgba(150, 170, 230, 0.08));
+  }
+  .kb-entry { position: relative; margin-bottom: 14px; }
+  .kb-entry::before {
+    content: '';
+    position: absolute;
+    left: -33px;
+    top: 22px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--tc, var(--accent));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--tc) 60%, transparent);
+  }
+  .kb-entry > a {
+    display: block;
+    position: relative;
+    padding: 16px 44px 18px 4px;
+    border-bottom: 1px solid rgba(150, 170, 230, 0.09);
+  }
+  .kb-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 9px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  .kb-pill {
+    font-family: var(--font-sans, sans-serif);
+    color: var(--tc, var(--accent));
+    border: 1px solid color-mix(in srgb, var(--tc) 40%, transparent);
+    border-radius: 999px;
+    padding: 2px 10px;
+  }
+  .kb-entry h2 { margin: 0 0 8px; font: 400 21px var(--font-display); transition: color 0.25s ease; }
+  .kb-entry > a:hover h2 { color: var(--accent); }
+  .kb-desc { margin: 0; font-size: 13.5px; line-height: 1.8; color: var(--muted); max-width: 720px; }
+  .kb-arrow {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .kb-entry > a:hover .kb-arrow {
+    opacity: 1;
+    transform: translateY(-50%) translateX(3px);
+    color: var(--accent);
+  }
+  .empty { color: var(--muted); }
+</style>
