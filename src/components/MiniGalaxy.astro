@@ -1,16 +1,26 @@
 ---
-// 迷你星团图 v3：按首页星团形态渲染（dense/spiral/scatter/natural，Plummer 密度模型）
-// 每个专题卡 = 对应首页星团的迷你版：同形态、同色系、同性格（种子 = 团 key 哈希）
+// 迷你星团卡 v9（清亮星辰）：小实心亮核 + 快衰减紧光晕，颗颗分明
+// 数量少、间距大，虚线星座网可见，团心收成一颗发光巨星
+// 无雾无渐变云——纯星点 + 主星，和首页星团同一语言
 interface Props {
   size?: number;
   color?: string;
-  form?: string;  // dense 密集结团 / spiral 规则螺旋 / scatter 分散广布 / natural 随机自然
-  seed?: string;  // 团 key：同团恒定同图
+  form?: string;
+  seed?: string;
 }
 const { size = 150, color = '#9db8ff', form = 'natural', seed = 'c' } = Astro.props;
 
-// ★ 与首页 BrainGraph 的 vivid() 同款增艳（饱和 ×1.75、亮度 ×1.18 封顶 0.74）：
-// 卡片星团色 = 首页星团渲染色（用户：颜色跟首页星图一致）
+let seedState = 2166136261;
+for (let i = 0; i < seed.length; i++) {
+  seedState = Math.imul(seedState ^ seed.charCodeAt(i), 16777619) >>> 0;
+}
+seedState = seedState || 88;
+const rand = () => {
+  seedState = (seedState * 1103515245 + 12345) % 2147483648;
+  return seedState / 2147483648;
+};
+
+// 域色增艳 + 浅档（星珠亮心）
 const hex2rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 const rgb2hex = (r: number, g: number, b: number) =>
   '#' + [r, g, b].map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('');
@@ -40,88 +50,74 @@ const hsl2rgb = (h: number, s: number, l: number) => {
   };
   return [f(h + 1 / 3), f(h), f(h - 1 / 3)];
 };
-const vivid = (hex: string) => {
-  const [r, g, b] = hex2rgb(hex);
-  const [h, sat, l] = rgb2hsl(r, g, b);
-  // 视觉图实测量化：亮且浓（RGB 224,91,98 = 高亮度 + 强色相）——l≈0.62、s≈0.85
-  return rgb2hex(...hsl2rgb(h, Math.min(0.85, sat * 1.9), Math.min(0.62, Math.max(0.5, l * 0.88))));
-};
-const vc = vivid(color); // 增艳后的卡面星团色
+const [hr0, s0, l0] = rgb2hsl(...hex2rgb(color));
+const vc = rgb2hex(...hsl2rgb(hr0, Math.min(0.85, s0 * 1.9), Math.min(0.62, Math.max(0.52, l0 * 0.88))));
 
-// 字符串哈希 → 确定性伪随机（同 key 恒定同图，不同团不同性格）
-let seedState = 2166136261;
-for (let i = 0; i < seed.length; i++) {
-  seedState = Math.imul(seedState ^ seed.charCodeAt(i), 16777619) >>> 0;
-}
-seedState = seedState || 88;
-const rand = () => {
-  seedState = (seedState * 1103515245 + 12345) % 2147483648;
-  return seedState / 2147483648;
-};
-
-// Plummer 密度模型（与首页星团背景星同款）：中心富集、外围 r^-4 衰减
-const rad = size * 0.45;
-const RC = rad * (form === 'dense' ? 0.2 : form === 'scatter' ? 0.6 : 0.34); // 形态可辨：密团紧/散团松
-const xT = rad / RC;
-const mT = Math.pow(xT, 3) / Math.pow(1 + xT * xT, 1.5);
-const plummer = (u: number) => {
-  const m = Math.min(mT * 0.9999, Math.max(mT * 1e-6, u * mT));
-  let lo = 0, hi = xT;
-  for (let it = 0; it < 20; it++) {
-    const mid = (lo + hi) * 0.5;
-    const mm = Math.pow(mid, 3) / Math.pow(1 + mid * mid, 1.5);
-    if (mm < m) lo = mid; else hi = mid;
-  }
-  return RC * (lo + hi) * 0.5;
-};
-
+// ===== 星点布位（form 结构 + 最小间距）=====
+const rad = size * 0.3;
+interface P { x: number; y: number; r: number; }
+const stars: P[] = [];
 const golden = Math.PI * (3 - Math.sqrt(5));
-// 星点三分：形态主群（浓彩）+ 中心加密群（光心从密度长出来）+ 白闪亮星
-const stars: { x: number; y: number; r: number; o: number; c: string }[] = [];
-const coreDots: { x: number; y: number; r: number; o: number; c: string }[] = [];
-const glints: { x: number; y: number; r: number; o: number }[] = [];
-const N = 86;
-for (let i = 0; i < N; i++) {
-  let th: number, dr: number;
-  if (form === 'spiral') {
-    const u = i / N;
-    const arm = i % 2 === 0 ? 0 : Math.PI;
-    dr = (0.12 + 0.88 * u) * rad * (0.9 + rand() * 0.2);
-    th = arm + u * Math.PI * 2.4 + (rand() - 0.5) * 0.3;
-  } else if (form === 'natural') {
-    th = golden * i + (rand() - 0.5) * 0.8;
-    dr = plummer(rand());
-  } else {
-    th = rand() * Math.PI * 2;
-    dr = plummer(rand());
+const minD = size * 0.105;
+const tryPlace = (x: number, y: number, rr: number) => {
+  if (stars.every((q) => Math.hypot(q.x - x, q.y - y) > minD)) {
+    stars.push({ x, y, r: rr });
+    return true;
   }
-  stars.push({
-    x: Math.cos(th) * dr,
-    y: Math.sin(th) * dr * 0.72,
-    r: 1.0 + rand() * 1.8,
-    o: 0.6 + rand() * 0.4,
-    c: vc,
-  });
+  return false;
+};
+if (form === 'spiral') {
+  for (let i = 0; i < 60 && stars.length < 7; i++) {
+    const u = i / 60;
+    const arm = i % 2 === 0 ? 0 : Math.PI;
+    const r = rad * (0.15 + 0.85 * u);
+    const th = arm + u * 2.7 + (rand() - 0.5) * 0.2;
+    tryPlace(Math.cos(th) * r, Math.sin(th) * r * 0.82, size * (0.012 + rand() * 0.012));
+  }
+} else if (form === 'scatter') {
+  for (let i = 0; i < 40 && stars.length < 6; i++) {
+    const a = rand() * Math.PI * 2;
+    const r = rad * (0.25 + 0.75 * Math.sqrt(rand()));
+    tryPlace(Math.cos(a) * r, Math.sin(a) * r * 0.85, size * (0.012 + rand() * 0.012));
+  }
+} else {
+  for (let i = 0; i < 90 && stars.length < 8; i++) {
+    const a = golden * i + (rand() - 0.5) * 0.5;
+    const r = rad * Math.pow(rand(), 1.4);
+    tryPlace(Math.cos(a) * r, Math.sin(a) * r * 0.85, size * (0.012 + rand() * 0.013));
+  }
 }
-for (let i = 0; i < 35; i++) {
-  const a = rand() * Math.PI * 2;
-  const rr = Math.pow(rand(), 1.5) * rad * 0.15;
-  coreDots.push({
-    x: Math.cos(a) * rr,
-    y: Math.sin(a) * rr * 0.78,
-    r: 0.5 + rand() * 0.9,
-    o: 0.5 + rand() * 0.5,
-    c: vc,
-  });
-}
-for (let i = 0; i < 5; i++) {
-  const a = rand() * Math.PI * 2;
-  const rr = (0.3 + rand() * 0.55) * rad;
-  glints.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr * 0.78, r: 0.7 + rand() * 0.6, o: 0.85 });
-}
-
 const C = size / 2;
-const gid = `mgc-${size}-${vc.replace('#', '')}-${seedState.toString(36)}`;
+const gid = `sg-${size}-${vc.replace('#', '')}-${seedState.toString(36)}`;
+
+// ===== 虚线连接：星座式结构网（近邻连线 + 主星辐射）=====
+interface L { x1: number; y1: number; x2: number; y2: number; }
+const lines: L[] = [];
+const seen = new Set<string>();
+const maxLink = size * 0.17;
+for (let i = 0; i < stars.length; i++) {
+  const dists = stars
+    .map((q, j) => ({ j, d: Math.hypot(q.x - stars[i].x, q.y - stars[i].y) }))
+    .filter((q) => q.j !== i && q.d < maxLink)
+    .sort((a, b) => a.d - b.d);
+  const n = 1;
+  for (let k = 0; k < Math.min(n, dists.length); k++) {
+    const kk = i < dists[k].j ? `${i}-${dists[k].j}` : `${dists[k].j}-${i}`;
+    if (!seen.has(kk)) {
+      seen.add(kk);
+      const q = stars[dists[k].j];
+      lines.push({ x1: stars[i].x, y1: stars[i].y, x2: q.x, y2: q.y });
+    }
+  }
+}
+// 主星（团心）连到最近的 3 颗
+const nearMain = stars
+  .map((q, j) => ({ j, d: Math.hypot(q.x, q.y) }))
+  .sort((a, b) => a.d - b.d)
+  .slice(0, 2);
+for (const nm of nearMain) {
+  lines.push({ x1: 0, y1: 0, x2: stars[nm.j].x, y2: stars[nm.j].y });
+}
 ---
 
 <svg
@@ -132,34 +128,29 @@ const gid = `mgc-${size}-${vc.replace('#', '')}-${seedState.toString(36)}`;
   class="mini-galaxy"
 >
   <defs>
-    <radialGradient id={`mg-core-${gid}`}>
-      <stop offset="0%" stop-color="#ffffff"></stop>
-      <stop offset="22%" stop-color={vc}></stop>
-      <stop offset="55%" stop-color={vc} stop-opacity="1"></stop>
-      <stop offset="82%" stop-color={vc} stop-opacity="0.55"></stop>
-      <stop offset="100%" stop-color={vc} stop-opacity="0"></stop>
-    </radialGradient>
-    <radialGradient id={`mg-amb-${gid}`}>
-      <stop offset="0%" stop-color={vc} stop-opacity="0.3"></stop>
-      <stop offset="45%" stop-color={vc} stop-opacity="0.12"></stop>
-      <stop offset="78%" stop-color={vc} stop-opacity="0.04"></stop>
+    <radialGradient id={`sg-${gid}`}>
+      <stop offset="0%" stop-color={vc}></stop>
+      <stop offset="28%" stop-color={vc} stop-opacity="0.8"></stop>
+      <stop offset="58%" stop-color={vc} stop-opacity="0.22"></stop>
       <stop offset="100%" stop-color={vc} stop-opacity="0"></stop>
     </radialGradient>
   </defs>
-  <g transform={`translate(${C} ${C})`}>
-    <!-- 底光：极淡衬托（不盖星点）-->
-    <circle r={size * 0.46} fill={`url(#mg-amb-${gid})`}></circle>
-    <!-- 星团 = 星点本身：形态主群（浓彩）-->
-    {stars.map((d) => (
-      <circle cx={d.x} cy={d.y} r={d.r} fill={d.c} opacity={d.o} />
-    ))}
-    <!-- 中心加密群：光心从密度长出来，不画白盘 -->
-    {coreDots.map((d) => (
-      <circle cx={d.x} cy={d.y} r={d.r} fill={d.c} opacity={d.o} />
-    ))}
-    <!-- 白闪亮星 -->
-    {glints.map((d) => (
-      <circle cx={d.x} cy={d.y} r={d.r} fill="#ffffff" opacity={d.o} />
-    ))}
-  </g>
+  <!-- 虚线星座网 -->
+  {lines.map((l) => (
+    <line
+      x1={C + l.x1} y1={C + l.y1} x2={C + l.x2} y2={C + l.y2}
+      stroke={vc} stroke-width="0.9" stroke-dasharray="2 3.5" opacity="0.55"
+    ></line>
+  ))}
+  <!-- 星辰：紧光晕层 -->
+  {stars.map((d) => (
+    <circle cx={C + d.x} cy={C + d.y} r={d.r * 2.6} fill={`url(#sg-${gid})`}></circle>
+  ))}
+  <!-- 星辰：实心亮核，颗颗分明 -->
+  {stars.map((d) => (
+    <circle cx={C + d.x} cy={C + d.y} r={d.r * 0.8} fill={vc}></circle>
+  ))}
+  <!-- 主星：团心一颗发光巨星 -->
+  <circle cx={C} cy={C} r={size * 0.13} fill={`url(#sg-${gid})`}></circle>
+  <circle cx={C} cy={C} r={size * 0.028} fill={vc}></circle>
 </svg>
