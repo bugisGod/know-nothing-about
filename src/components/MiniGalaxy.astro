@@ -9,6 +9,45 @@ interface Props {
 }
 const { size = 150, color = '#9db8ff', form = 'natural', seed = 'c' } = Astro.props;
 
+// ★ 与首页 BrainGraph 的 vivid() 同款增艳（饱和 ×1.75、亮度 ×1.18 封顶 0.74）：
+// 卡片星团色 = 首页星团渲染色（用户：颜色跟首页星图一致）
+const hex2rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+const rgb2hex = (r: number, g: number, b: number) =>
+  '#' + [r, g, b].map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('');
+const rgb2hsl = (r: number, g: number, b: number) => {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  const l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn;
+  const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  let h = 0;
+  if (mx === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (mx === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h, s, l];
+};
+const hsl2rgb = (h: number, s: number, l: number) => {
+  if (s === 0) return [l, l, l];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const f = (t: number) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return [f(h + 1 / 3), f(h), f(h - 1 / 3)];
+};
+const vivid = (hex: string) => {
+  const [r, g, b] = hex2rgb(hex);
+  const [h, sat, l] = rgb2hsl(r, g, b);
+  // 视觉图实测量化：亮且浓（RGB 224,91,98 = 高亮度 + 强色相）——l≈0.62、s≈0.85
+  return rgb2hex(...hsl2rgb(h, Math.min(0.85, sat * 1.9), Math.min(0.62, Math.max(0.5, l * 0.88))));
+};
+const vc = vivid(color); // 增艳后的卡面星团色
+
 // 字符串哈希 → 确定性伪随机（同 key 恒定同图，不同团不同性格）
 let seedState = 2166136261;
 for (let i = 0; i < seed.length; i++) {
@@ -21,8 +60,8 @@ const rand = () => {
 };
 
 // Plummer 密度模型（与首页星团背景星同款）：中心富集、外围 r^-4 衰减
-const rad = size * 0.36;
-const RC = rad * (form === 'dense' ? 0.3 : form === 'scatter' ? 0.55 : 0.32);
+const rad = size * 0.45;
+const RC = rad * (form === 'dense' ? 0.2 : form === 'scatter' ? 0.6 : 0.34); // 形态可辨：密团紧/散团松
 const xT = rad / RC;
 const mT = Math.pow(xT, 3) / Math.pow(1 + xT * xT, 1.5);
 const plummer = (u: number) => {
@@ -37,39 +76,52 @@ const plummer = (u: number) => {
 };
 
 const golden = Math.PI * (3 - Math.sqrt(5));
-const stars: { x: number; y: number; r: number; o: number; w: boolean }[] = [];
-const N = 64;
+// 星点三分：形态主群（浓彩）+ 中心加密群（光心从密度长出来）+ 白闪亮星
+const stars: { x: number; y: number; r: number; o: number; c: string }[] = [];
+const coreDots: { x: number; y: number; r: number; o: number; c: string }[] = [];
+const glints: { x: number; y: number; r: number; o: number }[] = [];
+const N = 86;
 for (let i = 0; i < N; i++) {
   let th: number, dr: number;
   if (form === 'spiral') {
-    th = i * 0.55 + (rand() - 0.5) * 0.5;       // 规则双螺旋带
-    dr = plummer(rand());
-    th += Math.log(dr + 1) * 1.35;
+    const u = i / N;
+    const arm = i % 2 === 0 ? 0 : Math.PI;
+    dr = (0.12 + 0.88 * u) * rad * (0.9 + rand() * 0.2);
+    th = arm + u * Math.PI * 2.4 + (rand() - 0.5) * 0.3;
   } else if (form === 'natural') {
-    th = golden * i + (rand() - 0.5) * 0.8;     // 黄金角自然铺开
+    th = golden * i + (rand() - 0.5) * 0.8;
     dr = plummer(rand());
   } else {
-    th = rand() * Math.PI * 2;                  // dense/scatter：随机
+    th = rand() * Math.PI * 2;
     dr = plummer(rand());
   }
   stars.push({
     x: Math.cos(th) * dr,
     y: Math.sin(th) * dr * 0.72,
-    r: 0.5 + rand() * 1.3,
-    o: 0.25 + rand() * 0.7,
-    w: rand() < 0.15,
+    r: 1.0 + rand() * 1.8,
+    o: 0.6 + rand() * 0.4,
+    c: vc,
   });
 }
-// 亮星：4 颗带微光晕
-const bright: { x: number; y: number; r: number }[] = [];
-for (let i = 0; i < 4; i++) {
+for (let i = 0; i < 35; i++) {
   const a = rand() * Math.PI * 2;
-  const rr = (0.2 + rand() * 0.6) * rad;
-  bright.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr * 0.75, r: 1.4 + rand() * 1.0 });
+  const rr = Math.pow(rand(), 1.5) * rad * 0.15;
+  coreDots.push({
+    x: Math.cos(a) * rr,
+    y: Math.sin(a) * rr * 0.78,
+    r: 0.5 + rand() * 0.9,
+    o: 0.5 + rand() * 0.5,
+    c: vc,
+  });
+}
+for (let i = 0; i < 5; i++) {
+  const a = rand() * Math.PI * 2;
+  const rr = (0.3 + rand() * 0.55) * rad;
+  glints.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr * 0.78, r: 0.7 + rand() * 0.6, o: 0.85 });
 }
 
 const C = size / 2;
-const gid = `mgc-${size}-${color.replace('#', '')}-${seedState.toString(36)}`;
+const gid = `mgc-${size}-${vc.replace('#', '')}-${seedState.toString(36)}`;
 ---
 
 <svg
@@ -82,31 +134,32 @@ const gid = `mgc-${size}-${color.replace('#', '')}-${seedState.toString(36)}`;
   <defs>
     <radialGradient id={`mg-core-${gid}`}>
       <stop offset="0%" stop-color="#ffffff"></stop>
-      <stop offset="28%" stop-color={color}></stop>
-      <stop offset="100%" stop-color="transparent"></stop>
+      <stop offset="22%" stop-color={vc}></stop>
+      <stop offset="55%" stop-color={vc} stop-opacity="1"></stop>
+      <stop offset="82%" stop-color={vc} stop-opacity="0.55"></stop>
+      <stop offset="100%" stop-color={vc} stop-opacity="0"></stop>
     </radialGradient>
     <radialGradient id={`mg-amb-${gid}`}>
-      <stop offset="0%" stop-color={color} stop-opacity="0.3"></stop>
-      <stop offset="55%" stop-color={color} stop-opacity="0.09"></stop>
-      <stop offset="100%" stop-color={color} stop-opacity="0"></stop>
+      <stop offset="0%" stop-color={vc} stop-opacity="0.3"></stop>
+      <stop offset="45%" stop-color={vc} stop-opacity="0.12"></stop>
+      <stop offset="78%" stop-color={vc} stop-opacity="0.04"></stop>
+      <stop offset="100%" stop-color={vc} stop-opacity="0"></stop>
     </radialGradient>
   </defs>
   <g transform={`translate(${C} ${C})`}>
-    <!-- 弥散环境光晕 -->
-    <circle r={size * 0.48} fill={`url(#mg-amb-${gid})`}></circle>
-    <!-- 向心星点（按形态分布）-->
+    <!-- 底光：极淡衬托（不盖星点）-->
+    <circle r={size * 0.46} fill={`url(#mg-amb-${gid})`}></circle>
+    <!-- 星团 = 星点本身：形态主群（浓彩）-->
     {stars.map((d) => (
-      <circle cx={d.x} cy={d.y} r={d.r} fill={d.w ? '#ffffff' : color} opacity={d.o} />
+      <circle cx={d.x} cy={d.y} r={d.r} fill={d.c} opacity={d.o} />
     ))}
-    <!-- 亮星：微光晕 + 亮核 -->
-    {bright.map((b) => (
-      <g>
-        <circle cx={b.x} cy={b.y} r={b.r * 2.4} fill={color} opacity="0.2"></circle>
-        <circle cx={b.x} cy={b.y} r={b.r} fill="#ffffff" opacity="0.92"></circle>
-      </g>
+    <!-- 中心加密群：光心从密度长出来，不画白盘 -->
+    {coreDots.map((d) => (
+      <circle cx={d.x} cy={d.y} r={d.r} fill={d.c} opacity={d.o} />
     ))}
-    <!-- 主星：团心亮核（对应首页星团主星）-->
-    <circle r={size * 0.16} fill={`url(#mg-core-${gid})`}></circle>
-    <circle r={size * 0.045} fill="#ffffff"></circle>
+    <!-- 白闪亮星 -->
+    {glints.map((d) => (
+      <circle cx={d.x} cy={d.y} r={d.r} fill="#ffffff" opacity={d.o} />
+    ))}
   </g>
 </svg>

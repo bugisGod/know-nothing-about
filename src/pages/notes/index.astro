@@ -2,7 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import NebulaBand from "../../components/NebulaBand.astro";
 import MiniGalaxy from "../../components/MiniGalaxy.astro";
-import { SERIES, CATEGORIES } from "../../config";
+import { CATEGORIES } from "../../config";
 import { getCollection } from "astro:content";
 
 const notes = (await getCollection("notes", ({ data }) => !data.draft)).sort(
@@ -37,19 +37,13 @@ for (const n of notes) {
 }
 const topics = [...clusterMap.values()].sort((a, b) => b.entries.length - a.entries.length);
 
-// 专栏（系列）：如「深入理解 AI Agent」读书系列
-const series = Object.entries(SERIES)
-  .map(([id, s]) => ({ ...s, id, entries: notes.filter((n) => n.data.series === id) }))
-  .filter((s) => s.entries.length)
-  .sort((a, b) => b.entries.length - a.entries.length);
-
 const fmt = (date?: Date) =>
   date?.toISOString().slice(0, 10).replaceAll("-", ".") ?? "";
 ---
 <Base title="知识库" description="记录我学习、阅读与思考留下的东西。">
   <div class="kb-hero">
     <div class="kb-nebula" aria-hidden="true">
-      <NebulaBand height={430} />
+      <NebulaBand height={180} />
     </div>
     <div class="container kb-hero-inner">
       <div class="kb-head">
@@ -75,27 +69,6 @@ const fmt = (date?: Date) =>
                 <strong>{t.label}</strong>
                 {t.desc && <p class="topic-desc">{t.desc}</p>}
                 <span class="topic-count">{t.entries.length} 篇文章</span>
-              </div>
-            </a>
-          ))}
-        </div>
-      </section>
-    )}
-
-    {series.length > 0 && (
-      <section class="series-section" aria-label="专栏（系列）">
-        <h2 class="lib-h2">专栏</h2>
-        <div class="series-list">
-          {series.map((s) => (
-            <a class="series" href={`/notes/series/${s.id}/`}>
-              <div class="series-galaxy">
-                <MiniGalaxy size={116} color={s.color ?? '#9db8ff'} />
-              </div>
-              <div class="series-info">
-                <small>专栏</small>
-                <strong>{s.title}</strong>
-                {s.desc && <p class="series-desc">{s.desc}</p>}
-                <span class="series-count">{s.entries.length} 篇文章 <span aria-hidden="true">→</span></span>
               </div>
             </a>
           ))}
@@ -183,6 +156,7 @@ const fmt = (date?: Date) =>
 <style>
   /* ===== 页头 ===== */
   .kb-hero { position: relative; padding: 84px 0 26px; }
+  .kb-nebula { opacity: 0.45; } /* 视觉图：页头深空为主，星云压暗 */
   .kb-nebula { position: absolute; inset: 0 0 auto 0; pointer-events: none; }
   .kb-nebula :global(.nebula-band) { height: auto !important; }
   .kb-nebula :global(canvas) { width: 100% !important; }

@@ -936,8 +936,13 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     // ===== 螺旋星系布点 =====
     // 窄屏密度降级：同样的星挤进小画面，单位面积密度会暴涨（手机端是桌面的 4 倍）→
     // 要维持与桌面相同的疏密观感，星数须接近等比缩小（指数取 0.85）
-    const areaK = (mount.clientWidth * mount.clientHeight) / (1440 * 900);
-    const DN = Math.max(0.25, Math.min(1, Math.pow(areaK, 0.85))); // 375×812 → 0.29
+    // ★ 用「屏幕」而不是「当前窗口」做基准：粒子在初始化时按当时视口算死、resize 不重建，
+    //   若在小窗口打开再最大化，密度会按小窗口算 → 全屏必然稀疏。按屏幕面积预留，最大化后也对。
+    const scrA = (window.screen?.width || mount.clientWidth) * (window.screen?.height || mount.clientHeight);
+    const areaK = Math.max(mount.clientWidth * mount.clientHeight, scrA * 0.8) / (1440 * 900);
+    // ★ 上限 1 → 2.2：原来 1440×900 就封顶，屏幕再大也不加星 → 密度掉 19%、颗粒变粗 42%
+    //   （实测 1280×800 grain 3.09px² → 2560×1440 4.40px²）。大屏要的是【更多的星】，不是【更大的星】。
+    const DN = Math.max(0.25, Math.min(2.2, Math.pow(areaK, 0.85))); // 375×812 → 0.29；2560×1440 → 2.2
     // 竖屏上盘会横向撑破画面。缩放盘本身而非拉远相机（拉远会把前景星座一起缩小）
     const aspect0 = mount.clientWidth / Math.max(mount.clientHeight, 1);
     const gScale = 0.42 + 0.58 * Math.min(1, aspect0 / 1.6);
@@ -1001,7 +1006,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
             // 密度波：旋臂是「驻留的波形」（θ = branch·2π/ARMS + SWEEP·r/R），只有图案在转；
             //   恒星从波峰流入流出 → 亮度随之胀落。这是真实星系结构永存的机制（林家翘-Shu）。
             float dw = 0.5 + 0.5 * cos(uArms * (th - uSweep * r / uGR));
-            vTw *= mix(1.0, 0.32 + 0.68 * pow(dw, 2.0), uDw);
+            vTw *= mix(1.0, 0.42 + 0.58 * pow(dw, 2.0), uDw); // 谷底 0.32→0.42：臂隙保留底光，不压成纯黑（团跨出臂脊时不割裂）
             // 翘曲：盘外缘沿 z 起伏，旋转时边缘此起彼伏 —— 最省成本的立体运动线索
             float warp = uWarp * pow(clamp(r / uGR, 0.0, 1.0), 2.5) * sin(th - 0.6);
             vec2 pxy = vec2(cos(th) * r, sin(th) * r);
@@ -1025,7 +1030,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           void main() {
             vec4 tex = texture2D(uTex, gl_PointCoord);
             // 空气透视：越远越沉入夜空冷色 —— 深邃感的第二条线索
-            vec3 col = mix(vColor, vec3(0.60, 0.70, 0.94), clamp((1.0 - vFade) * 0.45, 0.0, 0.22));
+            // 空气透视：蓝味从 (0.60,0.70,0.94)×0.45 降到 (0.74,0.80,0.90)×0.34 —— 远处沉入夜色但不发蓝
+            vec3 col = mix(vColor, vec3(0.74, 0.80, 0.90), clamp((1.0 - vFade) * 0.34, 0.0, 0.16));
             gl_FragColor = vec4(col * tex.rgb, tex.a * uOpacity * vTw * vFade);
           }`,
         transparent: true, depthWrite: false,
@@ -1036,6 +1042,25 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       return mat;
     }
 
+    // 核球暖色（老年星族）：盘心银白星尘按 r^-0.6 累积会糊成一个【中性白团】——
+    // 实测核心饱和度只有 0.043（近乎纯白）。用色相把它染成琥珀（站点 --accent #d9a920 同系），
+    // 中心就变成「暖核」而不是「白饼」；比 cull 掉中心更好——既去白，又不挖空。
+    const cWarmCore = new THREE.Color(0xffd98a);
+    // 臂隙淡蓝填充（用户指定：臂隙中间填淡淡的蓝色）
+    const cGapBlue = new THREE.Color(0xa9bedd);
+    // 内臂紫金（用户：红框内旋臂太淡，加紫金色、向外慢慢过渡回银）——
+    // 色相同源中心彩色微尘的紫金盘。★ 紫调偏蓝一档：#b892e8 的 R=184 偏高，
+    //   与暖核的琥珀叠加后 R、B 双高 → 读作「粉」（用户：偏粉色了）。
+    //   0x9488e8：饱和度 0.42 的蓝紫（R-G 仅 12、B-G 96）——亮度越高越不翻粉，连接段可见度靠它。
+    //   ★ 金已完全撤出这一层（用户：粉还是重）——金交给暖核表达，紫金区不再掺金。
+    const cVioletArm = new THREE.Color(0x9488e8);
+    const cVioletIn = new THREE.Color(0xb09ad8);  // 暖紫：金→紫的中间站，避免金紫硬碰
+    // ★ 0.30GR → 0.18GR：琥珀染到 0.30GR 时，紫金区（0.15~0.55GR）的紫是叠在琥珀上的
+    //   → R、B 双高读作「粉」（用户：偏粉）。琥珀只守核周，紫金区交还给紫。
+    // ★ 强度 0.8 → 0.4：金色已由核球粒子海（cAmber 渐变）承担，盘星再染一遍会和紫撞色
+    //   （用户：金色和外面的紫色过渡不自然）。
+    const coreWarmMix = (rr: number) => Math.min(1, Math.max(0, 1 - (rr / GR) / 0.18)); // r<0.18GR 渐入
+
     // 盘星（含旋臂调制）：spread 越小 → 越贴臂线，旋臂越清晰
     function makeDisk(count, spread, size, opacity, maxPx, warmMix, bright, opt = {}) {
       const arr = new Float32Array(count * 3);
@@ -1043,28 +1068,40 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       const sz = new Float32Array(count);
       const pha = new Float32Array(count);
       // 银白色调（用户：过于偏蓝，要银白感）—— 冷色去饱和成银白、外盘换成银灰蓝
-      const cCool = new THREE.Color(0xdde1ea);   // 银白（低饱和，亮度高）
+      // ★ 真·银白：原 0xdde1ea 的 B-R=13，本身就偏蓝（实测盘内亮像素 44% 偏蓝）。
+      //   0xe3e5e7 的 B-R 仅 4 —— 中性银，把色相留给「暖核 ↔ 银灰外盘」的梯度去表达。
+      const cCool = new THREE.Color(0xe3e5e7);   // 银（近中性，B-R=4）
       const cWarm = new THREE.Color(0xfff0d2);
-      const cOuter = new THREE.Color(0x9aa6bd);  // 外盘银灰蓝（不再是深饱和蓝）
+      const cOuter = new THREE.Color(0xa7aeb6);  // 外盘银灰（饱和度 0.29→0.08，不再发蓝）
       const cGiant = new THREE.Color(0xffb070); // 橙红巨星：参考图里的橙色主角星
-      const cYoung = new THREE.Color(0xa9c8ff); // 蓝白年轻星：旋臂上的高光主角
+      const cYoung = new THREE.Color(0xc9d6ea); // 冷银白年轻星（原 0xa9c8ff 饱和度 0.34→0.14）
       for (let i = 0; i < count; i++) {
         const u = rand();
-        const r0 = Math.pow(u, 0.72) * GR;
+        // ★ barStart = 旋臂起始半径（占 GR 比例）：棒旋的臂从【棒端】长出，不再从盘心发散。
+        //   相位同步改为 SWEEP·((r0-rIn)/GR)，这样在 r0=rIn 处 th 正好等于 branch·2π/ARMS
+        //   = 0 / π/2 / π / 3π/2 —— 第 0、2 条臂的起点正对棒的 ansae（长轴两端）。
+        const rIn = (opt.barStart || 0) * GR;
+        const r0 = rIn + Math.pow(u, opt.barStart ? 0.55 : 0.72) * (GR - rIn); // 有棒时臂根加权：臂从棒端长出时是亮的，不留暗隙
         const branch = Math.floor(rand() * ARMS);
         // armShift：整层粒子的臂相位偏移——π/4 = 正好落在 ARMS=4 的臂间空隙（臂间丝带用）
-        const th = branch * ((Math.PI * 2) / ARMS) + (opt.armShift || 0) + SWEEP * (r0 / GR) + gj() * (spread * (0.35 + 0.9 * r0 / GR));
-        const rr = Math.max(0.2, r0 + gj() * (spread * GR * (0.25 + 0.75 * r0 / GR)));
+        const th = branch * ((Math.PI * 2) / ARMS) + (opt.armShift || 0) + SWEEP * ((r0 - rIn) / GR) + gj() * (spread * (0.35 + 0.9 * r0 / GR));
+        const rr = Math.max(Math.max(0.2, rIn * 0.9), r0 + gj() * (spread * GR * (0.25 + 0.75 * r0 / GR)));
         arr[i * 3] = Math.cos(th) * rr;
         arr[i * 3 + 1] = Math.sin(th) * rr;
         // 厚度：中心鼓包 + 外盘薄 —— 斜视下的「纵深感」几乎全来自这一行
         // ★ 用户：带宽宽一点 —— 薄盘基底 0.16→0.30、整体 ×1.15（只加宽盘带，核球不跟着鼓胀）
         const bulge = Math.exp(-Math.pow(Math.min(rr / (GR * 0.24), 20), 1.4));
-        arr[i * 3 + 2] = gj() * 1.15 * (0.30 + 2.2 * bulge);
+        // ★ 中心加厚项 2.2→0.7：原来盘心粒子沿法线散布 ±2.9 世界单位（尾巴 ±8.6），
+        //   倾斜视角下投影成一根竖直的「粒子柱」——看起来像有人往核里插了条竖线。
+        //   外盘不受影响（bulge≈0，厚度仍是 1.15×0.30）。
+        // 厚度在盘心归零（zRamp）：r→0 处盘面内没有粒子，任何 z 散布都会投影成一条竖线；
+        //   那里本来就有核心 sprite 挡着，不需要粒子厚度。
+        const zRamp = Math.min(1, rr / (GR * 0.14));
+        arr[i * 3 + 2] = gj() * 1.15 * (0.30 + 0.7 * bulge) * zRamp;
         // 内暖外冷（真实的星族渐变）：中心呼应站点的琥珀，外围是冷蓝夜
         const warm = Math.min(1, Math.max(0, 1 - (rr / GR) * 1.6)) * (rand() * 0.6 + 0.4) * warmMix;
         // 外盘渐入冷蓝：让盘有「内暖外冷」的色阶，而不是整片同色的灰白
-        const outK = Math.min(1, Math.max(0, (rr / GR - 0.42) / 0.58)) * 0.6;
+        const outK = Math.min(1, Math.max(0, (rr / GR - 0.42) / 0.58)) * 0.5; // 0.6→0.5：外盘冷化减弱
         // 星族点缀：主角星（橙红巨星/蓝白年轻星）—— 用户反馈红粒偏多：橙巨星概率 1.2%→0.5%
         const giantK = rand();
         let c;
@@ -1072,7 +1109,42 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         else if (giantK < 0.009) c = cYoung.clone();
         else c = cCool.clone().lerp(cWarm, warm).lerp(cOuter, outK);
         if (opt.coolShift) c = c.clone().lerp(cYoung, opt.coolShift); // 臂层冷色温：年轻星族
-        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        const cwK = coreWarmMix(rr);
+        if (cwK > 0) c = c.clone().lerp(cWarmCore, cwK * 0.4); // 核球暖化：去白（0.8→0.4：金交给核球海，避免与紫撞色）
+        // 臂隙淡蓝：臂脊（dw≈1）不动，臂隙（dw≈0）染淡蓝 —— 臂/隙之间多一层色温与色相差。
+        //   臂星基本都落在 dw 高处，所以这层只作用于臂隙的散星。
+        const gapK = (1 - (0.5 + 0.5 * Math.cos(ARMS * (th - SWEEP * rr / GR))))
+          * 0.8 * Math.min(1, Math.max(0, (rr / GR - 0.30) / 0.20));
+        if (gapK > 0.01) c = c.clone().lerp(cGapBlue, gapK);
+        // 内臂紫金渐变（opt.vg = 强度 0~1）：
+        //   径向——0.15GR 全量 → 0.55GR 归零（核区留给暖核 sprite，外盘归还银灰）；
+        //   角向——只染臂脊（dw 高处），臂隙的淡蓝不被紫金污染；
+        //   色相——内端偏金（呼应暖核）、外端偏紫，正好接住「暖核 → 银外盘」的中间段。
+        //   ★ 同时给一点尺寸增益：内臂粒子本来就又小又暗，低亮度下色相差读不出来
+        //     （实测只染色不可见）——亮度抬起来，紫金才「存在」。
+        let vgT = 0;
+        if (opt.vg) {
+          const vgR = rr / GR;
+          // ★ 硬切 → 宽渐变（用户：金色和外面的紫色过渡不自然）：
+          //   原 0.15GR 直接全量、0.55GR 归零，而琥珀染到 0.18GR —— 紫压在还没退场的琥珀上，生硬。
+          //   改为：0.08GR 起爬 → 0.30GR 满 → 0.38~0.72GR 衰减回银，宽度翻倍。
+          const vgK = Math.min(1, Math.min(Math.max(0, (vgR - 0.08) / 0.22),
+            1 - Math.max(0, (vgR - 0.38) / 0.34)));
+          if (vgK > 0.01) {
+            const dwv2 = 0.5 + 0.5 * Math.cos(ARMS * (th - SWEEP * rr / GR));
+            const t = vgK * opt.vg * Math.min(1, dwv2 * 1.4);
+            if (t > 0.01) {
+              vgT = t;
+              // 紫也分内外：内端暖紫（接得上金）→ 外端蓝紫（接得上银），中间自然过渡
+              const vgCol = cVioletIn.clone().lerp(cVioletArm, Math.min(1, Math.max(0, (vgR - 0.10) / 0.35)));
+              c = c.clone().lerp(vgCol, t * (0.35 + 0.65 * vgR));
+            }
+          }
+        }
+        // ★ 颜色写入必须在 cullK 之后：gl_PointSize 有 1px 下限，被 cull 的粒子尺寸缩到 0
+        //   仍会以 1px、全亮度写进画面。盘心处 Math.max(0.2,...) 把大量粒子钳到同一半径，
+        //   这些「已裁掉」的粒子叠在一起 → 就是核里残留的金色亮点。
+        //   把 cullK 同时乘进颜色，裁掉 = 真的消失（尺寸 × 亮度双重衰减）。
         // 粒度幂律：海量 1px 级微星融成连续星海，极少数大星 —— 深邃 = 大小跨度，不是星星多
         // 美化②⑤：内盘粒子稍大（叠加成光）、盘外缘渐隐（四周收进黑夜）
         // gapCull：臂间隙清理——离臂脊最暗带的散点直接隐没（用户：臂间隙杂星尘乱）
@@ -1080,13 +1152,23 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         if (opt.gapCull) {
           const dwv = 0.5 + 0.5 * Math.cos(ARMS * (th - SWEEP * rr / GR));
           if (dwv < opt.gapCull) cullK = 0.12; // 近零：视觉上清走，密度/相位体系不动
+        }
+        // ★ 原 bug：这段被嵌在 if (opt.gapCull) 里 → 没传 gapCull 的层（galArms）的
+        //   centerClean 完全不生效，盘心因此堆满臂星（coreWarmMix 把它们染成琥珀 →
+        //   就是用户看到的「核里的金色粒子」）；且硬编码 0.32/0.46，参数传了也不读。
+        //   现改为独立块并读参数：内界 = opt.centerClean。
+        // ★ 羽化 0.14→0.10 且改 sqrt 爬升（用户：旋臂与核球连接的那一圈太淡/发空）。
+        //   实测 r=40~90px 有一圈「护城河」：mean 7.7、亮像素仅 1%，而臂区是 13~14.6 / 17~20%——
+        //   旋臂根本没接到核上。线性羽化要爬到 0.26GR 才恢复亮度，把连接段整个压暗了；
+        //   sqrt 羽化在羽化带 25% 处就回到 0.5 亮度，臂能贴着核长出来，同时核心仍清到近零。
         if (opt.centerClean) {
-          const cr = rr / GR;
-          if (cr < 0.32) cullK = Math.min(cullK, 0.02);                      // 中心区：白色散点清到近零
-          else if (cr < 0.46) cullK = Math.min(cullK, 0.03 + (cr - 0.32) / 0.14 * 0.97); // 羽化过渡：内缘不出现锐利亮边
+          const c0 = opt.centerClean, c1 = c0 + 0.10, cr = rr / GR;
+          if (cr < c0) cullK = Math.min(cullK, 0.02);                                  // 核心区：清到近零
+          else if (cr < c1) cullK = Math.min(cullK, 0.02 + Math.sqrt((cr - c0) / 0.10) * 0.98); // 羽化：sqrt 快恢复
         }
-        }
-        sz[i] = (0.35 + 0.65 * Math.pow(rand(), 4)) * bright * cullK * (1.12 - 0.12 * (rr / GR)) * Math.max(0.3, 1 - Math.max(0, rr / GR - 0.85) / 0.15 * 0.7);
+        col[i * 3] = c.r * cullK; col[i * 3 + 1] = c.g * cullK; col[i * 3 + 2] = c.b * cullK;
+        // 地板 0.35→0.46、幂次 4→3.2：中位粒子变大变亮（银河带面亮度的主要来源），尾部巨星不动
+        sz[i] = (0.52 + 0.48 * Math.pow(rand(), 3.0)) * bright * cullK * (1.12 - 0.12 * (rr / GR)) * Math.max(0.3, 1 - Math.max(0, rr / GR - 0.85) / 0.15 * 0.7) * (1 + vgT * 0.65); // 紫金区粒子放大：色相要亮度才可读（0.5→0.65：琥珀撤出后连接段偏暗，补一档）
         if (giantK < 0.009) sz[i] *= 1.7 + rand() * 0.8; // 主角星收敛：亮点不抢戏
         pha[i] = rand() * Math.PI * 2;
       }
@@ -1101,24 +1183,36 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       return pts;
     }
 
-    // 核球：扁椭球星团，暖色、密集 —— 星系的视觉锚点
+    // 核球：扁椭球星海，暖色、密集 —— 星系的视觉锚点
+    // ★ 重新启用（用户：银河系中心不是一颗星辰，是旋臂的交汇）。
+    //   「交汇处」的正确做法是用【粒子海堆出延展亮区】，不是画一颗 sprite 亮星：
+    //   粒子堆积自带密度涨落 → 读作「无数星的叠加」；sprite 只是「一颗星」，与星海质感断裂。
     function makeBulge(count, size = 0.30, opacity = 0.92, maxPx = 9, szMul = 0.7, parent = galaxySpin) {
       const arr = new Float32Array(count * 3);
       const col = new Float32Array(count * 3);
       const sz = new Float32Array(count);
       const pha = new Float32Array(count);
-      const cWarm = new THREE.Color(0xfff0d8); // 提白一档：暗奶油读作卡其脏
-      const cCore = new THREE.Color(0xfffaf0);
+      const cHot = new THREE.Color(0xffeec8);   // 核心：暖白（白只占极小核心，不糊成一团白饼）
+      const cAmber = new THREE.Color(0xe0a860); // 核球外缘：琥珀，衔接内臂紫金
       for (let i = 0; i < count; i++) {
-        const rb = Math.abs(gj()) * GR * 0.10;
+        // 径向：指数面亮度轮廓 Σ(r)∝e^(-r/h) → 面元权重 r·e^(-r/h) → 两个指数分布之和（Gamma(2)）
+        //   h=0.05GR：均半径 ~0.1GR、尾巴铺到 ~0.3GR，正好是参考图那种「尘埃围着核、向外渐隐」。
+        //   ★ +0.05GR 内界（用户：参考图的核是近似透明的）：挖空最中心，尘埃只从环外长出来——
+        //   透明核的「洞」由粒子海留白，sprite 只描一圈半透明环。
+        //   h 0.05→0.062、粒数下调（用户：金色颗粒再散一点、别这么密集）
+        const rb = Math.min(GR * 0.45, GR * 0.05
+          + -(Math.log(1 - rand() * 0.999) + Math.log(1 - rand() * 0.999)) * GR * 0.062);
         const tb = rand() * Math.PI * 2;
         arr[i * 3] = Math.cos(tb) * rb;
         arr[i * 3 + 1] = Math.sin(tb) * rb * 0.85;
-        // z 厚度必须小于盘倾角下的投影短轴，否则核球在斜视时拉成「竖条」
-        arr[i * 3 + 2] = gj() * GR * 0.022;
-        const c = cWarm.clone().lerp(cCore, 1 - Math.min(1, rb / (GR * 0.1)));
+        // z 厚度：① 必须小于盘倾角下的投影短轴，否则核球在斜视时拉成「竖条」；
+        //   ② 在 r→0 处归零（同盘层 zRamp 的教训）：盘心没有面内尺度，任何 z 散布都会投影成一条竖线。
+        arr[i * 3 + 2] = gj() * GR * 0.030 * Math.min(1, rb / (GR * 0.06));
+        const t = Math.min(1, rb / (GR * 0.22));
+        const c = cHot.clone().lerp(cAmber, t);
         col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
-        sz[i] = (0.35 + 0.65 * Math.pow(rand(), 3)) * 0.7;
+        // 尺寸：不再放大中心（过曝感已由 sprite 环接管），保持均匀颗粒
+        sz[i] = (0.35 + 0.65 * Math.pow(rand(), 3)) * szMul;
         pha[i] = rand() * Math.PI * 2;
       }
       const geo = new THREE.BufferGeometry();
@@ -1161,15 +1255,66 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       return pts;
     }
 
+    // ===== 棒（棒旋星系的「棒」）=====
+    // 物理：棒 = 老年星族的椭球状密度过剩；两条主臂从棒端（ansae）长出。
+    // ★ 必须挂 galaxySpin（与旋臂同一图案速度）：挂 spinCore（0.007 vs 盘层 0.014）会让
+    //   旋臂在几十秒内从棒端滑走——棒和臂是一个 m=2 模式，不能差速。
+    // ★ 配色：棒 = 老年星族（琥珀），臂 = 年轻星族（银/淡紫）—— 与站点「金核→银盘」色阶同源。
+    const BAR_A = GR * 0.34, BAR_B = GR * 0.115; // 半长轴 / 半短轴（轴比 ≈ 3:1）
+    function makeBar(count, size = 0.45, opacity = 0.82, maxPx = 12, szMul = 0.62, parent = galaxySpin) {
+      const arr = new Float32Array(count * 3);
+      const col = new Float32Array(count * 3);
+      const sz = new Float32Array(count);
+      const pha = new Float32Array(count);
+      const cBarIn = new THREE.Color(0xf6d29a); // 内侧：亮暖琥珀（接核球金尘）
+      const cBarOut = new THREE.Color(0xe2ab60); // 外侧：深琥珀（接臂的银）
+      for (let i = 0; i < count; i++) {
+        // 椭圆坐标采样：u = rand^0.75 → 面密度 ∝ u^(-2/3)，略向中心集中（棒内侧更亮）
+        const u = Math.pow(rand(), 0.85);
+        const tb = rand() * Math.PI * 2;
+        let x = Math.cos(tb) * BAR_A * u;
+        let y = Math.sin(tb) * BAR_B * u;
+        const jit = (0.004 + 0.012 * (1 - u)) * GR; // 边缘软化：不留硬边（0.02→0.012：棒形要立得住）
+        x += gj() * jit; y += gj() * jit;
+        arr[i * 3] = x;
+        arr[i * 3 + 1] = y;
+        const rEll = Math.hypot(x / BAR_A, y / BAR_B);
+        // 厚度：棒是盘内结构，比盘薄；rEll→0 处归零（竖线教训同盘层 zRamp）
+        arr[i * 3 + 2] = gj() * GR * 0.018 * Math.min(1, rEll);
+        const c = cBarIn.clone().lerp(cBarOut, Math.min(1, rEll));
+        // ansa（棒端把手）：真实棒两端常有一对增亮结 —— 也是旋臂的起点
+        const ansa = Math.max(0, (Math.abs(x) / BAR_A - 0.62) / 0.38);
+        const f = 1 + Math.pow(ansa, 1.5) * 0.7;
+        col[i * 3] = c.r * f; col[i * 3 + 1] = c.g * f; col[i * 3 + 2] = c.b * f;
+        sz[i] = (0.3 + 0.7 * Math.pow(rand(), 3)) * szMul * f;
+        pha[i] = rand() * Math.PI * 2;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 0.5);
+      const pts = new THREE.Points(geo, galaxyMat(size, opacity, maxPx));
+      parent.add(pts);
+      return pts;
+    }
+
     // 七层。每层的「运动角色」不同 —— 自转看起来对不对，全在这七行的 opt 上：
     //   churn = 涌动（短周期摆动，让星海不死板，且永不累积变形）
     //   drift = 真正的个体漂移（只在 tracer 层给，数量少，长期变形不可见）
     //   dw    = 密度波亮度调制（0 = 亮度与臂无关；1 = 完全由「是否在臂上」决定亮度）
     //   warp  = 盘外缘翘曲：旋转时边缘此起彼伏，是「三维空间中的运动」最强的廉价线索
-    const galDisk  = makeDisk(Math.round(20000 * DN), 0.055, 0.24, 0.72, 9, 0.62, 1, // size 0.27：颗粒细化（用户：全屏大颗粒粗糙）
-      { churn: 0.012, warp: 0.6, dw: 0.8, gapCull: 0.3, centerClean: 0.35 });
-    const galArms  = makeDisk(Math.round(9000 * DN), 0.085, 0.38, 0.9, 12, 0.35, 1.5, // 臂脊银星加量+细化
-      { churn: 0.014, warp: 0.6, dw: 0.9, centerClean: 0.32, coolShift: 0.35 }); // 冷蓝白年轻星族
+    // ★ 旋臂「展宽」而非「压黑臂隙」：亮区半宽要接近星团尺度（团雾 ~110px、团成员云 ~52px），
+    //   否则团的外围必然跨出臂脊伸进暗隙，读起来像「贴在一根细线上」。
+    //   spread 0.055→0.10 / 0.085→0.14（亮区半宽 ~20px → ~40px），dw 略降让臂隙留住底光。
+    //   ★ 展宽必须同步加量：光是加宽 spread 会把同样的粒子摊薄，脊峰反而变暗（实测 bandLum 9.6→9.0）。
+    //     粒数按展宽倍数补：20000→32000（×1.6）、9000→14000（×1.55）。
+    const galDisk  = makeDisk(Math.round(32000 * DN), 0.10, 0.24, 0.72, 9, 0.62, 1, // size 0.27：颗粒细化（用户：全屏大颗粒粗糙）
+      // vg 0.32：紫金渐变强度。★ 不要再改这里的旋臂径向结构（barStart 已废，见 makeBar 注释）
+      { churn: 0.012, warp: 0.6, dw: 0.62, gapCull: 0.12, centerClean: 0.055, vg: 0.32 });
+    const galArms  = makeDisk(Math.round(14000 * DN), 0.14, 0.38, 0.9, 12, 0.35, 1.5, // 臂脊银星加量+细化
+      { churn: 0.014, warp: 0.6, dw: 0.78, centerClean: 0.055, coolShift: 0.22 });
     // 臂隙填充（用户：旋臂中间别那么空）：dw=0 的均匀银尘层——不受密度波调制，
     // 淡淡铺满整个盘面（含臂隙），旋臂亮、臂隙淡，不再「臂外全黑」
     let galFill: THREE.Points;
@@ -1177,18 +1322,18 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // 絮状填充（用户：絮状 = 顺流向拉长的短弧丝，不是圆球团）：
       // 短弧丝（总量 30000×DN），每条沿旋臂流向弯曲、切向拉长，粒数 8~33，疏密随机；
       // 角度分槽+抖动：丝缕覆盖所有方位角，抹平臂隙的整片空区；亮度均值上调更可见
-      const N_TOTAL = Math.round(14000 * DN); // 减半：清澈=絮间见纯黑
+      const N_TOTAL = Math.round(21000 * DN); // 16000→21000：臂隙填充需要真材实料，光染色看不出来 // 减半：清澈=絮间见纯黑（略加：絮层是天然的「盘底光」，dw=0 与臂无关，专治臂隙纯黑）
       const arrF = new Float32Array(N_TOTAL * 3);
       const colF = new Float32Array(N_TOTAL * 3);
       const szF = new Float32Array(N_TOTAL);
       const phaF = new Float32Array(N_TOTAL);
-      const cFill = new THREE.Color(0xdde1ea);
+      const cFill = new THREE.Color(0xe3e5e7); // 银（与盘基色一致）
       const rngF = mulberry32(774411);
       let w = 0;
       let slot = 0;
       const NSLOTS = 24;
       while (w < N_TOTAL) {
-        const r0 = GR * (0.34 + 0.72 * Math.sqrt(rngF())); // 内界外推：中心区不留絮
+        const r0 = GR * (0.12 + 0.94 * Math.sqrt(rngF())); // 内界对齐 centerClean 的 0.12GR：核心光球内不留絮
         const th0 = (((slot++) % NSLOTS) + rngF() * 0.9) / NSLOTS * Math.PI * 2;
         const arc = 0.08 + rngF() * 0.38;                   // 弧丝长短差异拉开
         const n = Math.min(N_TOTAL - w, 8 + Math.floor(rngF() * 26));
@@ -1198,7 +1343,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         for (let i = 0; i < n && w < N_TOTAL; i++, w++) {
           const t = n > 1 ? i / (n - 1) : 0.5;
           const th = th0 + thDir * t * arc;
-          const rr = Math.max(r0, GR * 0.34) * (1 + Math.sin(t * Math.PI) * bow * thDir); // 弧丝微弯（沿流向鼓一点）；整体抬到核心光海之外（主星禁入）
+          const rr = Math.max(r0, GR * 0.12) * (1 + Math.sin(t * Math.PI) * bow * thDir); // 弧丝微弯（沿流向鼓一点）；整体抬到核心光海之外（主星禁入）
           const px = Math.cos(th) * rr;
           const py = Math.sin(th) * rr * 0.9;
           const perp = (rngF() - 0.5) * 2 * jit;             // 细垂直抖动：丝而不绳，宽窄随机
@@ -1206,8 +1351,16 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           arrF[w * 3 + 1] = py + Math.cos(th) * perp * 0.9;
           arrF[w * 3 + 2] = (rngF() - 0.5) * 1.3;
           const f = 0.34 + rngF() * 0.62;
-          colF[w * 3] = cFill.r * f; colF[w * 3 + 1] = cFill.g * f; colF[w * 3 + 2] = cFill.b * f;
-          szF[w] = 0.2 + rngF() * 0.42;
+          const cFx = cFill.clone().lerp(cWarmCore, coreWarmMix(rr) * 0.8); // 絮层也跟着暖化（r<0.30GR 已伸进盘心）
+          // 臂隙冷银：dw=1 在臂脊（不冷化）、dw=0 在臂隙正中（冷化最强）。
+          //   只在 r>0.30GR 生效 —— 内区旋臂缠绕太密，dw 变化快，冷化会斑驳成一团乱色。
+          const dwvF = 0.5 + 0.5 * Math.cos(ARMS * (th - SWEEP * rr / GR));
+          const gapRad = Math.min(1, Math.max(0, (rr / GR - 0.30) / 0.20));
+          const gapK = (1 - dwvF) * gapRad;              // 0=臂脊 1=臂隙正中
+          const gapTint = gapK * 0.85;
+          if (gapTint > 0.01) cFx.lerp(cGapBlue, gapTint);
+          colF[w * 3] = cFx.r * f; colF[w * 3 + 1] = cFx.g * f; colF[w * 3 + 2] = cFx.b * f;
+          szF[w] = (0.2 + rngF() * 0.42) * (1 + gapK * 1.1); // 臂隙多填一点：只染色看不出来，得有星
           phaF[w] = rngF() * Math.PI * 2;
         }
       }
@@ -1217,12 +1370,17 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       geoF.setAttribute('aSize', new THREE.BufferAttribute(szF, 1));
       geoF.setAttribute('aPhase', new THREE.BufferAttribute(phaF, 1));
       geoF.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
-      galFill = new THREE.Points(geoF, galaxyMat(0.42, 0.45, 9, { churn: 0.01, warp: 0.7 })); // 絮粒细化
+      galFill = new THREE.Points(geoF, galaxyMat(0.42, 0.54, 9, { churn: 0.01, warp: 0.7 })); // 絮粒细化；opacity 0.45→0.54 = 抬盘底光
       galFill.material.blending = THREE.AdditiveBlending;
       galaxySpin.add(galFill);
     }
-    const galBulge = makeBulge(Math.round(3200 * DN), 0.5, 0.96, 16, 0.75, spinCore); // 美化①：更大更软，中心融成光
+    // ★ 重新点亮（原 3200 且 visible=false）：核球尘埃围绕半透明环状核（用户参考图形态）；
+    //   密度不能堆太高——参考图的核周尘埃是「颗粒可辨」的，堆实了就成了金团。
+    const galBulge = makeBulge(Math.round(3800 * DN), 0.5, 0.96, 16, 0.75, spinCore); // 5200→3800：金尘稀疏、颗粒可辨
     const galCore  = makeCoreGlow(Math.round(70 * DN), GR * 0.10, 6, 0.13, 80, spinCore); // 暖核收敛：提气不抢戏
+    // ★ 棒暂不参与渲染：上一版为「臂从棒端长出」改动了旋臂径向分布，把用户调好的内区色彩
+    //   结构整段删掉 —— 已回滚。棒只能做【纯叠加层】，绝不许动 makeDisk 的径向/相位。
+    // const galBar = makeBar(Math.round(3600 * DN), 0.45, 0.9, 12, 0.66, galaxySpin);
     const galSheen = makeDisk(Math.round(400 * DN), 0.075, 1.9, 0.03, 20, 0.55, 1, // 减量：中心白点退场
       { churn: 0.010, warp: 0.6, dw: 0.85 });
     const galHalo  = makeDisk(Math.round(280 * DN), 0.09, 1.30, 0.03, 20, 0.5, 1, // 减量
@@ -1231,7 +1389,6 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     // ===== 中心巨星（用户：中间收成一颗发光的巨星）=====
     // 核球/微光/辉光/四芒碎粒全部退场，换成三层叠出的干净发光巨星：
     // 白热核 + 暖光内晕 + 大范围暖色外晕。挂在 galaxyTilt 上（跟随盘心与滚动位移）。
-    galBulge.visible = false;
     galCore.visible = false;
     galSheen.visible = false;
     galHalo.visible = false;
@@ -1246,11 +1403,87 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         star.add(sp);
       };
       // 全高斯无平台：任何一层都没有「实心盘」，透明感来自低透明度+平滑衰减
-      mkStar(haloTex, 5, 0.06, 0xe8d4ac);       // 奶油外层大气：极淡
-      mkStar(ringGlowTex, 3.6, 0.1, 0xc9a6e8); // 紫晕：与金环叠成紫金
-      mkStar(ringGlowTex, 2.8, 0.38, 0xfaeed2); // 环形主体：提亮提白
-      mkStar(dotTex, 0.42, 0.05, 0xfdf6e6);     // 中心微光：近零
+      // ★ 去白（用户：核心球太白）。两个原因叠加：
+      //   ① 紫晕 0xc9a6e8 与琥珀 0xfaeed2 是互补色，Additive 相加 → 饱和度互相抵消 → 中性灰
+      //      （实测核心 sat 仅 0.043）。紫晕改成同色系金，不再与主体互补。
+      //   ② 盘心银白星尘堆积（见 coreWarmMix）—— 已由核球暖化处理。
+      //   主体 0xfaeed2 → 0xf0d494（琥珀金），opacity 0.38→0.32 保亮度。
+      // ★ 去「黄外圈」（用户：中间核的黄色外圈很丑）：ringGlowTex 是甜甜圈——
+      //   中心 alpha 0.02（几乎空心）、0.62 半径处 0.95 最亮 → 叠出来就是一圈空心黄环，
+      //   像 UI 描边而不是核球。改成三层高斯：中心最亮、向外平滑衰减（真实核球形态）。
+      //   尺寸第一轮偏小（r=0 亮度 40.9→28、r=20 只剩 10.5），放大一档补回体积感。
+      // ★ 去「脏/雾」（用户：核心脏脏的、雾雾的）：原方案是两层极低透明度的大范围 haloTex
+      //   （中心 alpha 仅 0.42、尾巴拖到 0.5 半径）——低透明度加法混合铺在近黑背景上 = 灰雾。
+      //   改法：**减少层数 + 每层提高不透明度 + 换快衰减贴图**，亮度集中在核内而不是摊成雾。
+      //   glowHaloTex：100%→50%(0.18)→18%(0.4)→4%(0.7)，衰减远快于 haloTex；
+      //   coreTex：0~0.45 实心平台 + 快衰减 → 核是「实的」，不糊。
+      // ★ 第二轮（用户：还是脏脏的、雾雾的）：低透明度琥珀叠黑底 = 暗卡其棕，这是「脏」的
+      //   本质。发光感 = 亮度集中：小而实的热核（高不透明度）+ 紧凑暖晕，摊开就是雾。
+      // ★ 中心 = 半透明环状核（用户参考图：核是近似透明的，内部镂空）：
+      //   ringGlowTex 一层、低不透明度、柔和金——不再叠热核星，让环内真正透出黑底。
+      mkStar(glowHaloTex, 6.5, 0.035, 0xe8b870); // 大范围暖橘晕：与光柱同色系收尾
+      mkStar(glowHaloTex, 3.0, 0.07, 0xffc470);  // 紧凑暖橘晕
+      // 环 0.20→0.32、色 #d9b878→#e8c88a（用户：核太淡）；芯尖 0.07 只给镂空区一点底光，仍是透的
+      mkStar(ringGlowTex, 2.5, 0.42, 0xf0b860);  // 半透明橘金环核：与光柱同色温
+      mkStar(dotTex, 0.9, 0.07, 0xffe8b8);       // 镂空区底光：极淡暖橘
       galaxyTilt.add(star);
+    }
+
+    // ===== 旋棒 / 光柱：【垂直于银河盘面】穿盘而过（方向不动，只调形状）=====
+    // ★ 方向已定稿，不要再改：沿盘面法线（局部 Z）。盘面 = 局部 XY（makeDisk 的 x,y 是盘内
+    //   坐标、z 是盘厚），法线 = 局部 Z；galaxyTilt 的 Ry 恒 0 → 法线在屏幕上投影恒为竖直。
+    // ★ 本轮只做形状优化：更细（半径 0.022→0.018GR）、更含蓄，保持「针」而不是「柱」。
+    {
+      const count = Math.round(1800 * DN);
+      const arr = new Float32Array(count * 3);
+      const col = new Float32Array(count * 3);
+      const sz = new Float32Array(count);
+      const pha = new Float32Array(count);
+      const cHot = new THREE.Color(0xfff6e8);   // 核心：暖白
+      const cMid = new THREE.Color(0xffb055);   // 中段：橘黄（太阳色）
+      const cTail = new THREE.Color(0xd96a30);  // 远端：橘红渐隐
+      const L = GR * 0.62;                      // 沿法线的半长（克制：暗示极轴而非贯穿全屏）
+      for (let i = 0; i < count; i++) {
+        const s = rand() < 0.5 ? 1 : -1;        // 双向对称：穿盘而过
+        const k = Math.pow(rand(), 0.8);        // 密度略向核心集中
+        const z = s * L * k;
+        const t = Math.abs(z) / L;
+        // 半径：中间略粗、两端收细（像光针而不是圆柱），叠加随机做绒毛感
+        const rad = GR * 0.012 * (0.3 + 0.7 * Math.pow(rand(), 0.7)) * (1 + 0.55 * t * t);
+        const th = rand() * Math.PI * 2;
+        const sway = Math.sin(z / L * Math.PI) * L * 0.045 * t; // 微弯：自然光弧
+        arr[i * 3] = Math.cos(th) * rad + sway;
+        arr[i * 3 + 1] = Math.sin(th) * rad;
+        arr[i * 3 + 2] = z;
+        const c = cHot.clone().lerp(cTail, t);
+        const f = 0.16 + 1.1 * Math.pow(1 - t, 1.5); // 提亮：光柱本身可辨
+        col[i * 3] = c.r * f; col[i * 3 + 1] = c.g * f; col[i * 3 + 2] = c.b * f;
+        sz[i] = (0.3 + 0.7 * Math.pow(rand(), 3)) * 0.38;
+        pha[i] = rand() * Math.PI * 2;
+      }
+      const geoB = new THREE.BufferGeometry();
+      geoB.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      geoB.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      geoB.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+      geoB.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+      geoB.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR);
+      const beam = new THREE.Points(geoB, galaxyMat(0.5, 0.7, 12, { churn: 0.004, warp: 0 }));
+      galaxySpin.add(beam);
+      // 沿轴叠 5 个柔光：点亮柱身（已收窄，保证是「针」不是「柱」）
+      const mkBeamGlow = (zFrac: number, scale: number, opacity: number, color: number) => {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: dotTex, color: new THREE.Color(color), transparent: true, opacity,
+          depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+        }));
+        sp.position.set(0, 0, L * zFrac);
+        sp.scale.setScalar(scale);
+        galaxySpin.add(sp);
+      };
+      mkBeamGlow(0,     GR * 0.15, 0.18, 0xffe2b0);
+      mkBeamGlow(0.4,   GR * 0.11, 0.1, 0xffb055);
+      mkBeamGlow(-0.4,  GR * 0.11, 0.1, 0xffb055);
+      mkBeamGlow(0.72,  GR * 0.07, 0.05, 0xd96a30);
+      mkBeamGlow(-0.72, GR * 0.07, 0.05, 0xd96a30);
     }
 
     // ===== 中心彩色微尘（用户：穿过中核加点别的颜色，淡淡的）=====
@@ -1951,17 +2184,25 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         }
         // 银色星云裙：团外围 0.9~1.6×半径的银河色细星，内密外疏、向外渐隐——
         // 无论团落在亮臂还是臂间暗隙，脚下都有衔接银河的星光底座，不再「悬空突兀」
-        const cSk = new THREE.Color(0xdde1ea);
+        const cSk = new THREE.Color(0xe3e5e7); // 银（与盘基色一致）
+        // ★ 自适应底座：团脚下的银河越暗，银色星云裙越亮越大 —— 团永远「坐在光里」。
+        //   dw = 臂相位亮度因子（1 = 正好在臂脊，0 = 臂隙正中）。团心默认钉在臂脊（dw=1，
+        //   不补偿）；一旦被 hero 驱逐或将来加团导致偏离，底座自动长出来，不会悬空。
+        const thC = Math.atan2(clusPos[k * 3 + 1], clusPos[k * 3]);
+        const rrC = Math.hypot(clusPos[k * 3], clusPos[k * 3 + 1]) || 1;
+        const dwC = 0.5 + 0.5 * Math.cos(ARMS * (thC - SWEEP * rrC / GR));
+        const skBoost = 1 + (1 - dwC) * 0.9;   // 臂隙 ×1.9 / 半臂 ×1.45 / 臂脊 ×1.0
+        const skSpread = 1 + (1 - dwC) * 0.35; // 暗处底座铺得更开，与暗区接壤更柔
         for (let i = 0; i < SKIRT; i++) {
           const j = BG + i;
           const th = rngB() * Math.PI * 2;
           const u = rngB();
-          const dr = rad * (0.9 + 0.7 * u * u);
+          const dr = rad * (0.9 + 0.7 * u * u) * skSpread;
           arr[j * 3] = clusPos[k * 3] + Math.cos(th) * dr;
           arr[j * 3 + 1] = clusPos[k * 3 + 1] + Math.sin(th) * dr * 0.75;
           arr[j * 3 + 2] = clusPos[k * 3 + 2] + (rngB() - 0.5) * 1.0;
           const fade = 1 - u * 0.72;
-          const f = (0.3 + rngB() * 0.4) * fade;
+          const f = (0.3 + rngB() * 0.4) * fade * skBoost;
           col[j * 3] = cSk.r * f; col[j * 3 + 1] = cSk.g * f; col[j * 3 + 2] = cSk.b * f;
           sz[j] = 0.3 + rngB() * 0.4;
           pha[j] = rngB() * Math.PI * 2;
@@ -2329,7 +2570,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       const sz = new Float32Array(n);
       const pha = new Float32Array(n);
       const cW = new THREE.Color(0xe4e6ec);
-      const cB = new THREE.Color(0xaebbdd);
+      const cB = new THREE.Color(0xc2c8d4); // 银灰（原 0xaebbdd B-R=47 过蓝）
       const cG = new THREE.Color(0xd8c290);
       for (let i = 0; i < n; i++) {
         arr[i * 3] = (rand() * 2 - 1) * W2 * 2;
@@ -2406,7 +2647,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       const col = new Float32Array(n * 3);
       const pha = new Float32Array(n);
       const cW = new THREE.Color(0xdfe4ee);
-      const cB = new THREE.Color(0xaebbdd);
+      const cB = new THREE.Color(0xc2c8d4); // 银灰（原 0xaebbdd B-R=47 过蓝）
       for (let i = 0; i < n; i++) {
         let x, y;
         do { x = (rand() * 2 - 1) * 17; y = (rand() * 2 - 1) * 10; }
@@ -2927,9 +3168,13 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       renderer.setSize(w, h);
       const pr = renderer.getPixelRatio();
       // uScale/uMax 都是「物理像素」语义：乘 pixelRatio 后真机（dpr 2/3）上的星点尺寸才与桌面观感一致
+      // ★ 原来 uScale ∝ h 线性：屏幕越大星点被放大成 2.4px 的圆球 → 全屏「颗粒感/粗糙」。
+      //   恒星是点光源，不该随屏幕变大而变大；正确的自适应是【加数量】（见 DN 上限 2.2）。
+      //   这里把 h 的指数压到 0.35：900px 高为基准（值不变），1440px 只放大 1.18× 而不是 1.6×。
+      const hk = Math.pow(h / 900, 0.35);
       dustMats.forEach((m) => {
-        m.uniforms.uScale.value = h * pr * 0.38; // 0.42→0.38：全屏粒子再细一档
-        if (m.userData.baseMax !== undefined) m.uniforms.uMax.value = m.userData.baseMax * pr;
+        m.uniforms.uScale.value = 342 * pr * hk;
+        if (m.userData.baseMax !== undefined) m.uniforms.uMax.value = m.userData.baseMax * pr * hk;
       });
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
@@ -3193,8 +3438,11 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // ★ ShaderMaterial 必须写 uniforms.uOpacity.value —— .opacity 属性不进渲染（历史静默失效）
       // 银河带银色粒子加重（用户）：盘 0.80→0.92、旋臂 0.72→0.78（仍留呼吸振幅）
       galDisk.material.uniforms.uOpacity.value = 0.92 + Math.sin(t * 0.16) * 0.08;
-      galArms.material.uniforms.uOpacity.value = 0.78 + Math.sin(t * 0.21 + 1.6) * 0.12;
-      galHalo.material.uniforms.uOpacity.value = 0.035 + Math.sin(t * 0.14 + 0.6) * 0.018;
+      // 臂层提亮（用户：旋臂太淡）：0.78→0.92。色相冷度降到 0.22 后，
+      //   臂的可辨度改由【亮度 + 亮区宽度】承担（谷底已抬到 0.42，不会压黑臂隙）
+      galArms.material.uniforms.uOpacity.value = 0.92 + Math.sin(t * 0.21 + 1.6) * 0.08;
+      // 絮层补呼吸：原来只有盘/臂两层呼吸、絮层恒定 → 臂絮对比会周期性漂移
+      galFill.material.uniforms.uOpacity.value = 0.54 + Math.sin(t * 0.19 + 0.9) * 0.06;
 
       // 相机极缓游移（星系自身的呼吸式漂移，与鼠标无关）：近景浮尘与远景星幕错动出视差。
       // ★ 鼠标视差已按用户要求移除：鼠标一动画面就整体跟着晃，观感是「银河在追鼠标」。

@@ -2,7 +2,7 @@
 import Base from "../../../layouts/Base.astro";
 import NebulaBand from "../../../components/NebulaBand.astro";
 import MiniGalaxy from "../../../components/MiniGalaxy.astro";
-import { CATEGORIES } from "../../../config";
+import { CATEGORIES, SERIES } from "../../../config";
 import { getCollection } from "astro:content";
 
 export async function getStaticPaths() {
@@ -14,19 +14,36 @@ export async function getStaticPaths() {
     if (!cats.has(cat)) cats.set(cat, []);
     cats.get(cat)!.push(n);
   }
-  return [...cats.entries()].map(([cat, entries]) => ({
-    params: { cat },
-    props: {
-      form: cat === "study" ? "dense" : cat === "frontend" ? "spiral" : "natural",
-      entries: entries.sort(
-        (a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0),
-      ),
-    },
-  }));
+  return [...cats.entries()].map(([cat, entries]) => {
+    const sorted = entries.sort(
+      (a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0),
+    );
+    // 专栏（series）分组：专题内部的子集合（如学习笔记下的「深入理解 AI Agent」）
+    const seriesMap = new Map<string, { id: string; entries: typeof sorted }>();
+    const loose: typeof sorted = [];
+    for (const n of sorted) {
+      const sid = n.data.series;
+      if (sid && SERIES[sid]) {
+        if (!seriesMap.has(sid)) seriesMap.set(sid, { id: sid, entries: [] });
+        seriesMap.get(sid)!.entries.push(n);
+      } else {
+        loose.push(n);
+      }
+    }
+    return {
+      params: { cat },
+      props: {
+        form: cat === "study" ? "dense" : cat === "frontend" ? "spiral" : "natural",
+        entries: sorted,
+        seriesList: [...seriesMap.values()],
+        loose,
+      },
+    };
+  });
 }
 
 const { cat } = Astro.params;
-const { entries, form } = Astro.props;
+const { entries, form, seriesList, loose } = Astro.props;
 const meta = CATEGORIES[cat];
 const label = meta?.label ?? cat;
 const desc = meta?.desc ?? "";
@@ -56,21 +73,50 @@ const fmt = (date?: Date) =>
   </div>
 
   <div class="container tp-body">
-    <ol class="kb-timeline">
-      {entries.map((n) => (
-        <li class="kb-entry">
-          <a href={`/notes/${n.id}/`}>
-            <p class="kb-meta">
-              <time datetime={n.data.date?.toISOString()}>{fmt(n.data.date)}</time>
-              <span class="kb-pill">{label}</span>
-            </p>
-            <h2>{n.data.title}</h2>
-            {n.data.description && <p class="kb-desc">{n.data.description}</p>}
-            <span class="kb-arrow" aria-hidden="true">→</span>
-          </a>
-        </li>
-      ))}
-    </ol>
+    {seriesList.map((sr) => {
+      const sm = SERIES[sr.id];
+      return (
+        <section class="sr-sec" aria-label={`专栏：${sm.title}`}>
+          <h2 class="sr-h2">
+            <span class="sr-badge">专栏</span>{sm.title}
+            <small class="sr-cnt">{sr.entries.length} 篇</small>
+          </h2>
+          {sm.desc && <p class="sr-desc">{sm.desc}</p>}
+          <ol class="kb-timeline">
+            {sr.entries.map((n) => (
+              <li class="kb-entry">
+                <a href={`/notes/${n.id}/`}>
+                  <p class="kb-meta"><time datetime={n.data.date?.toISOString()}>{fmt(n.data.date)}</time></p>
+                  <h2>{n.data.title}</h2>
+                  {n.data.description && <p class="kb-desc">{n.data.description}</p>}
+                  <span class="kb-arrow" aria-hidden="true">→</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </section>
+      );
+    })}
+    {loose.length > 0 && (
+      <section class="sr-sec" aria-label="其他文章">
+        {seriesList.length > 0 && <h2 class="sr-h2">其他文章</h2>}
+        <ol class="kb-timeline">
+            {loose.map((n) => (
+              <li class="kb-entry">
+                <a href={`/notes/${n.id}/`}>
+                  <p class="kb-meta">
+                    <time datetime={n.data.date?.toISOString()}>{fmt(n.data.date)}</time>
+                    <span class="kb-pill">{label}</span>
+                  </p>
+                  <h2>{n.data.title}</h2>
+                  {n.data.description && <p class="kb-desc">{n.data.description}</p>}
+                  <span class="kb-arrow" aria-hidden="true">→</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+      </section>
+    )}
     {entries.length === 0 && <p class="empty">该专题下暂无文章</p>}
   </div>
 </Base>
@@ -120,6 +166,24 @@ const fmt = (date?: Date) =>
   .tp-count { font-family: var(--mono); font-size: 12px; color: var(--tc); letter-spacing: 0.04em; }
 
   .tp-body { padding-top: 8px; }
+  .sr-sec { margin-bottom: 36px; }
+  .sr-h2 {
+    margin: 0 0 6px;
+    font: 400 19px var(--font-display);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sr-badge {
+    font: 400 10px var(--font-sans, sans-serif);
+    color: var(--tc, var(--accent));
+    border: 1px solid color-mix(in srgb, var(--tc) 45%, transparent);
+    border-radius: 999px;
+    padding: 2px 10px;
+    letter-spacing: 0.14em;
+  }
+  .sr-cnt { font: 400 11px var(--mono); color: var(--muted); margin-left: 2px; }
+  .sr-desc { margin: 0 0 14px; font-size: 12.5px; line-height: 1.7; color: var(--muted); max-width: 640px; }
   .kb-timeline {
     list-style: none;
     margin: 0;
