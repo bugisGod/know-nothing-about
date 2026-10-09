@@ -2,7 +2,8 @@
 import Base from "../../../layouts/Base.astro";
 import NebulaBand from "../../../components/NebulaBand.astro";
 import MiniGalaxy from "../../../components/MiniGalaxy.astro";
-import { CATEGORIES, SERIES } from "../../../config";
+import { CATEGORIES, SERIES, PROJECT_COLOR } from "../../../config";
+import { assignClusterColors } from "../../../lib/cluster-colors.server";
 import { getCollection } from "astro:content";
 
 export async function getStaticPaths() {
@@ -33,7 +34,6 @@ export async function getStaticPaths() {
     return {
       params: { cat },
       props: {
-        form: cat === "study" ? "dense" : cat === "frontend" ? "spiral" : "natural",
         entries: sorted,
         seriesList: [...seriesMap.values()],
         loose,
@@ -43,11 +43,11 @@ export async function getStaticPaths() {
 }
 
 const { cat } = Astro.params;
-const { entries, form, seriesList, loose } = Astro.props;
+const { entries, seriesList, loose } = Astro.props;
 const meta = CATEGORIES[cat];
+const color = Astro.props.color as string;
 const label = meta?.label ?? cat;
 const desc = meta?.desc ?? "";
-const color = meta?.color ?? "#9db8ff";
 const fmt = (date?: Date) =>
   date?.toISOString().slice(0, 10).replaceAll("-", ".") ?? "";
 ---
@@ -60,7 +60,7 @@ const fmt = (date?: Date) =>
       <a class="tp-back" href="/notes/">← 返回知识库</a>
       <div class="tp-banner" style={`--tc: ${color}`}>
         <div class="tp-galaxy">
-          <MiniGalaxy size={130} color={color} form={form} seed={cat} />
+          <MiniGalaxy size={130} color={color} seed={cat} />
         </div>
         <div class="tp-head">
           <small>⭐ 专题</small>

@@ -15,7 +15,7 @@ const { slug } = Astro.params;
 // 找该系列任一文章所属分类，跳到对应专题页
 const notes = await getCollection("notes", ({ data }) => !data.draft);
 const one = notes.find((n) => n.data.series === slug);
-const cat = one ? (one.id.includes("/") ? one.id.split("/")[0] : "study") : "study";
+const cat = one ? (one.id.includes("/") ? one.id.split("/")[0] : "ai") : "ai";
 ---
 <html lang="zh-CN">
   <head>

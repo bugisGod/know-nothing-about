@@ -2,7 +2,7 @@
 import Base from '../layouts/Base.astro';
 import BrainGraph from '../components/BrainGraph.astro';
 import { getCollection } from 'astro:content';
-import { SITE, CATEGORIES } from '../config';
+import { SITE, CATEGORIES, PROJECT_COLOR, assignClusterColors } from '../config';
 
 const catOf = (id: string) => (id.includes('/') ? id.split('/')[0] : '未分类');
 const allNotes = await getCollection('notes', ({ data }) => !data.draft);
@@ -63,6 +63,12 @@ const ensureCluster = (key: string, init: Omit<ClusterDef, 'count'>) => {
 };
 
 const stars: StarDef[] = [];
+// 每团的出生日期 = 团内最早文章的日期（决定自动取色的分配顺序：新团排队尾）
+const births: Record<string, string> = {};
+const noteBirth = (k: string, d?: Date | string) => {
+  const b = d ? new Date(d).toISOString().slice(0, 10) : "9999-99-99";
+  if (!births[k] || b < births[k]) births[k] = b;
+};
 
 for (const n of allNotes) {
   const cat = catOf(n.id);
@@ -75,10 +81,9 @@ for (const n of allNotes) {
     url: `/notes/?category=${encodeURIComponent(cat)}`,
     color: meta?.color,
     desc: meta?.desc,
-    // 星团形态语义：每个分类的结构不同，形态本身就是信息
-    form: meta?.form ?? (cat === 'study' ? 'dense' : cat === 'frontend' ? 'spiral' : 'natural'),
   });
   clusters[ci].count++;
+  noteBirth(key, n.data.date);
   stars.push({
     id: n.id,
     title: n.data.title,
@@ -100,11 +105,12 @@ for (const p of allProjects) {
     key: 'projects',
     title: '项目',
     url: '/projects/',
-    color: '#ffc46b',
+    color: PROJECT_COLOR,
     desc: '做完的东西 · 复盘',
     form: 'scatter',
   });
   clusters[ci].count++;
+  noteBirth("projects", p.data.date);
   stars.push({
     id: p.id,
     title: p.data.title,
@@ -118,6 +124,7 @@ for (const p of allProjects) {
     recent: isRecent(p.data.date),
   });
 }
+
 
 // 星际连线：文章之间共享标签的关联 —— 知识网络（方案图核心概念）。
 // 数据源两级：frontmatter 声明 related（slug 列表）的文章以手工为准，其余按
@@ -148,6 +155,14 @@ const links: { a: number; b: number; w: number }[] = [];
   manualBy.forEach((targets, i) => {
     for (const j of targets) links.push({ a: Math.min(i, j), b: Math.max(i, j), w: 3 });
   });
+}
+
+// ★ 无状态自动配色：按出生顺序贪心取色（手动配置色优先永动，新团自动避开所有已有色）
+{
+  const assigned = assignClusterColors(
+    clusters.map((c) => ({ key: c.key, color: c.color, birth: births[c.key] })),
+  );
+  for (const c of clusters) c.color = assigned[c.key];
 }
 
 // 每个分类的不重复话题（星团 hover 信息：N 篇 · M 个话题 + 标签列表）

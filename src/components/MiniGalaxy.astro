@@ -1,14 +1,13 @@
 ---
-// 迷你星团卡 v9（清亮星辰）：小实心亮核 + 快衰减紧光晕，颗颗分明
-// 数量少、间距大，虚线星座网可见，团心收成一颗发光巨星
+// 迷你星团卡 v10（形态发生器）：结构与首页同源，全部由种子哈希派生
+// 旋臂(0/2/3) × 缠绕 × 椭率 × 不对称 × 核剖面 —— 新增专题零配置自动长出独立形状
 // 无雾无渐变云——纯星点 + 主星，和首页星团同一语言
 interface Props {
   size?: number;
   color?: string;
-  form?: string;
   seed?: string;
 }
-const { size = 150, color = '#9db8ff', form = 'natural', seed = 'c' } = Astro.props;
+const { size = 150, color = '#9db8ff', seed = 'c' } = Astro.props;
 
 let seedState = 2166136261;
 for (let i = 0; i < seed.length; i++) {
@@ -53,7 +52,7 @@ const hsl2rgb = (h: number, s: number, l: number) => {
 const [hr0, s0, l0] = rgb2hsl(...hex2rgb(color));
 const vc = rgb2hex(...hsl2rgb(hr0, Math.min(0.85, s0 * 1.9), Math.min(0.62, Math.max(0.52, l0 * 0.88))));
 
-// ===== 星点布位（form 结构 + 最小间距）=====
+// ===== 星点布位（形态发生器 + 最小间距）=====
 const rad = size * 0.3;
 interface P { x: number; y: number; r: number; }
 const stars: P[] = [];
@@ -66,26 +65,25 @@ const tryPlace = (x: number, y: number, rr: number) => {
   }
   return false;
 };
-if (form === 'spiral') {
-  for (let i = 0; i < 60 && stars.length < 7; i++) {
-    const u = i / 60;
-    const arm = i % 2 === 0 ? 0 : Math.PI;
-    const r = rad * (0.15 + 0.85 * u);
-    const th = arm + u * 2.7 + (rand() - 0.5) * 0.2;
-    tryPlace(Math.cos(th) * r, Math.sin(th) * r * 0.82, size * (0.012 + rand() * 0.012));
+// 形态参数（先消费若干 rand()：同种子恒定同形态）
+const arms = [0, 0, 2, 2, 3][Math.floor(rand() * 5)];
+const armAmp = 0.6 + rand() * 0.5;
+const wind = 1.4 + rand() * 1.8;
+const flat = 0.2 + rand() * 0.45;
+const pa = rand() * Math.PI;
+const lop = (rand() - 0.5) * 0.5;
+const core = 0.3 + rand() * 0.25;
+for (let i = 0; i < 120 && stars.length < 8; i++) {
+  const th0 = golden * i + (rand() - 0.5) * 0.7;
+  const dr0 = rad * (0.18 + 0.82 * Math.pow(rand(), 1.25)) * (0.55 + core);
+  if (arms > 0) {
+    // 对数螺旋臂相位：臂脊上的星才保留（与首页同款拒绝采样）
+    const phase = arms * (th0 - wind * Math.log(1 + dr0 / (rad * core)));
+    if (rand() * (1 + armAmp) >= 1 + armAmp * Math.cos(phase)) continue;
   }
-} else if (form === 'scatter') {
-  for (let i = 0; i < 40 && stars.length < 6; i++) {
-    const a = rand() * Math.PI * 2;
-    const r = rad * (0.25 + 0.75 * Math.sqrt(rand()));
-    tryPlace(Math.cos(a) * r, Math.sin(a) * r * 0.85, size * (0.012 + rand() * 0.012));
-  }
-} else {
-  for (let i = 0; i < 90 && stars.length < 8; i++) {
-    const a = golden * i + (rand() - 0.5) * 0.5;
-    const r = rad * Math.pow(rand(), 1.4);
-    tryPlace(Math.cos(a) * r, Math.sin(a) * r * 0.85, size * (0.012 + rand() * 0.013));
-  }
+  const d1 = dr0 * (1 + lop * Math.cos(th0));
+  const ex = Math.cos(th0) * d1, ey = Math.sin(th0) * d1 * (1 - flat);
+  tryPlace(ex * Math.cos(pa) - ey * Math.sin(pa), ex * Math.sin(pa) + ey * Math.cos(pa), size * (0.012 + rand() * 0.013));
 }
 const C = size / 2;
 const gid = `sg-${size}-${vc.replace('#', '')}-${seedState.toString(36)}`;
