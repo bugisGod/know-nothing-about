@@ -23,12 +23,12 @@ const { compact = false, reading = false } = Astro.props;
   }
   .sky-band :global(h1) {
     max-width: 740px;
-    font-family: var(--font-display);
-    font-size: clamp(30px, 3.4vw, 44px);
-    font-weight: 400;
-    line-height: 1.4;
+    /* ★ 与知识库页标题同一标准（无衬线粗体大字号），全站页头一致 */
+    font-size: clamp(40px, 5vw, 64px);
+    font-weight: 700;
+    line-height: 1.1;
     margin: 14px 0 18px;
-    letter-spacing: 0;
+    letter-spacing: 0.04em;
     text-wrap: balance;
   }
   .sky-band :global(.page-desc) {

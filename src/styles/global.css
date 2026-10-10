@@ -218,11 +218,11 @@ button {
 
 /* ===== 页面标题 / 小节 ===== */
 .page-title {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: clamp(36px, 4.5vw, 44px);
-  letter-spacing: 0.01em;
-  line-height: 1.25;
+  /* ★ 与知识库页标题同一标准 */
+  font-weight: 700;
+  font-size: clamp(40px, 5vw, 64px);
+  letter-spacing: 0.04em;
+  line-height: 1.1;
   margin: 10px 0 12px;
   text-wrap: balance;
 }
