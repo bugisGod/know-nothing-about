@@ -28,7 +28,7 @@ const fmtDate = (d: Date) => {
       {projects.map((p, i) => (
         <a class="proj-card" href={`/projects/${p.id}/`} style={`--tc: ${PROJECT_COLOR}`}>
           <div class="pc-top">
-            <span class="pc-num">{String(i + 1).padStart(2, "0")}</span>
+            <span class="pc-num"><i class="pc-star">✦</i> {String(i + 1).padStart(2, "0")}</span>
             <span class:list={["status", `status--${statusKey(p.data.status)}`]}>
               <i class="dot" />
               {p.data.status}
@@ -36,7 +36,11 @@ const fmtDate = (d: Date) => {
           </div>
           <h3>{p.data.title}</h3>
           <p class="pc-desc">{p.data.description}</p>
-          <div class="pc-tech">{p.data.tech.join(" / ")}</div>
+          <div class="pc-tech">
+            {p.data.tech.map((t) => (
+              <span class="pc-chip">{t}</span>
+            ))}
+          </div>
           <div class="pc-foot">
             <span>{[p.data.period, p.data.role].filter(Boolean).join(" · ")}</span>
             <span class="pc-arrow" aria-hidden="true">→</span>
@@ -77,29 +81,51 @@ const fmtDate = (d: Date) => {
     margin-bottom: 12px;
   }
   .pc-num {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-family: var(--mono);
     font-size: 11.5px;
     letter-spacing: 0.1em;
-    color: color-mix(in srgb, var(--tc) 75%, transparent);
+    color: var(--tc);
+  }
+  .pc-star {
+    font-style: normal;
+    font-size: 10px;
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--tc) 60%, transparent));
   }
   .proj-card h3 {
     margin: 0 0 8px;
-    font: 400 19px var(--font-display);
+    font: 400 21px var(--font-display);
     color: var(--text);
   }
   .pc-desc {
     margin: 0 0 14px;
+    max-width: 34em;
     font-size: 12.5px;
-    line-height: 1.7;
-    color: var(--muted);
+    line-height: 1.75;
+    color: var(--text-2);
     flex: 1;
   }
   .pc-tech {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-bottom: 14px;
+  }
+  .pc-chip {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 10.5px;
     letter-spacing: 0.03em;
-    color: color-mix(in srgb, var(--text) 55%, transparent);
-    margin-bottom: 12px;
+    color: color-mix(in srgb, var(--text) 62%, transparent);
+    padding: 3px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    transition: border-color 0.25s ease, color 0.25s ease;
+  }
+  .proj-card:hover .pc-chip {
+    border-color: color-mix(in srgb, var(--tc) 30%, var(--border));
+    color: color-mix(in srgb, var(--tc) 55%, var(--text));
   }
   .pc-foot {
     display: flex;
@@ -112,17 +138,36 @@ const fmtDate = (d: Date) => {
     color: var(--muted);
   }
   .pc-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
     color: var(--muted);
-    transition: color 0.25s ease, transform 0.25s ease;
+    transition: color 0.25s ease, transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
   }
   .proj-card:hover .pc-arrow {
-    color: var(--tc);
+    color: #14120c;
+    background: var(--tc);
+    border-color: var(--tc);
     transform: translateX(4px);
   }
   .proj-card:hover h3 {
     color: color-mix(in srgb, var(--tc) 30%, var(--text));
   }
   .proj-card h3 { transition: color 0.25s ease; }
+  /* 状态徽标提重（卡片局部，不碰笔记页共用 .status）：右上角要有视觉重量 */
+  .proj-card :global(.status) { font-size: 12.5px; }
+  .proj-card :global(.status--ongoing) {
+    color: var(--tc);
+    text-shadow: 0 0 12px color-mix(in srgb, var(--tc) 45%, transparent);
+  }
+  .proj-card :global(.status--ongoing .dot) {
+    box-shadow: 0 0 8px color-mix(in srgb, var(--tc) 70%, transparent);
+  }
+  .proj-card :global(.status--done .dot) { background: var(--tc); opacity: 0.85; }
   @media (max-width: 760px) {
     .proj-grid { grid-template-columns: 1fr; }
   }
