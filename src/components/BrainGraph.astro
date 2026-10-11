@@ -271,9 +271,10 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     text-align: center;
     /* 衬线：星团名是这块空间的「地名」，衬线的庄重感让它像星图上的标注而非 UI 控件 */
     font-family: var(--font-display);
-    font-size: 15px;
+    font-size: 14.5px;
     font-weight: 500;
-    letter-spacing: 0.1em;
+    line-height: 1.3; /* ★ 收紧半行距：文字贴住折线 */
+    letter-spacing: 0.14em;
     white-space: nowrap;
     color: rgba(236, 234, 228, 0.82);
     text-shadow: 0 1px 10px rgba(7, 8, 14, 0.95), 0 0 16px rgba(120, 150, 220, 0.18);
@@ -282,11 +283,20 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     will-change: transform;
     transition: opacity 0.4s ease, color 0.25s ease, font-size 0.25s ease, text-shadow 0.25s ease;
   }
+  /* ★ 星图折线标注（用户参考图）：斜线从团升起 → 折成横线 → 标签挂在横线右端。
+     盒右移 48 / 斜线 44px@30° 落在团心（JS base -16 配合），全部伪元素纯 CSS */
+  .graph-frame :global(.cluster-label) {
+    /* 水平偏移由 JS transform 直接给（盒左 = 主星x + 48），margin 会和 -50% 居中打架 */
+  }
+  /* ★ 标签回归贴近式（折线方案已否）：主星正下方 20px，从属感靠距离而非引线 */
+  .graph-frame :global(.cluster-label) {
+    line-height: 1.3;
+  }
 
   /* hover 星团：名字明显亮起来 + 篇数浮出 —— 「这一片被指代了」要一眼看出来 */
   .graph-frame :global(.cluster-label[data-state="hover"]) {
     color: #ffe0aa;
-    font-size: 19px;
+    font-size: 17px;
     text-shadow: 0 1px 12px rgba(7, 8, 14, 0.95), 0 0 26px rgba(255, 200, 110, 0.5);
   }
   /* 点击锁定：团名是画面的视觉中心，但仍压得住分寸 —— 再大就成了网页 logo */
@@ -301,11 +311,16 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
   }
   .graph-frame :global(.cluster-label[data-state="dim"]) {
     color: rgba(232, 230, 223, 0.72);
-    font-size: 15px;
+    font-size: 13.5px;
     text-shadow: 0 1px 8px rgba(7, 8, 14, 0.95);
   }
 
   .graph-frame :global(.cl-count) {
+    position: absolute;   /* ★ 脱流：盒子高度=团名，横线能贴到文字正下方 */
+    top: calc(100% + 7px);
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
     opacity: 0; /* 默认只显示团名（方案：数量 hover 再出现），hover/锁定浮出 */
     font-family: var(--mono);
     font-size: 10.5px;
@@ -324,6 +339,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     content: '';
     position: absolute;
     left: 50%;
+    top: auto;
     bottom: -12px;
     width: 46px;
     height: 1px;
@@ -1388,7 +1404,11 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     const galCore  = makeCoreGlow(Math.round(70 * DN), GR * 0.10, 6, 0.13, 80, spinCore); // 暖核收敛：提气不抢戏
     // ★ 棒暂不参与渲染：上一版为「臂从棒端长出」改动了旋臂径向分布，把用户调好的内区色彩
     //   结构整段删掉 —— 已回滚。棒只能做【纯叠加层】，绝不许动 makeDisk 的径向/相位。
-    // const galBar = makeBar(Math.round(3600 * DN), 0.45, 0.9, 12, 0.66, galaxySpin);
+    // ★ 棒旋星系的「棒」上线（用户点破语义）：盘面内的椭球长条，旋臂从棒端长出。
+    //    纯叠加层（教训：绝不许动 makeDisk 的径向/相位）；暖琥珀接核球金尘
+    const galBar = makeBar(Math.round(3000 * DN), 0.42, 0.68, 11, 0.6, galaxySpin);
+
+
     const galSheen = makeDisk(Math.round(400 * DN), 0.075, 1.9, 0.03, 20, 0.55, 1, // 减量：中心白点退场
       { churn: 0.010, warp: 0.6, dw: 0.85 });
     const galHalo  = makeDisk(Math.round(280 * DN), 0.09, 1.30, 0.03, 20, 0.5, 1, // 减量
@@ -1433,7 +1453,11 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       mkStar(glowHaloTex, 2.3, 0.055, 0xffc470);  // ★ 紧凑暖橘晕：缩小调淡
       // 环 0.20→0.32、色 #d9b878→#e8c88a（用户：核太淡）；芯尖 0.07 只给镂空区一点底光，仍是透的
       mkStar(ringGlowTex, 2.5, 0.42, 0xf0b860);  // 半透明橘金环核：与光柱同色温
-      mkStar(dotTex, 0.9, 0.07, 0xffe8b8);       // 镂空区底光：极淡暖橘
+      // ★ 银河之心（方向一：环+心）：环心一颗暖橘主星 —— 环从「空洞」变「轨道」，
+      //   星的光晕把环和周围尘「焊」在一起，中心有了焦点。太阳色温（与环/柱同系）
+      mkStar(glowHaloTex, 1.05, 0.30, 0xffc46b); // 心之外晕：紧凑暖橘
+      mkStar(coreTex, 0.5, 0.75, 0xffe0b0);      // 心之本体：小而实的亮核
+      mkStar(dotTex, 0.9, 0.05, 0xffe8b8);       // 镂空区底光：极淡暖橘
       galaxyTilt.add(star);
     }
 
@@ -1450,7 +1474,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       const cHot = new THREE.Color(0xfff6e8);   // 核心：暖白
       const cMid = new THREE.Color(0xffb055);   // 中段：橘黄（太阳色）
       const cTail = new THREE.Color(0xd96a30);  // 远端：橘红渐隐
-      const L = GR * 0.62;                      // 沿法线的半长（克制：暗示极轴而非贯穿全屏）
+      const L = GR * 0.34;                      // ★ 半长 0.62→0.34（方向三：只留环上下贴合的一段，
+                                                //   出环远端的漏光读成杂乱符号；极轴语义由近段承担）
       for (let i = 0; i < count; i++) {
         const s = rand() < 0.5 ? 1 : -1;        // 双向对称：穿盘而过
         const k = Math.pow(rand(), 0.8);        // 密度略向核心集中
@@ -1464,7 +1489,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         arr[i * 3 + 1] = Math.sin(th) * rad;
         arr[i * 3 + 2] = z;
         const c = cHot.clone().lerp(cTail, t);
-        const f = 0.16 + 1.1 * Math.pow(1 - t, 1.5); // 提亮：光柱本身可辨
+        const f = 0.16 + 1.1 * Math.pow(1 - t, 1.8); // 衰减加陡：远端更快归零
         col[i * 3] = c.r * f; col[i * 3 + 1] = c.g * f; col[i * 3 + 2] = c.b * f;
         sz[i] = (0.3 + 0.7 * Math.pow(rand(), 3)) * 0.38;
         pha[i] = rand() * Math.PI * 2;
@@ -1477,6 +1502,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       geoB.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR);
       const beam = new THREE.Points(geoB, galaxyMat(0.5, 0.7, 12, { churn: 0.004, warp: 0 }));
       galaxySpin.add(beam);
+      beam.visible = false; // ★ 棒旋语义纠正：棒在盘面内（galBar 承担），垂直光针退役
       // 沿轴叠 5 个柔光：点亮柱身（已收窄，保证是「针」不是「柱」）
       const mkBeamGlow = (zFrac: number, scale: number, opacity: number, color: number) => {
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -3511,7 +3537,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
             (0.26 + clusNearT[k] * 0.04 + clusHovT[k] * 0.07 + clusFocT[k] * 0.09)
             * d * (0.9 + breath * 0.14);
           // 标签存在感：他团压暗，本团随状态提亮（聚焦时最亮，名称与信息成为视觉中心）
-          clusLabelOp[k] = d * (0.72 + clusHovT[k] * 0.18 + clusFocT[k] * 0.28);
+          clusLabelOp[k] = d * (0.85 + clusHovT[k] * 0.15 + clusFocT[k] * 0.15); // ★ 默认亮度提档（13.5px 那版太含蓄，用户「没看到标签」）
         }
         // 文章星层级（唯一写入点 —— 以前多处写 starSize 会互相覆盖）
         // 方案表：默认正常 / hover 星团 全体稍微降权（本团 0.9 他团 0.7，边界与雾当主角）/
@@ -3649,7 +3675,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           // 标签真实尺寸（hover 15→19px、focus 更大 → 高度 49→56→61，必须按实测值算，否则撑大后压到下方）
           const lw = L.el.offsetWidth, lh = L.el.offsetHeight;
           const rPx = clusterScreenR(L.k);
-          const base = focusIdx === L.k ? -(rPx * 0.5 + 30) : rPx * 0.78 + 14;
+          // ★ 标签挂团右上（用户参考图：斜线升起→折横→标签在横线右端），base 为常量
+          const base = focusIdx === L.k ? -(rPx * 0.5 + 30) : 20; // 主星下方 20px
           // 候选偏移：原位 → 小幅上/下让位 → 大幅让位（撞到 UI 时先避让，避不开才隐藏）
           const cands = focusIdx === L.k
             ? [base, base - 40, base + 40, base - 80]
@@ -3700,6 +3727,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
             px += (mdx / md) * pull; py += (mdy / md) * pull;
           }
           // 位置用避让后算出的 dy（候选里已排除撞 UI / 出界的偏移）
+          // ★ 贴近式（折线已否）：标签居中挂在主星正下方 20px
           p.L.el.style.transform = `translate(${px}px, ${py}px) translate(-50%, ${Math.round(p.dy)}px)`;
           // 写死数值而非空串：CSS 默认 opacity:0，空串会回落到隐形。
           // 他团降权 + hover/锁定提亮：名称与信息成为视觉中心时，它自然最亮。
