@@ -1276,7 +1276,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     // ★ 必须挂 galaxySpin（与旋臂同一图案速度）：挂 spinCore（0.007 vs 盘层 0.014）会让
     //   旋臂在几十秒内从棒端滑走——棒和臂是一个 m=2 模式，不能差速。
     // ★ 配色：棒 = 老年星族（琥珀），臂 = 年轻星族（银/淡紫）—— 与站点「金核→银盘」色阶同源。
-    const BAR_A = GR * 0.34, BAR_B = GR * 0.115; // 半长轴 / 半短轴（轴比 ≈ 3:1）
+    const BAR_A = GR * 0.26, BAR_B = GR * 0.095; // 半长轴/半短轴（★ 银河系实测：棒全长 2.7 万光年/盘径 10 万 ≈ 0.26；轴比 ≈ 2.7:1）
     function makeBar(count, size = 0.45, opacity = 0.82, maxPx = 12, szMul = 0.62, parent = galaxySpin) {
       const arr = new Float32Array(count * 3);
       const col = new Float32Array(count * 3);
@@ -1407,6 +1407,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     // ★ 棒旋星系的「棒」上线（用户点破语义）：盘面内的椭球长条，旋臂从棒端长出。
     //    纯叠加层（教训：绝不许动 makeDisk 的径向/相位）；暖琥珀接核球金尘
     const galBar = makeBar(Math.round(3000 * DN), 0.42, 0.68, 11, 0.6, galaxySpin);
+    galBar.rotation.z = SWEEP * 0.26; // ★ 棒端对齐臂根：旋臂在棒端半径的相位角（两主臂从棒端长出，NGC 1300 形态）
 
 
     const galSheen = makeDisk(Math.round(400 * DN), 0.075, 1.9, 0.03, 20, 0.55, 1, // 减量：中心白点退场
