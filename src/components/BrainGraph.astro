@@ -986,6 +986,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           uMouseK: { value: 0 },
           uFadeLo: { value: opt.fadeLo ?? 0.55 }, // 远端亮度下限：内容层（星团/文章星）调高，远侧不被空气透视吞掉
           uSteady: { value: opt.steady || 0 }, // 闪烁压缩：文章星=1.0（亮度必须恒定在白热，不能随呼吸暗下去）
+          uArmK: { value: new THREE.Vector2(opt.armMinor ?? 1, opt.armMajor ?? 1) }, // ★ 主次臂亮度系数（银河系现代模型：2 主臂接棒端 + 2 次臂）
         },
         vertexShader: `
           attribute vec3 aColor;
@@ -997,6 +998,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           uniform float uMax;
           uniform float uFadeLo;
           uniform float uSteady;
+          uniform vec2 uArmK;
           uniform float uDrift;
           uniform float uChurn;
           uniform float uWarp;
@@ -1023,6 +1025,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
             //   恒星从波峰流入流出 → 亮度随之胀落。这是真实星系结构永存的机制（林家翘-Shu）。
             float dw = 0.5 + 0.5 * cos(uArms * (th - uSweep * r / uGR));
             vTw *= mix(1.0, 0.42 + 0.58 * pow(dw, 2.0), uDw); // 谷底 0.32→0.42：臂隙保留底光，不压成纯黑（团跨出臂脊时不割裂）
+            // ★ 主次臂：半频余弦区分偶臂（棒端，主）与奇臂（次）——银河系现代模型（NASA/JPL 2008）
+            vTw *= mix(uArmK.x, uArmK.y, 0.5 + 0.5 * cos(uArms * 0.5 * (th - uSweep * r / uGR)));
             // 翘曲：盘外缘沿 z 起伏，旋转时边缘此起彼伏 —— 最省成本的立体运动线索
             float warp = uWarp * pow(clamp(r / uGR, 0.0, 1.0), 2.5) * sin(th - 0.6);
             vec2 pxy = vec2(cos(th) * r, sin(th) * r);
@@ -1063,7 +1067,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     // 中心就变成「暖核」而不是「白饼」；比 cull 掉中心更好——既去白，又不挖空。
     const cWarmCore = new THREE.Color(0xffd98a);
     // 臂隙淡蓝填充（用户指定：臂隙中间填淡淡的蓝色）
-    const cGapBlue = new THREE.Color(0xa9bedd);
+    const cGapWarm = new THREE.Color(0xcabfa8); // ★ 臂隙改暖中性（原淡蓝反了：真实星系臂脊蓝/臂隙老年偏黄）
     // 内臂紫金（用户：红框内旋臂太淡，加紫金色、向外慢慢过渡回银）——
     // 色相同源中心彩色微尘的紫金盘。★ 紫调偏蓝一档：#b892e8 的 R=184 偏高，
     //   与暖核的琥珀叠加后 R、B 双高 → 读作「粉」（用户：偏粉色了）。
@@ -1119,10 +1123,17 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         // 外盘渐入冷蓝：让盘有「内暖外冷」的色阶，而不是整片同色的灰白
         const outK = Math.min(1, Math.max(0, (rr / GR - 0.42) / 0.58)) * 0.5; // 0.6→0.5：外盘冷化减弱
         // 星族点缀：主角星（橙红巨星/蓝白年轻星）—— 用户反馈红粒偏多：橙巨星概率 1.2%→0.5%
+        // ★ 主臂脊恒星形成区（NASA/SDSS）：蓝白星份额 ×2.2、0.5% 淡粉 HII 结（稍大）——只在本团臂脊
+        const onMajorRidge = opt.starKnots
+          ? (0.5 + 0.5 * Math.cos(ARMS * (th - SWEEP * rr / GR))) * (0.5 + 0.5 * Math.cos(ARMS * 0.5 * (th - SWEEP * rr / GR)))
+          : 0;
+        const youngBoost = onMajorRidge > 0.62 ? 2.2 : 1;
+        const pinkK = opt.starKnots && onMajorRidge > 0.72 && rand() < 0.005;
         const giantK = rand();
         let c;
-        if (giantK < 0.004) c = cGiant.clone();
-        else if (giantK < 0.02) c = cYoung.clone();
+        if (pinkK) c = new THREE.Color(0xd89ab4);
+        else if (giantK < 0.004) c = cGiant.clone();
+        else if (giantK < (onMajorRidge > 0.62 ? 0.02 * youngBoost : 0.02)) c = cYoung.clone();
         else c = cCool.clone().lerp(cWarm, warm).lerp(cOuter, outK);
         if (opt.coolShift) c = c.clone().lerp(cYoung, opt.coolShift); // 臂层冷色温：年轻星族
         const cwK = coreWarmMix(rr);
@@ -1131,7 +1142,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         //   臂星基本都落在 dw 高处，所以这层只作用于臂隙的散星。
         const gapK = (1 - (0.5 + 0.5 * Math.cos(ARMS * (th - SWEEP * rr / GR))))
           * 0.8 * Math.min(1, Math.max(0, (rr / GR - 0.30) / 0.20));
-        if (gapK > 0.01) c = c.clone().lerp(cGapBlue, gapK);
+        if (gapK > 0.01) c = c.clone().lerp(cGapWarm, gapK);
         // 内臂紫金渐变（opt.vg = 强度 0~1）：
         //   径向——0.15GR 全量 → 0.55GR 归零（核区留给暖核 sprite，外盘归还银灰）；
         //   角向——只染臂脊（dw 高处），臂隙的淡蓝不被紫金污染；
@@ -1186,6 +1197,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         // 地板 0.35→0.46、幂次 4→3.2：中位粒子变大变亮（银河带面亮度的主要来源），尾部巨星不动
         sz[i] = (0.52 + 0.48 * Math.pow(rand(), 3.0)) * bright * cullK * (1.12 - 0.12 * (rr / GR)) * Math.max(0.3, 1 - Math.max(0, rr / GR - 0.85) / 0.15 * 0.7) * (1 + vgT * 0.65); // 紫金区粒子放大：色相要亮度才可读（0.5→0.65：琥珀撤出后连接段偏暗，补一档）
         if (giantK < 0.009) sz[i] *= 1.7 + rand() * 0.8; // 主角星收敛：亮点不抢戏
+        if (pinkK) sz[i] *= 1.6; // HII 结稍大：臂上的「星星工厂」
         pha[i] = rand() * Math.PI * 2;
       }
       const geo = new THREE.BufferGeometry();
@@ -1330,7 +1342,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // vg 0.32：紫金渐变强度。★ 不要再改这里的旋臂径向结构（barStart 已废，见 makeBar 注释）
       { churn: 0.012, warp: 0.6, dw: 0.62, gapCull: 0.12, centerClean: 0.055, vg: 0.32 });
     const galArms  = makeDisk(Math.round(11000 * DN), 0.14, 0.38, 0.9, 12, 0.35, 1.5, // ★ 减密 // 臂脊银星加量+细化
-      { churn: 0.014, warp: 0.6, dw: 0.78, centerClean: 0.055, coolShift: 0.22 });
+      { churn: 0.014, warp: 0.6, dw: 0.78, centerClean: 0.055, coolShift: 0.22, armMinor: 0.62, armMajor: 1.3, starKnots: true }); // ★ 主次臂分级 + 恒星形成区
     // 臂隙填充（用户：旋臂中间别那么空）：dw=0 的均匀银尘层——不受密度波调制，
     // 淡淡铺满整个盘面（含臂隙），旋臂亮、臂隙淡，不再「臂外全黑」
     let galFill: THREE.Points;
@@ -1381,7 +1393,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           const gapRad = Math.min(1, Math.max(0, (rr / GR - 0.30) / 0.20));
           const gapK = (1 - dwvF) * gapRad;              // 0=臂脊 1=臂隙正中
           const gapTint = gapK * 0.85;
-          if (gapTint > 0.01) cFx.lerp(cGapBlue, gapTint);
+          if (gapTint > 0.01) cFx.lerp(cGapWarm, gapTint);
           if (thTint) cFx.lerp(thTint, 0.45);
           colF[w * 3] = cFx.r * f; colF[w * 3 + 1] = cFx.g * f; colF[w * 3 + 2] = cFx.b * f;
           szF[w] = (0.2 + rngF() * 0.42) * (1 + gapK * 1.1); // 臂隙多填一点：只染色看不出来，得有星
@@ -1647,7 +1659,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     // tracer：少数「能看出在流动」的星。它们不跟图案同步（drift），且被密度波完整调制
     // （dw=1）→ 流入旋臂时被点亮、流出时暗下去。数量少，长期漂移不伤结构。
     const galStream = makeDisk(Math.round(900 * DN), 0.035, 0.42, 0.55, 13, 0.55, 1.4,
-      { drift: -0.016, warp: 0.6, dw: 1 });
+      { drift: -0.016, warp: 0.6, dw: 1, armMinor: 0.6, armMajor: 1.3 });
 
     // 域色增艳：CATEGORIES 色板偏灰（#93a9d6 一类），在星海里辨识度不足。
     // 只提饱和 + 略提亮度，不动色相 —— 与列表页标识色同源，仍是同一色系。
@@ -3332,7 +3344,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // ★ 原来 uScale ∝ h 线性：屏幕越大星点被放大成 2.4px 的圆球 → 全屏「颗粒感/粗糙」。
       //   恒星是点光源，不该随屏幕变大而变大；正确的自适应是【加数量】（见 DN 上限 2.2）。
       //   这里把 h 的指数压到 0.35：900px 高为基准（值不变），1440px 只放大 1.18× 而不是 1.6×。
-      const hk = Math.pow(h / 900, 0.35);
+      const hk = Math.pow(h / 900, 0.2); // ★ 全屏细腻：大屏星点放大更缓（0.35 时 1440p 星径 +18% 读感粗糙），密度由 DN 承担
       dustMats.forEach((m) => {
         m.uniforms.uScale.value = 342 * pr * hk;
         if (m.userData.baseMax !== undefined) m.uniforms.uMax.value = m.userData.baseMax * pr * hk;
