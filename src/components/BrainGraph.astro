@@ -1127,13 +1127,17 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         const onMajorRidge = opt.starKnots
           ? (0.5 + 0.5 * Math.cos(ARMS * (th - SWEEP * rr / GR))) * (0.5 + 0.5 * Math.cos(ARMS * 0.5 * (th - SWEEP * rr / GR)))
           : 0;
-        const youngBoost = onMajorRidge > 0.62 ? 2.2 : 1;
-        const pinkK = opt.starKnots && onMajorRidge > 0.72 && rand() < 0.005;
+        // ★ 次臂也有星星工厂（BeSSeL：气体/年轻星示踪四臂，恒星质量集中双主臂）：40% 密度
+        const onMinorRidge = opt.starKnots
+          ? (0.5 + 0.5 * Math.cos(ARMS * (th - SWEEP * rr / GR))) * (1 - (0.5 + 0.5 * Math.cos(ARMS * 0.5 * (th - SWEEP * rr / GR))))
+          : 0;
+        const youngBoost = onMajorRidge > 0.62 ? 2.2 : onMinorRidge > 0.62 ? 1.25 : 1;
+        const pinkK = opt.starKnots && rand() < (onMajorRidge > 0.72 ? 0.005 : onMinorRidge > 0.72 ? 0.002 : 0);
         const giantK = rand();
         let c;
         if (pinkK) c = new THREE.Color(0xd89ab4);
         else if (giantK < 0.004) c = cGiant.clone();
-        else if (giantK < (onMajorRidge > 0.62 ? 0.02 * youngBoost : 0.02)) c = cYoung.clone();
+        else if (giantK < 0.02 * youngBoost) c = cYoung.clone();
         else c = cCool.clone().lerp(cWarm, warm).lerp(cOuter, outK);
         if (opt.coolShift) c = c.clone().lerp(cYoung, opt.coolShift); // 臂层冷色温：年轻星族
         const cwK = coreWarmMix(rr);
@@ -1308,7 +1312,10 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         arr[i * 3 + 1] = y;
         const rEll = Math.hypot(x / BAR_A, y / BAR_B);
         // 厚度：棒是盘内结构，比盘薄；rEll→0 处归零（竖线教训同盘层 zRamp）
-        arr[i * 3 + 2] = gj() * GR * 0.018 * Math.min(1, rEll);
+        // ★ 花生形（SHAO/ESO 盒状-花生核球）：厚度包络在 |x|≈0.35A 两侧隆起 —— 倾斜侧视时
+        //   棒剪影呈花生腰身（俯瞰无感，结构性彩蛋）
+        const peanut = 1 + 1.3 * Math.exp(-Math.pow(Math.abs(x) / BAR_A - 0.35, 2) / 0.09);
+        arr[i * 3 + 2] = gj() * GR * 0.018 * Math.min(1, rEll) * peanut;
         const c = cBarIn.clone().lerp(cBarOut, Math.min(1, rEll));
         // ansa（棒端把手）：真实棒两端常有一对增亮结 —— 也是旋臂的起点
         const ansa = Math.max(0, (Math.abs(x) / BAR_A - 0.62) / 0.38);
@@ -1409,6 +1416,51 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       galFill = new THREE.Points(geoF, galaxyMat(0.42, 0.54, 9, { churn: 0.01, warp: 0.7 })); // 絮粒细化；opacity 0.45→0.54 = 抬盘底光
       galFill.material.blending = THREE.AdditiveBlending;
       galaxySpin.add(galFill);
+    }
+
+    // ★ 主臂羽毛短刺（spurs/feathers，真实旋臂的次结构；猎户臂就是一条 spur）：
+    //   沿两条主臂脊（branch 0/2）每隔一段分出短弧刺，向外下游撇；亮度 ≤ 臂的 55%
+    {
+      const rngS = mulberry32(20261013);
+      const pos: number[] = [];
+      const colS: number[] = [];
+      const szS: number[] = [];
+      const phaS: number[] = [];
+      const cSpur = new THREE.Color(0xd9dde3);
+      for (const branch of [0, 2]) {
+        const baseTh = branch * ((Math.PI * 2) / ARMS);
+        for (let rr = GR * 0.38; rr < GR * 0.95; rr += GR * 0.16) {
+          if (rngS() < 0.3) continue;
+          const th0 = baseTh + SWEEP * (rr / GR) + (rngS() - 0.5) * 0.1;
+          const len = GR * (0.14 + rngS() * 0.06);
+          const n = 26 + Math.floor(rngS() * 10);
+          for (let i = 0; i < n; i++) {
+            const t = i / (n - 1);
+            // ★ v2 可见性重设计：起点在臂脊外侧 0.03GR，向外侧暗区伸展 ——
+            //   在暗背景上才有对比度（贴着亮臂脊的淡丝不可见，已被开关实验证伪）
+            const rr2 = rr + GR * 0.03 + t * len * Math.sin(0.75);
+            const th = th0 + (t * len * Math.cos(0.75)) / Math.max(rr2, 1);
+            const perp = (rngS() - 0.5) * 0.10;
+            pos.push(Math.cos(th) * rr2 - Math.sin(th) * perp * rr2 * 0.1,
+                     Math.sin(th) * rr2 * 0.9 + Math.cos(th) * perp * rr2 * 0.09,
+                     (rngS() - 0.5) * 0.9);
+            const f = (0.55 + rngS() * 0.4) * (1 - t * 0.35);
+            colS.push(cSpur.r * f, cSpur.g * f, cSpur.b * f);
+            szS.push(0.5 + rngS() * 0.4);
+            phaS.push(rngS() * Math.PI * 2);
+          }
+        }
+      }
+      const geoS = new THREE.BufferGeometry();
+      geoS.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+      geoS.setAttribute('aColor', new THREE.BufferAttribute(new Float32Array(colS), 3));
+      geoS.setAttribute('aSize', new THREE.BufferAttribute(new Float32Array(szS), 1));
+      geoS.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(phaS), 1));
+      geoS.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.2);
+      const galSpur = new THREE.Points(geoS, galaxyMat(0.5, 0.85, 9, { churn: 0.01, warp: 0.6 }));
+      galSpur.material.blending = THREE.AdditiveBlending;
+      dustMats.push(galSpur.material);
+      galaxySpin.add(galSpur);
     }
     // ★ 重新点亮（原 3200 且 visible=false）：核球尘埃围绕半透明环状核（用户参考图形态）；
     //   密度不能堆太高——参考图的核周尘埃是「颗粒可辨」的，堆实了就成了金团。
@@ -1656,6 +1708,76 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         mkFg(p.x, p.y, Z_FG[i], i === 0 ? 0.42 : i === 1 ? 0.34 : 0.3, 0xcfd6e4);
       });
     }
+    // ★ 球状星团晕（ESA/沙普利：~150 个古老球状团球形散布银晕，老年红、无气体无年轻星）：
+    //   盘外围 10 个微型暖红球状团 + 稀薄古老晕星 —— 盘外空间的纵深层次。挂 galaxyTilt
+    //   （球状星团独立倾斜轨道，不随盘自转）；亮度克制是关键
+    {
+      const rngG = mulberry32(20261012);
+      for (let g = 0; g < 10; g++) {
+        const nStar = 90 + Math.floor(rngG() * 50);
+        const dirTh = rngG() * Math.PI * 2;
+        const dirPh = Math.acos(rngG() * 2 - 1);
+        const dist = GR * (0.95 + rngG() * 0.55);
+        const cx = Math.sin(dirPh) * Math.cos(dirTh) * dist;
+        const cy = Math.sin(dirPh) * Math.sin(dirTh) * dist * 0.9;
+        const cz = Math.cos(dirPh) * dist * 0.75;
+        const rad = GR * (0.035 + rngG() * 0.03);
+        const arr = new Float32Array(nStar * 3);
+        const col = new Float32Array(nStar * 3);
+        const sz = new Float32Array(nStar);
+        const pha = new Float32Array(nStar);
+        const base = new THREE.Color(0xd8a878);
+        for (let i = 0; i < nStar; i++) {
+          const u = Math.pow(rngG(), 2.2);
+          const t1 = rngG() * Math.PI * 2, t2 = Math.acos(rngG() * 2 - 1);
+          arr[i * 3] = cx + Math.sin(t2) * Math.cos(t1) * rad * u;
+          arr[i * 3 + 1] = cy + Math.sin(t2) * Math.sin(t1) * rad * u;
+          arr[i * 3 + 2] = cz + Math.cos(t2) * rad * u;
+          const f = (0.45 + rngG() * 0.55) * (1 - u * 0.5) * 1.25;
+          col[i * 3] = base.r * f; col[i * 3 + 1] = base.g * f; col[i * 3 + 2] = base.b * f;
+          sz[i] = 0.5 + rngG() * 0.5;
+          pha[i] = rngG() * Math.PI * 2;
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+        geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+        geo.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+        geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+        geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
+        const pts = new THREE.Points(geo, galaxyMat(0.5, 0.75, 9, { fadeLo: 0.5 }));
+        pts.material.blending = THREE.AdditiveBlending;
+        dustMats.push(pts.material);
+        galaxyTilt.add(pts);
+      }
+      const nHalo = Math.round(700 * DN);
+      const arr2 = new Float32Array(nHalo * 3);
+      const col2 = new Float32Array(nHalo * 3);
+      const sz2 = new Float32Array(nHalo);
+      const pha2 = new Float32Array(nHalo);
+      const cHalo = new THREE.Color(0xcfc4b0);
+      for (let i = 0; i < nHalo; i++) {
+        const rr = GR * (0.55 + 1.05 * Math.pow(rngG(), 3));
+        const t1 = rngG() * Math.PI * 2, t2 = Math.acos(rngG() * 2 - 1);
+        arr2[i * 3] = Math.sin(t2) * Math.cos(t1) * rr;
+        arr2[i * 3 + 1] = Math.sin(t2) * Math.sin(t1) * rr * 0.85;
+        arr2[i * 3 + 2] = Math.cos(t2) * rr * 0.7;
+        const f = 0.32 + rngG() * 0.38;
+        col2[i * 3] = cHalo.r * f; col2[i * 3 + 1] = cHalo.g * f; col2[i * 3 + 2] = cHalo.b * f;
+        sz2[i] = 0.3 + rngG() * 0.3;
+        pha2[i] = rngG() * Math.PI * 2;
+      }
+      const geoH = new THREE.BufferGeometry();
+      geoH.setAttribute('position', new THREE.BufferAttribute(arr2, 3));
+      geoH.setAttribute('aColor', new THREE.BufferAttribute(col2, 3));
+      geoH.setAttribute('aSize', new THREE.BufferAttribute(sz2, 1));
+      geoH.setAttribute('aPhase', new THREE.BufferAttribute(pha2, 1));
+      geoH.boundingSphere = new THREE.Sphere(new THREE.Vector3(), GR * 1.7);
+      const halo = new THREE.Points(geoH, galaxyMat(0.35, 0.6, 6, { fadeLo: 0.5 }));
+      halo.material.blending = THREE.AdditiveBlending;
+      dustMats.push(halo.material);
+      galaxyTilt.add(halo);
+    }
+
     // tracer：少数「能看出在流动」的星。它们不跟图案同步（drift），且被密度波完整调制
     // （dw=1）→ 流入旋臂时被点亮、流出时暗下去。数量少，长期漂移不伤结构。
     const galStream = makeDisk(Math.round(900 * DN), 0.035, 0.42, 0.55, 13, 0.55, 1.4,
