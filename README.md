@@ -2,9 +2,9 @@
 
 > scio — 拉丁语「我知道」，出自 *Scio me nihil scire*（我知道我一无所知）。
 
-个人名片 + 知识库 + 项目复盘，一个纯静态站点：内容全部是 Markdown，构建产物可以部署到任何静态托管平台。
+个人名片 + 知识库 + 项目复盘，一个纯静态站点：内容全部是 Markdown，构建产物部署在自家服务器（Caddy）。
 
-技术栈：[Astro](https://astro.build) · TypeScript · [Pagefind](https://pagefind.app)（静态搜索）· 原生 CSS，无 UI 框架依赖。
+技术栈：[Astro](https://astro.build) · TypeScript · [three.js](https://threejs.org)（首页银河）· [Pagefind](https://pagefind.app)（静态搜索）· 原生 CSS，无 UI 框架依赖。
 
 ## 快速开始
 
@@ -15,87 +15,87 @@ npm run build      # 构建（含搜索索引），输出到 dist/
 npm run preview    # 本地预览构建结果（搜索在这里可用）
 ```
 
-> 搜索索引是在构建时生成的，所以 `npm run dev` 下搜索页会提示先执行构建。
+> 搜索索引在构建时生成，`npm run dev` 下搜索页会提示先执行构建。
+> **改代码后必须重启 preview**（sirv 缓存旧 bundle）。
 
-## 变成你自己的站点（三步）
+## 日常维护（全部零配置，不改代码）
 
-1. **改个人信息**：`src/config.ts` —— 名字、一句话介绍、技能标签、社交链接
-2. **换头像**：替换 `public/avatar.svg`（想用 png 就改名 `avatar.png`，并同步修改 `src/pages/index.astro` 里的引用）
-3. **改域名**：`astro.config.mjs` 里的 `site` 换成你的正式域名（影响 sitemap 和 RSS 链接）
+### 加一篇笔记
 
-## 写一篇知识笔记
+`src/content/notes/<分类>/<slug>.md`：
 
-在 `src/content/notes/<分类>/` 下新建 `xxx.md`，**文件夹名就是分类名**：
-
-```md
+```yaml
 ---
-title: 笔记标题
-description: 一句话描述（列表页展示用）
-date: 2026-09-12
-tags: [标签1, 标签2]
----
-正文，标准 Markdown。
-```
-
-- 想加新分类？直接新建一个文件夹
-- `draft: true` 表示草稿，构建时会被隐藏
-- 知识库侧边栏目录根据文件夹结构自动生成
-
-## 写一份项目复盘
-
-在 `src/content/projects/` 下新建 `xxx.md`：
-
-```md
----
-title: 项目名
-description: 一句话简介
-date: 2026-09-12          # 最后更新时间，用于排序
-period: 2026.01 – 2026.09 # 可选，时间段
-role: 独立开发             # 可选，你的角色
-tech: [Astro, TypeScript] # 技术栈标签
-status: 已完成             # 进行中 / 已完成 / 已归档
-link: https://...         # 可选，线上地址
-repo: https://...         # 可选，仓库地址
+title: 标题
+description: 一句话摘要（列表页/分享卡用）
+date: 2026-10-17
+tags: [ai, zcode]        # 自由填写
+series: 专栏名            # 可选：同 series 在专题页聚成专栏
+pinned: true              # 可选：银河里的置顶亮星
+related: [其它文章slug]    # 可选：手工知识连线（银河星际航线）
+draft: true               # 可选：草稿不构建
 ---
 ```
 
-推荐的正文结构：**背景与目标 → 技术选型 → 实现要点 → 踩坑记录 → 经验沉淀**。参考现成的例子：`src/content/projects/个人网站搭建.md`。
+首页自动多一颗文章星、星团按 √n 自动长大、知识库自动收录。
+
+### 加一个分类（= 新星团 + 新专题卡）
+
+```
+mkdir src/content/notes/<新分类>
+```
+
+放文章即生效，三处全自动：首页星团（自动配色 + 独立形状——分类名哈希派生，
+与知识库卡同种子同流）、知识库专题卡、`/notes/?category=<分类>` 筛选。
+想覆盖默认色/中文名，才在 `src/config.ts` 的 `CATEGORIES` 加条目。
+
+### 加一个项目
+
+`src/content/projects/<slug>.md`，frontmatter 见现有项目
+（`period / role / tech / status / link / repo`）。
+
+## 部署
+
+```bash
+./deploy.sh    # = npm run build + SFTP 上传 /var/www/scio（Caddy 伺服）
+```
+
+- **部署红线**：`git status` 确认无 `*测试*.md` 混入（测试文章一律不部署）
+- 生产验证：线上 bundle 特征码与本地 dist 一致 + 内容级抽查
+- GitHub 同步：`.shots/api-push.mjs`
+
+## 首页银河（src/components/BrainGraph.astro）
+
+- 知识专题 = 星团（形状/颜色由分类名哈希自动生成）；文章 = 星；
+  探索态（EXPLORE）自由漫游，点星团页内聚焦，点文章星进文章
+- 调试口：URL 加 `?debug=1` 暴露 `__gal`——`state()`（逐帧信号采样）、
+  `clusterInfo(k)`、`pickTest(x,y)`、`starScreen(i)`
+- 视觉改动验收工具（`.shots/`，不入库）：`state-verify.mjs`（聚焦跳变）、
+  `fog-matrix.mjs`（雾团矩阵）、`full-test.mjs`（全站 28 项回归）
+- 排障铁律：**先枚举点击时所有变化的量、逐帧采值找离散跳变，再改代码**
+  （截图法抓不到分支类 bug）
 
 ## 目录结构
 
 ```
 src/
-├── config.ts            # 全站个人信息，改这里
-├── content.config.ts    # 内容集合的 frontmatter schema
+├── config.ts            # 个人信息 + 分类/系列覆盖位 + 自动配色
+├── content.config.ts    # 内容集合 frontmatter schema
 ├── content/
-│   ├── notes/           # 知识库（子文件夹 = 分类）
+│   ├── notes/           # 知识库（子文件夹 = 分类 = 星团）
 │   └── projects/        # 项目复盘
 ├── layouts/Base.astro   # 页面骨架（head / 主题初始化）
-├── components/          # Header / Footer / Icon
-├── pages/               # 路由：首页、notes、projects、search、rss、404
-└── styles/global.css    # 全局样式与深浅色主题变量
+├── components/
+│   ├── BrainGraph.astro # 首页 3D 银河（星团/文章星/探索态）
+│   ├── MiniGalaxy.astro # 知识库专题卡星图（与首页团同源同形状）
+│   └── ...
+├── pages/               # 路由：首页、notes、projects、search、404
+└── styles/global.css    # 全局样式与主题变量
 ```
 
-## 部署
+## 其它
 
-`npm run build` 产出纯静态 `dist/`，任意静态托管均可：
-
-- **Vercel / Netlify**：构建命令 `npm run build`，输出目录 `dist`
-- **GitHub Pages**：用官方 Action `withastro/action@v2` 即可；注意 `build` 脚本里包含 pagefind 索引步骤，不要改成裸的 `astro build`
-- 部署前把 `astro.config.mjs` 的 `site` 换成正式域名
-
-## 自定义外观
-
-- 星空主题色板：`src/styles/global.css` 顶部的 `:root` 变量
-- 页头导航：`src/components/Header.astro`
-- 首页版式：`src/pages/index.astro`
-
-
-
-## 星空与阅读布局
-
-- `src/components/StarMap.astro`：首页按分类聚合星域，每组最多 3 个；点击显示最近 5 篇，完整内容通过分类页或列表进入。星群线稿仅表示主题入口，不表示逐篇文章之间的引用关系。
-- `src/components/StarField.astro`：固定种子的装饰星野，与内容数量无关；阅读页淡化中心背景，减少动态干扰。
-- `src/components/ArticleToc.astro`：宽屏右侧目录，窄屏折叠目录。笔记与项目详情共用阅读宽度。
-- 知识库支持 `?category=分类名`，可直接分享分类地址；原有 Markdown 路径不变。
-- 首页仅保留原有名言，不添加装饰性标语。减少动态效果的系统设置会关闭星尘动画。
+- 知识库支持 `?category=分类名` 直接分享分类地址
+- 阅读页宽屏右侧目录（ArticleToc），窄屏折叠
+- `prefers-reduced-motion` 会关闭星尘动画与流星
+- 自定义主题色板：`src/styles/global.css` 顶部 `:root` 变量

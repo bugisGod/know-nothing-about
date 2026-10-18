@@ -31,19 +31,21 @@ for (const n of notes) {
       key: cat,
       label: meta?.label ?? cat,
       desc: meta?.desc ?? "",
-      color: meta?.color,
+      color: meta?.color ?? '',
       entries: [],
     });
   }
   clusterMap.get(cat)!.entries.push(n);
 }
 // ★ 无状态自动配色（与首页同函数同输入 → 同结果）
+// ★ key 加 cat: 前缀（2026-10-16 修复）：首页团 key = cat:xxx，自动配色按 key 哈希——
+//   知识库这边曾用裸 xxx 哈希，新分类（无配置色）两边会哈希出不同颜色（zz测试 粉vs金 实锤）
 {
   const assigned = assignClusterColors(
-    [...clusterMap.values()].map((t) => ({ key: t.key, color: t.color, birth: births[t.key] })),
+    [...clusterMap.values()].map((t) => ({ key: `cat:${t.key}`, color: t.color, birth: births[t.key] })),
     [PROJECT_COLOR],
   );
-  for (const t of clusterMap.values()) t.color = assigned[t.key];
+  for (const t of clusterMap.values()) t.color = assigned[`cat:${t.key}`];
 }
 const topics = [...clusterMap.values()].sort((a, b) => b.entries.length - a.entries.length);
 
@@ -200,7 +202,9 @@ const fmt = (date?: Date) =>
   .topic-section { margin-bottom: 52px; }
   .topic-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* ★ auto-fill（2026-10-17 用户「知识库一行几列」）：
+      原 auto-fit 会折叠空轨道——2 个专题时两卡被拉到 527px（实测），卡宽随专题数漂移。
+      auto-fill 列数只由视口定（1072px 容器=3 列×345），与项目页行为一致，卡宽稳定 */
     gap: 18px;
   }
   .topic-card {

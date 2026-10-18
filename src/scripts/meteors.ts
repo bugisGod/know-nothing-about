@@ -25,7 +25,7 @@
   new ResizeObserver(resize).observe(document.documentElement);
 
   // 静态微星（低频闪烁，与背景渐变星点叠加出层次）
-  const twinkles = Array.from({ length: 40 }, (_, i) => ({
+  const twinkles = Array.from({ length: 40 }, () => ({
     x: Math.random(), y: Math.random(),
     r: 0.4 + Math.random() * 0.9,
     base: 0.12 + Math.random() * 0.3,

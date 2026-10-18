@@ -142,16 +142,9 @@ const links: { a: number; b: number; w: number }[] = [];
     if (targets.length) manualBy.set(i, targets);
   });
   const hasManual = (i: number) => manualBy.has(i);
-  for (let i = 0; i < stars.length; i++) {
-    for (let j = i + 1; j < stars.length; j++) {
-      if (hasManual(i) || hasManual(j)) continue; // 手工声明的星不走自动连线
-      const shared = stars[i].tags.filter((t) => stars[j].tags.includes(t)).length;
-      if (shared > 0) {
-        const cross = stars[i].cluster !== stars[j].cluster ? 1 : 0;
-        links.push({ a: i, b: j, w: Math.min(shared, 2) + cross });
-      }
-    }
-  }
+  // ★ 同标签自动连线已退役（2026-10-16 用户终审）：「共享任一标签就连线」是 O(n²)——
+  //   8 篇同标签测试文章曾织出 45+ 条冷蓝白虚线 = 星团上的白雾团（染红定位+逐层隐藏实锤）。
+  //   限流到每星 2 条仍织网。连线语义收归【手工 related 声明】：数量恒少、条条有意
   manualBy.forEach((targets, i) => {
     for (const j of targets) links.push({ a: Math.min(i, j), b: Math.max(i, j), w: 3 });
   });

@@ -1,7 +1,7 @@
 ---
-// 迷你星团卡 v10（形态发生器）：结构与首页同源，全部由种子哈希派生
-// 旋臂(0/2/3) × 缠绕 × 椭率 × 不对称 × 核剖面 —— 新增专题零配置自动长出独立形状
-// 无雾无渐变云——纯星点 + 主星，和首页星团同一语言
+// 迷你星团卡 v11（canvas 质感版）：形态与首页同源同流（FNV+LCG 同序消费），
+// 质感对齐首页——柔光晕星点（加性发光）+ 银尘薄雾 + 团心主星辉光。
+// v10 的 SVG 圆点+虚线已退役（质感与首页不一致；首页团内连线也已证伪删除）
 interface Props {
   size?: number;
   color?: string;
@@ -20,7 +20,7 @@ const rand = () => {
 };
 
 // 域色增艳 + 浅档（星珠亮心）
-const hex2rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+const hex2rgb = (h: string): [number, number, number] => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255) as [number, number, number];
 const rgb2hex = (r: number, g: number, b: number) =>
   '#' + [r, g, b].map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('');
 const rgb2hsl = (r: number, g: number, b: number) => {
@@ -54,7 +54,7 @@ const vc = rgb2hex(...hsl2rgb(hr0, Math.min(0.85, s0 * 1.9), Math.min(0.62, Math
 
 // ===== 星点布位（形态发生器 + 最小间距）=====
 const rad = size * 0.3;
-interface P { x: number; y: number; r: number; }
+interface P { x: number; y: number; r: number; z?: number; }
 const stars: P[] = [];
 const golden = Math.PI * (3 - Math.sqrt(5));
 const minD = size * 0.105;
@@ -66,89 +66,208 @@ const tryPlace = (x: number, y: number, rr: number) => {
   return false;
 };
 // 形态参数（先消费若干 rand()：同种子恒定同形态）
-const arms = [0, 0, 2, 2, 3][Math.floor(rand() * 5)];
-const armAmp = 0.6 + rand() * 0.5;
-const wind = 1.4 + rand() * 1.8;
+// ★ 疏散星团形态 v2（2026-10-15 与首页同步改版）：真实星团无旋臂——
+//   King 中心富集 + 扁平长轴 + 次级团块 + 星链（消费顺序与首页 clusterMorph 严格一致）
 const flat = 0.2 + rand() * 0.45;
 const pa = rand() * Math.PI;
-const lop = (rand() - 0.5) * 0.5;
 const core = 0.3 + rand() * 0.25;
+const thick = 0.35 + rand() * 0.35; // ★ 立体厚度：卡片不画 z，但必须消费同序的流（与首页形状对应）
+const nClumps = Math.floor(rand() * 2.6);
+const clumps: { th: number; rr: number; s: number; cz: number }[] = [];
+for (let i = 0; i < nClumps; i++) {
+  clumps.push({ th: rand() * Math.PI * 2, rr: 0.3 + rand() * 0.32, s: 0.16 + rand() * 0.13, cz: (rand() - 0.5) * 0.9 });
+}
+const nChains = Math.floor(rand() * 2.3);
+const chains: { th0: number; rr0: number; arc: number; w: number; zA: number }[] = [];
+for (let i = 0; i < nChains; i++) {
+  chains.push({
+    th0: rand() * Math.PI * 2,
+    rr0: 0.28 + rand() * 0.3,
+    arc: (0.5 + rand() * 0.55) * (rand() < 0.5 ? -1 : 1),
+    w: 0.06 + rand() * 0.05,
+    zA: (rand() - 0.5) * 1.2,
+  });
+}
+// 密度场（与首页 clusterDensity 同款）：基底 + 团块高斯 + 星链胶囊，单位 = 团半径
+const fy = 1 - flat;
+const clusterDensity = (x: number, y: number) => {
+  let v = 0.32;
+  for (const c of clumps) {
+    const cx = Math.cos(c.th) * c.rr, cy = Math.sin(c.th) * c.rr * fy;
+    const dx = x - cx, dy = y - cy;
+    v += 0.85 * Math.exp(-(dx * dx + dy * dy) / (2 * c.s * c.s));
+  }
+  for (const ch of chains) {
+    const cx = Math.cos(ch.th0) * ch.rr0, cy = Math.sin(ch.th0) * ch.rr0 * fy;
+    let tx = -Math.sin(ch.th0), ty = Math.cos(ch.th0) * fy;
+    const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+    const px = x - cx, py = y - cy;
+    const half = ch.arc / 2;
+    const al = Math.max(-half, Math.min(half, px * tx + py * ty));
+    const dx = px - tx * al, dy = py - ty * al;
+    v += 0.8 * Math.exp(-(dx * dx + dy * dy) / (2 * ch.w * ch.w));
+  }
+  return v;
+};
 for (let i = 0; i < 120 && stars.length < 8; i++) {
   const th0 = golden * i + (rand() - 0.5) * 0.7;
   const dr0 = rad * (0.18 + 0.82 * Math.pow(rand(), 1.25)) * (0.55 + core);
-  if (arms > 0) {
-    // 对数螺旋臂相位：臂脊上的星才保留（与首页同款拒绝采样）
-    const phase = arms * (th0 - wind * Math.log(1 + dr0 / (rad * core)));
-    if (rand() * (1 + armAmp) >= 1 + armAmp * Math.cos(phase)) continue;
-  }
-  const d1 = dr0 * (1 + lop * Math.cos(th0));
-  const ex = Math.cos(th0) * d1, ey = Math.sin(th0) * d1 * (1 - flat);
+  // 向团块/星链聚拢的拒绝采样（与首页文章星同一套）
+  const rrN = dr0 / rad;
+  const ex0 = Math.cos(th0) * rrN, ey0 = Math.sin(th0) * rrN * fy;
+  if (rand() > Math.min(1, clusterDensity(ex0, ey0))) continue;
+  const ex = ex0 * rad, ey = ey0 * rad;
   tryPlace(ex * Math.cos(pa) - ey * Math.sin(pa), ex * Math.sin(pa) + ey * Math.cos(pa), size * (0.012 + rand() * 0.013));
 }
-const C = size / 2;
-const gid = `sg-${size}-${vc.replace('#', '')}-${seedState.toString(36)}`;
+// ★ 深度 z（与首页 clusterZ 同构的简化版）：团块引力 + 基础厚度
+//   卡上表现为星点的尺寸/亮度微差（近亮远暗）——平而不贴纸
+const zOf = (x: number, y: number) => {
+  const nrm = Math.hypot(x / rad, y / rad);
+  let z = 0.75 + (1 - Math.min(1, nrm)) * 0.25;
+  for (const c of clumps) {
+    const cx = Math.cos(c.th) * c.rr, cy = Math.sin(c.th) * c.rr * fy;
+    const dd = Math.hypot(x / rad - cx, y / rad - cy);
+    z += Math.exp(-(dd * dd) / (2 * c.s * c.s)) * 0.35;
+  }
+  return Math.min(1.35, z);
+};
+for (const s of stars) s.z = zOf(s.x, s.y); // stars 存的是中心相对坐标
 
-// ===== 虚线连接：星座式结构网（近邻连线 + 主星辐射）=====
-interface L { x1: number; y1: number; x2: number; y2: number; }
-const lines: L[] = [];
-const seen = new Set<string>();
-const maxLink = size * 0.17;
-for (let i = 0; i < stars.length; i++) {
-  const dists = stars
-    .map((q, j) => ({ j, d: Math.hypot(q.x - stars[i].x, q.y - stars[i].y) }))
-    .filter((q) => q.j !== i && q.d < maxLink)
-    .sort((a, b) => a.d - b.d);
-  const n = 1;
-  for (let k = 0; k < Math.min(n, dists.length); k++) {
-    const kk = i < dists[k].j ? `${i}-${dists[k].j}` : `${dists[k].j}-${i}`;
-    if (!seen.has(kk)) {
-      seen.add(kk);
-      const q = stars[dists[k].j];
-      lines.push({ x1: stars[i].x, y1: stars[i].y, x2: q.x, y2: q.y });
+const C = size / 2;
+const gid = `mg-${size}-${vc.replace('#', '')}-${seedState.toString(36)}`;
+const vcRgb = (() => { const c = hex2rgb(vc); return c.map((v) => Math.round(v * 255)); })();
+// ★ 形状显式成像 v2（2026-10-16 用户「这样有形状区分吗」——v1 均匀采样把结构搅成点浆）：
+//   分带采样保真结构：星链=珠串（大点亮）、团块=密实亮核、基底=薄雾小点。
+//   三个形态元素视觉对比拉开，形状一眼可辨
+const cloud: { x: number; y: number; r: number; a: number }[] = [];
+{
+  // ① 星链珠串：沿链轴等距 + 横向微抖，2.2px 亮珠
+  for (const ch of chains) {
+    const cx = Math.cos(ch.th0) * ch.rr0, cy = Math.sin(ch.th0) * ch.rr0 * fy;
+    let tx = -Math.sin(ch.th0), ty = Math.cos(ch.th0) * fy;
+    const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+    const nBead = Math.round(12 + ch.arc * 16);
+    for (let i = 0; i < nBead; i++) {
+      const al = -ch.arc / 2 + (ch.arc * i) / (nBead - 1);
+      const w = (rand() - 0.5) * ch.w * 0.7;
+      cloud.push({
+        x: +(C + cx + tx * al + tx * w).toFixed(1),
+        y: +(C + cy + ty * al + ty * w).toFixed(1),
+        r: +(1.2 + rand() * 0.55).toFixed(2),
+        a: +(0.30 + rand() * 0.16).toFixed(3),
+      });
     }
   }
+  // ② 团块密核：向心高斯（收 0.7s），1.3px 中亮——比基底密、比珠串散
+  for (const c of clumps) {
+    const cx = Math.cos(c.th) * c.rr, cy = Math.sin(c.th) * c.rr * fy;
+    for (let i = 0; i < 40; i++) {
+      const ddx = (rand() + rand() + rand() - 1.5) * 0.7 * c.s;
+      const ddy = (rand() + rand() + rand() - 1.5) * 0.7 * c.s * fy;
+      cloud.push({
+        x: +(C + (cx + ddx) * rad).toFixed(1),
+        y: +(C + (cy + ddy) * rad).toFixed(1),
+        r: +(0.9 + rand() * 0.55).toFixed(2),
+        a: +(0.20 + rand() * 0.12).toFixed(3),
+      });
+    }
+  }
+  // ③ 基底（轮廓主体）：King 剖面撒 260 粒，撑起整团的外形轮廓——
+  //   团块/珠串是「结构高光」，基底是「形状本体」，不能稀
+  let tries = 0;
+  while (cloud.length < 320 && tries < 5000) {
+    tries++;
+    const th = rand() * Math.PI * 2;
+    const rrN = 0.12 + 0.95 * Math.sqrt(rand());
+    const ex = Math.cos(th) * rrN, ey = Math.sin(th) * rrN * fy;
+    if (rand() > Math.min(1, clusterDensity(ex, ey) * 0.75)) continue;
+    cloud.push({
+      x: +(C + ex * rad).toFixed(1),
+      y: +(C + ey * rad).toFixed(1),
+      r: +(0.5 + rand() * 0.7).toFixed(2),
+      a: +(0.10 + rand() * 0.10).toFixed(3),
+    });
+  }
 }
-// 主星（团心）连到最近的 3 颗
-const nearMain = stars
-  .map((q, j) => ({ j, d: Math.hypot(q.x, q.y) }))
-  .sort((a, b) => a.d - b.d)
-  .slice(0, 2);
-for (const nm of nearMain) {
-  lines.push({ x1: 0, y1: 0, x2: stars[nm.j].x, y2: stars[nm.j].y });
-}
+const payload = JSON.stringify({
+  size,
+  vcRgb,
+  cloud,
+  stars: stars.map((s) => ({ x: +s.x.toFixed(1), y: +s.y.toFixed(1), r: +s.r.toFixed(2), z: +s.z.toFixed(2) })),
+});
+
+
 ---
 
-<svg
+<canvas
+  class="mini-galaxy"
   width={size}
   height={size}
-  viewBox={`0 0 ${size} ${size}`}
+  style={`width:${size}px;height:${size}px`}
+  data-g={payload}
+  data-size={size}
   aria-hidden="true"
-  class="mini-galaxy"
->
-  <defs>
-    <radialGradient id={`sg-${gid}`}>
-      <stop offset="0%" stop-color={vc}></stop>
-      <stop offset="28%" stop-color={vc} stop-opacity="0.8"></stop>
-      <stop offset="58%" stop-color={vc} stop-opacity="0.22"></stop>
-      <stop offset="100%" stop-color={vc} stop-opacity="0"></stop>
-    </radialGradient>
-  </defs>
-  <!-- 虚线星座网 -->
-  {lines.map((l) => (
-    <line
-      x1={C + l.x1} y1={C + l.y1} x2={C + l.x2} y2={C + l.y2}
-      stroke={vc} stroke-width="0.9" stroke-dasharray="2 3.5" opacity="0.55"
-    ></line>
-  ))}
-  <!-- 星辰：紧光晕层 -->
-  {stars.map((d) => (
-    <circle cx={C + d.x} cy={C + d.y} r={d.r * 2.6} fill={`url(#sg-${gid})`}></circle>
-  ))}
-  <!-- 星辰：实心亮核，颗颗分明 -->
-  {stars.map((d) => (
-    <circle cx={C + d.x} cy={C + d.y} r={d.r * 0.8} fill={vc}></circle>
-  ))}
-  <!-- 主星：团心一颗发光巨星 -->
-  <circle cx={C} cy={C} r={size * 0.13} fill={`url(#sg-${gid})`}></circle>
-  <circle cx={C} cy={C} r={size * 0.028} fill={vc}></circle>
-</svg>
+></canvas>
+
+<script>
+  // 质感对齐首页：柔光晕星点（加性发光）+ 银尘薄雾 + 团心主星辉光
+  function drawMg(cv: HTMLCanvasElement) {
+    const d = JSON.parse(cv.dataset.g!);
+    const size = d.size;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = size * dpr;
+    cv.height = size * dpr;
+    const g = cv.getContext('2d');
+    if (!g) return;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, size, size);
+    // ① 形状点云 v2（加性，按 a 升序 = 基底在下、珠串在上）：结构分层的形状成像
+    const [vr, vg, vb] = d.vcRgb; // ★ 必须在最前：esbuild 会把解构提升，循环先于它使用 l,i,d = TDZ 崩溃
+    const ordered = [...d.cloud].sort((p, q) => p.a - q.a);
+    for (const s of ordered) {
+      g.fillStyle = `rgba(${vr},${vg},${vb},${s.a})`;
+      g.beginPath(); g.arc(s.x, s.y, s.r, 0, Math.PI * 2); g.fill();
+    }
+    // ② 星点：柔光晕 + 白芯（lighter 加性 = 首页同款发光质感）
+    g.globalCompositeOperation = 'lighter';
+    for (const s of d.stars) {
+      const z = s.z as number;
+      const halo = g.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 3.0);
+      halo.addColorStop(0, `rgba(${vr},${vg},${vb},${0.75 * z})`);
+      halo.addColorStop(0.55, `rgba(${vr},${vg},${vb},${0.3 * z})`);
+      halo.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = halo;
+      g.beginPath(); g.arc(s.x, s.y, s.r * 2.6, 0, Math.PI * 2); g.fill();
+      const core = g.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 1.35);
+      core.addColorStop(0, `rgba(255,255,255,${0.95 * z})`);
+      core.addColorStop(0.45, `rgba(${vr},${vg},${vb},${0.9 * z})`);
+      core.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = core;
+      g.beginPath(); g.arc(s.x, s.y, s.r * 1.35, 0, Math.PI * 2); g.fill();
+    }
+    // ③ 团心主星：辉光 + 核
+    const C = size / 2;
+    const mg = g.createRadialGradient(C, C, 0, C, C, size * 0.13);
+    mg.addColorStop(0, `rgba(${vr},${vg},${vb},0.6)`);
+    mg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = mg;
+    g.beginPath(); g.arc(C, C, size * 0.19, 0, Math.PI * 2); g.fill();
+    const mc = g.createRadialGradient(C, C, 0, C, C, size * 0.042);
+    mc.addColorStop(0, 'rgba(255,255,255,0.95)');
+    mc.addColorStop(0.5, `rgba(${vr},${vg},${vb},0.9)`);
+    mc.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = mc;
+    g.beginPath(); g.arc(C, C, size * 0.042, 0, Math.PI * 2); g.fill();
+    g.globalCompositeOperation = 'source-over';
+  }
+  function drawAllMg() {
+    document.querySelectorAll<HTMLCanvasElement>('canvas.mini-galaxy').forEach(drawMg);
+  }
+  drawAllMg();
+  // DPR 变化（跨屏拖动）重绘；尺寸固定无需响应 resize 布局
+  let mgLastDpr = Math.min(window.devicePixelRatio || 1, 2);
+  window.addEventListener('resize', () => {
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    if (d !== mgLastDpr) { mgLastDpr = d; drawAllMg(); }
+  });
+</script>

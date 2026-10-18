@@ -55,7 +55,9 @@ const fmtDate = (d: Date) => {
   /* ===== 项目卡片网格（参考知识库专题卡视觉语言，不带星图）===== */
   .proj-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 420px));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); /* ★ 1fr 弹性上限（2026-10-17 用户实测抓包「全屏也是两列」）：
+      原 minmax(320px, 420px) 固定上限 → 规范按 420px 算列数，1072px 容器永远只容 2 列还剩 200px 空白。
+      1fr 让列宽摊满容器：1072px → 3 列×345px，窄窗口 2 列，手机 1 列 */
     gap: 18px;
     padding-bottom: 40px;
   }
