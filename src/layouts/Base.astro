@@ -32,6 +32,16 @@ const pageTitle = title ? `${title} · ${SITE.title}` : SITE.title;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
+    <!-- 自托管访问统计：1px gif，无 cookie 无第三方 -->
+    <script is:inline>
+      (function () {
+        try {
+          var p = location.pathname;
+          if (p.indexOf('/admin') === 0 || p.indexOf('/aa') === 0) return;
+          new Image().src = '/aa?p=' + encodeURIComponent(p) + '&r=' + encodeURIComponent(document.referrer || '');
+        } catch (e) {}
+      })();
+    </script>
     <meta name="generator" content={Astro.generator} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonical} />

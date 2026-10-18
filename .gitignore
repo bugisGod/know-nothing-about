@@ -4,3 +4,11 @@ dist/
 .shots/
 server.ini
 .DS_Store
+admin/data/
+admin/admin-dev.log
+admin/cookies.txt
+admin/payload.json
+admin/pub*.log
+admin/test-img.png
+admin/admin-dev.log
+admin/data/

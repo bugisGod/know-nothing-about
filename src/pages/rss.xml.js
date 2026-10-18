@@ -1,21 +1,15 @@
 import rss from '@astrojs/rss';
-import { getCollection, render } from 'astro:content';
-import { experimental_AstroContainer as AstroContainer } from 'astro/container';
+import { listNotes, listProjects } from '../lib/posts';
 import { SITE } from '../config';
 
 export async function GET(context) {
   // 全文 RSS：正文渲染成 HTML 放进 content:encoded，订阅器里直接读
-  const container = await AstroContainer.create();
-
-  const notes = (await getCollection('notes', ({ data }) => !data.draft)).filter((e) => e.data.date);
-  const projects = (await getCollection('projects', ({ data }) => !data.draft)).filter(
-    (e) => e.data.date
-  );
+  const notes = listNotes().filter((e) => e.data.date);
+  const projects = listProjects().filter((e) => e.data.date);
 
   const items = [];
   for (const e of notes) {
-    const { Content } = await render(e);
-    const html = await container.renderToString(Content);
+    const html = e.html;
     items.push({
       title: `[笔记] ${e.data.title}`,
       description: e.data.description ?? '',
@@ -25,8 +19,7 @@ export async function GET(context) {
     });
   }
   for (const e of projects) {
-    const { Content } = await render(e);
-    const html = await container.renderToString(Content);
+    const html = e.html;
     items.push({
       title: `[项目] ${e.data.title}`,
       description: e.data.description,

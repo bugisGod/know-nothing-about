@@ -3,10 +3,10 @@ import Base from "../../../layouts/Base.astro";
 import NebulaBand from "../../../components/NebulaBand.astro";
 import MiniGalaxy from "../../../components/MiniGalaxy.astro";
 import { CATEGORIES, SERIES, PROJECT_COLOR } from "../../../config";
-import { getCollection } from "astro:content";
+import { listNotes } from "../../../lib/posts";
 
 export async function getStaticPaths() {
-  const notes = await getCollection("notes", ({ data }) => !data.draft);
+  const notes = listNotes();
   const catOf = (id: string) => (id.includes("/") ? id.split("/")[0] : "未分类");
   const cats = new Map<string, typeof notes>();
   for (const n of notes) {
@@ -42,7 +42,26 @@ export async function getStaticPaths() {
 }
 
 const { cat } = Astro.params;
-const { entries, seriesList, loose } = Astro.props;
+// SSR：无 props 时（直接 URL 访问）就地构建与 getStaticPaths 同构的数据
+let { entries, seriesList, loose } = Astro.props as any;
+if (!entries) {
+  const all = listNotes();
+  const sorted = all
+    .filter((n) => (n.id.includes("/") ? n.id.split("/")[0] : "") === cat)
+    .sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0));
+  const seriesMap = new Map();
+  const looseArr = [];
+  for (const n of sorted) {
+    const sid = n.data.series;
+    if (sid && SERIES[sid]) {
+      if (!seriesMap.has(sid)) seriesMap.set(sid, { id: sid, entries: [] });
+      seriesMap.get(sid).entries.push(n);
+    } else looseArr.push(n);
+  }
+  entries = sorted;
+  seriesList = [...seriesMap.values()];
+  loose = looseArr;
+}
 const meta = CATEGORIES[cat];
 const color = Astro.props.color as string;
 const label = meta?.label ?? cat;

@@ -3,18 +3,18 @@ import Base from "../../layouts/Base.astro";
 import SkyBand from "../../components/SkyBand.astro";
 import Icon from "../../components/Icon.astro";
 import ArticleToc from "../../components/ArticleToc.astro";
-import { getCollection, render } from "astro:content";
+import { listProjects, getProject } from "../../lib/posts";
 
 export async function getStaticPaths() {
-  const projects = await getCollection("projects", ({ data }) => !data.draft);
-  return projects.map((entry) => ({
-    params: { slug: entry.id },
-    props: { entry },
-  }));
+  return listProjects().map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
 }
 
-const { entry } = Astro.props;
-const { Content, headings } = await render(entry);
+const entry: any = Astro.props.entry ?? getProject(String(Astro.params.slug));
+if (!entry) return Astro.redirect("/404");
+const entryHtml: string = entry.html;
+const headings = [...entryHtml.matchAll(/<h([1-6]) id="([^"]*)"/g)].map((m) => ({
+  depth: Number(m[1]), slug: m[2], text: '',
+}));
 const d = entry.data;
 
 const fmt = (date: Date) =>
@@ -53,7 +53,7 @@ const fmt = (date: Date) =>
           </span>
         )}
       </div>
-      <Content />
+      <div set:html={entryHtml} />
     </article>
   </div>
 </Base>

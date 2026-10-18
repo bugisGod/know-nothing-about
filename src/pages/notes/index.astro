@@ -3,9 +3,10 @@ import Base from "../../layouts/Base.astro";
 import NebulaBand from "../../components/NebulaBand.astro";
 import MiniGalaxy from "../../components/MiniGalaxy.astro";
 import { CATEGORIES, PROJECT_COLOR, assignClusterColors } from "../../config";
-import { getCollection } from "astro:content";
+import { listNotes } from "../../lib/posts";
+import { tagLabel } from "../../lib/tags";
 
-const notes = (await getCollection("notes", ({ data }) => !data.draft)).sort(
+const notes = listNotes().sort(
   (a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0),
 );
 
@@ -120,7 +121,7 @@ const fmt = (date?: Date) =>
                   <time datetime={n.data.date?.toISOString()}>{fmt(n.data.date)}</time>
                   <span class="kb-meta-cat">{label}</span>
                   {(n.data.tags ?? []).slice(0, 2).map((t) => (
-                    <span class="kb-meta-tag">{t}</span>
+                    <span class="kb-meta-tag">{tagLabel(t)}</span>
                   ))}
                 </p>
                 <h2>{n.data.title}</h2>

@@ -2,10 +2,10 @@
 // 专栏（系列）页 → 跳转到所属专题页
 // 层级（用户定稿）：知识库 → 专题（= 首页星团，按目录分类）→ 专栏（专题内部的系列子集合）
 // 「深入理解 AI Agent」= 学习笔记专题下的专栏，不再有独立顶级页面
-import { getCollection } from "astro:content";
+import { listNotes } from "../../../lib/posts";
 
 export async function getStaticPaths() {
-  const notes = await getCollection("notes", ({ data }) => !data.draft);
+  const notes = listNotes();
   const sids = new Set<string>();
   for (const n of notes) if (n.data.series) sids.add(n.data.series);
   return [...sids].map((slug) => ({ params: { slug } }));
@@ -13,7 +13,7 @@ export async function getStaticPaths() {
 
 const { slug } = Astro.params;
 // 找该系列任一文章所属分类，跳到对应专题页
-const notes = await getCollection("notes", ({ data }) => !data.draft);
+const notes = listNotes();
 const one = notes.find((n) => n.data.series === slug);
 const cat = one ? (one.id.includes("/") ? one.id.split("/")[0] : "ai") : "ai";
 ---
