@@ -3,7 +3,7 @@
 import { Hono } from 'hono';
 import { db } from './db.js';
 import { renderLayout } from './views.js';
-import { listRepoNotes, noteFileContent } from './repo.js';
+import { listRepoNotes, noteAsDraftData } from './repo.js';
 
 export const notes = new Hono();
 
@@ -92,9 +92,9 @@ notes.get('/notes/edit', (c) => {
   // ★ 白名单：cat/slug 会拼进文件路径与发布后的仓库路径
   const cat = SAFE(c.req.query('cat') || '');
   const slug = SAFE(c.req.query('slug') || '');
-  const text = noteFileContent(cat, slug);
-  if (text == null) return c.text('找不到文章', 404);
-  const { fm, body } = parseMd(text);
+  const data = noteAsDraftData(cat, slug);
+  if (!data) return c.text('找不到文章', 404);
+  const { fm, body } = data;
   const r = db.prepare("INSERT INTO drafts (kind, category, slug, title, fm, content_md, published_path) VALUES ('note',?,?,?,?,?,?)")
     .run(cat, slug, fm.title || slug, JSON.stringify({ ...fm, title: undefined }), body, `src/content/notes/${cat}/${slug}.md`);
   return c.redirect(`/admin/notes/${r.lastInsertRowid}/edit`);

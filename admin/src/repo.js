@@ -14,30 +14,28 @@ export function git(args, opts = {}) {
   return execFileSync('git', args, { cwd: SRC_DIR, encoding: 'utf8', ...opts }).trim();
 }
 
-// 列出仓库里的全部笔记（分类=目录）
+// 列出已发布笔记（★ SSR 化：读 posts 表——发布 v2 不再落 md，读文件会漏新文章）
 export function listRepoNotes() {
-  const root = join(SRC_DIR, 'src/content/notes');
-  if (!existsSync(root)) return [];
-  const out = [];
-  for (const cat of readdirSync(root)) {
-    const dir = join(root, cat);
-    if (!statSync(dir).isDirectory()) continue;
-    for (const f of readdirSync(dir)) {
-      if (!f.endsWith('.md')) continue;
-      const slug = f.slice(0, -3);
-      const text = readFileSync(join(dir, f), 'utf8');
-      const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-      const fm = m ? m[1] : '';
-      const title = fm.match(/^title:\s*(.+)$/m)?.[1]?.replace(/^['"]|['"]$/g, '') || slug;
-      const date = fm.match(/^date:\s*(.+)$/m)?.[1]?.trim() || '';
-      const draft = /^draft:\s*true/m.test(fm);
-      if (draft) continue;
-      out.push({ category: cat, slug, title, date, rel: `src/content/notes/${cat}/${f}` });
-    }
-  }
-  out.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  return out;
+  return db.prepare("SELECT category, slug, title, date FROM posts WHERE kind='note' ORDER BY date DESC").all()
+    .map((r) => ({ category: r.category, slug: r.slug.toLowerCase(), title: r.title, date: r.date, rel: `posts:${r.category}/${r.slug}` }));
 }
+// 取已发布笔记（转入编辑用）：返回 {fm, body} 形状（与 parseMd 输出同构）
+export function noteAsDraftData(cat, slug) {
+  const row = db.prepare("SELECT * FROM posts WHERE kind='note' AND category=? AND slug=? COLLATE NOCASE").get(cat, slug);
+  if (!row) return null;
+  return {
+    fm: {
+      description: row.description || undefined,
+      date: row.date,
+      tags: JSON.parse(row.tags || '[]'),
+      related: JSON.parse(row.related || '[]'),
+      pinned: !!row.pinned,
+      series: row.series || undefined,
+    },
+    body: row.content_md,
+  };
+}
+import { db } from './db.js';
 
 export function noteFileContent(cat, slug) {
   const p = join(SRC_DIR, 'src/content/notes', cat, `${slug}.md`);

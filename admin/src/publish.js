@@ -46,6 +46,13 @@ export function publishStream() {
           if (!SRC_DIR) throw new Error('SCIO_SRC_DIR 未配置');
 
           // 1. 同步远端（有远端时）
+          // ★ 护栏（事故教训 2026-10-19）：SRC_DIR 有未提交改动 → 拒绝发布
+          if (existsSync(join(SRC_DIR, '.git'))) {
+            const dirty = git(['status', '--porcelain']);
+            if (dirty && process.env.SCIO_ALLOW_DIRTY !== '1') {
+              throw new Error('SRC_DIR 有未提交改动，拒绝发布（防误清工作区）。先在 ' + SRC_DIR + ' 提交或清理，或设 SCIO_ALLOW_DIRTY=1 强制');
+            }
+          }
           if (existsSync(join(SRC_DIR, '.git'))) {
             const remotes = git(['remote']);
             if (remotes) {
@@ -64,6 +71,12 @@ export function publishStream() {
             }
           }
 
+          // 1.5 ★ posts 表快照（真回滚的依据——v2 不再备份 dist，DB 快照即版本）
+          const snapshot = db.prepare('SELECT * FROM posts ORDER BY id').all();
+          writeFileSync(join(DATA_DIR, `rollback-p${pubId}.json`), JSON.stringify(snapshot));
+          db.prepare('DELETE FROM rollback WHERE restored=0').run();
+          db.prepare('INSERT INTO rollback (publish_id, rows) VALUES (?,?)').run(pubId, snapshot.length);
+
           // 2. ★ 直写 posts 表（SSR 即时生效，2026-10-18）：html 预渲染 + UPSERT
           const drafts = db.prepare("SELECT * FROM drafts WHERE kind IN ('note','project')").all();
           let written = 0;
@@ -79,7 +92,13 @@ export function publishStream() {
               updated_at=datetime('now')`);
           for (const d of drafts) {
             const fm = JSON.parse(d.fm || '{}');
-            if (fm.draft) continue;
+            if (fm.draft) {
+              // ★ 下架：勾「隐藏」= 从线上移除（原 v2 只跳过写入，旧行一直在线）
+              const del = db.prepare("DELETE FROM posts WHERE kind=? AND category=? AND slug=? COLLATE NOCASE")
+                .run(d.kind, d.kind === 'note' ? d.category : '', d.slug);
+              if (del.changes > 0) { cap(`- 下架: ${d.category ? d.category + '/' : ''}${d.slug}`); }
+              continue;
+            }
             if (!d.title || !d.slug || (d.kind === 'note' && !d.category)) continue;
             const html = await renderMarkdown(d.content_md || '');
             const row = {
@@ -110,6 +129,11 @@ export function publishStream() {
                 cap(`+ public/images/${f}`);
               }
               log(`· 搬运图片 ${files.length} 张`);
+              // ★ 同步到 SSR 静态根（运行时伺服 dist/client/images——构建期快照不含新图）
+              const clientImg = join(SRC_DIR, 'dist/client/images');
+              if (existsSync(clientImg)) {
+                for (const f of files) cpSync(join(mediaStage, f), join(clientImg, f));
+              }
             }
           }
 
@@ -156,11 +180,24 @@ export function publishStream() {
   return stream;
 }
 
-// 回滚：把 backup 拷回 WEB_DIR
+// ★ 回滚 v2（SSR）：恢复上一次发布前的 posts 快照（搜索索引由下次发布或手动重建）
 export function rollback() {
-  const backup = join(SRC_DIR, '..', 'scio-dist-prev');
-  if (!existsSync(backup)) throw new Error('没有可回滚的备份');
-  rmSync(WEB_DIR, { recursive: true, force: true });
-  cpSync(backup, WEB_DIR, { recursive: true });
-  db.prepare("UPDATE publishes SET status='rolled_back' WHERE status='ok' ORDER BY id DESC LIMIT 1").run();
+  const last = db.prepare('SELECT publish_id FROM rollback WHERE restored=0 ORDER BY id DESC LIMIT 1').get();
+  if (!last) throw new Error('没有可回滚的快照');
+  const file = join(DATA_DIR, `rollback-p${last.publish_id}.json`);
+  if (!existsSync(file)) throw new Error('快照文件缺失: ' + file);
+  const snapshot = JSON.parse(readFileSync(file, 'utf8'));
+  const restore = db.transaction(() => {
+    db.prepare('DELETE FROM posts').run();
+    const ins = db.prepare(`INSERT INTO posts
+      (kind, category, slug, title, description, date, tags, related, pinned, series,
+       period, role, tech, status, link, repo, content_md, html, created_at, updated_at)
+      VALUES (@kind,@category,@slug,@title,@description,@date,@tags,@related,@pinned,@series,
+              @period,@role,@tech,@status,@link,@repo,@content_md,@html,@created_at,@updated_at)`);
+    for (const row of snapshot) ins.run(row);
+  });
+  restore();
+  db.prepare('UPDATE rollback SET restored=1 WHERE publish_id=?').run(last.publish_id);
+  db.prepare("UPDATE publishes SET status='rolled_back' WHERE status='ok' AND id=?").run(last.publish_id);
+  return `已回滚到发布 #${last.publish_id} 之前（${snapshot.length} 篇）`;
 }

@@ -63,6 +63,13 @@ CREATE TABLE IF NOT EXISTS publishes (
   started_at TEXT DEFAULT (datetime('now')),
   finished_at TEXT
 );
+CREATE TABLE IF NOT EXISTS rollback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  publish_id INTEGER NOT NULL,
+  rows INTEGER DEFAULT 0,
+  restored INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS analytics (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts TEXT DEFAULT (datetime('now')),

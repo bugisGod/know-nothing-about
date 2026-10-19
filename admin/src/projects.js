@@ -72,23 +72,17 @@ projects.get('/projects/new', (c) => {
 // 已发布项目转入编辑（草稿副本）
 projects.get('/projects/edit', (c) => {
   const slug = SAFE(c.req.query('slug') || '');
-  const p = join(SRC_DIR, 'src/content/projects', `${slug}.md`);
-  if (!existsSync(p)) return c.text('找不到项目', 404);
-  const text = readFileSync(p, 'utf8');
-  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-  const fm = {};
-  if (m) for (const line of m[1].split(/\r?\n/)) {
-    const kv = line.match(/^([a-zA-Z_]+):\s*(.*)$/);
-    if (!kv) continue;
-    let v = kv[2].trim();
-    if (v.startsWith('[') && v.endsWith(']')) v = v.slice(1, -1).split(',').map((x) => x.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
-    else if (v === 'true' || v === 'false') v = v === 'true';
-    fm[kv[1]] = v;
-  }
-  const title = fm.title || slug;
-  delete fm.title;
+  // SSR 化：已发布项目从 posts 表转入编辑（不再读 md 文件）
+  const row = db.prepare("SELECT * FROM posts WHERE kind='project' AND slug=? COLLATE NOCASE").get(slug);
+  if (!row) return c.text('找不到项目', 404);
+  const fm = {
+    description: row.description, period: row.period || undefined, role: row.role || undefined,
+    tech: JSON.parse(row.tech || '[]'), tags: JSON.parse(row.tags || '[]'),
+    status: row.status || '已完成', link: row.link || undefined, repo: row.repo || undefined,
+    date: row.date,
+  };
   const r = db.prepare("INSERT INTO drafts (kind, slug, title, fm, content_md, published_path) VALUES ('project',?,?,?,?,?)")
-    .run(slug, title, JSON.stringify(fm), m ? m[2] : text, `src/content/projects/${slug}.md`);
+    .run(row.slug.toLowerCase(), row.title, JSON.stringify(fm), row.content_md, `project//${row.slug.toLowerCase()}`);
   return c.redirect(`/admin/projects/${r.lastInsertRowid}/edit`);
 });
 

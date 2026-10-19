@@ -14,6 +14,9 @@ export function db() {
     _db.exec("PRAGMA journal_mode = WAL;");
     _db.exec("PRAGMA busy_timeout = 5000;");
     ensurePosts(_db);
+    // ★ 空库告警（部署静默空站的防线——DB 没上服务器时页面全空但 HTTP 200）
+    const n = _db.prepare('SELECT COUNT(*) c FROM posts').get().c;
+    if (n === 0) console.error('[posts] ⚠️ posts 表为空——站点将无内容。若刚部署：检查 SCIO_DB 路径 / 跑 scripts/migrate-content.mjs / 从后台发布一次');
   }
   return _db;
 }
@@ -46,23 +49,6 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 CREATE INDEX IF NOT EXISTS idx_posts_kind ON posts(kind);
 CREATE INDEX IF NOT EXISTS idx_posts_series ON posts(series);
-CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
-  title, description, body, content='posts', content_rowid='id', tokenize='unicode61'
-);
-CREATE TRIGGER IF NOT EXISTS posts_ai AFTER INSERT ON posts BEGIN
-  INSERT INTO posts_fts(rowid, title, description, body)
-  VALUES (new.id, new.title, new.description, new.content_md);
-END;
-CREATE TRIGGER IF NOT EXISTS posts_ad AFTER DELETE ON posts BEGIN
-  INSERT INTO posts_fts(posts_fts, rowid, title, description, body)
-  VALUES ('delete', old.id, old.title, old.description, old.content_md);
-END;
-CREATE TRIGGER IF NOT EXISTS posts_au AFTER UPDATE ON posts BEGIN
-  INSERT INTO posts_fts(posts_fts, rowid, title, description, body)
-  VALUES ('delete', old.id, old.title, old.description, old.content_md);
-  INSERT INTO posts_fts(rowid, title, description, body)
-  VALUES (new.id, new.title, new.description, new.content_md);
-END;
 `);
 }
 

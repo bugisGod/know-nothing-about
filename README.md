@@ -37,7 +37,7 @@ draft: true               # 可选：草稿不构建
 ---
 ```
 
-首页自动多一颗文章星、星团按 √n 自动长大、知识库自动收录。
+写完发布**即时生效**（写库秒级在线）：首页自动多一颗文章星、星团按 √n 自动长大、知识库自动收录。
 
 ### 加一个分类（= 新星团 + 新专题卡）
 
@@ -56,13 +56,22 @@ mkdir src/content/notes/<新分类>
 
 ## 部署
 
+**架构（2026-10-19 SSR 化）**：站点=Node SSR 服务（实时渲染，数据在 SQLite），
+后台=独立 Node 服务，Caddy 分流 `/admin`、`/aa` 与其余流量。
+内容真身在数据库（admin.db）——**持久化路径 + 备份是生命线**。
+
 ```bash
-./deploy.sh    # = npm run build + SFTP 上传 /var/www/scio（Caddy 伺服）
+npm run build     # 构建产物 dist/server + dist/client
+npm run start     # 本地/服务器：起 SSR + pagefind 索引兜底
 ```
 
-- **部署红线**：`git status` 确认无 `*测试*.md` 混入（测试文章一律不部署）
-- 生产验证：线上 bundle 特征码与本地 dist 一致 + 内容级抽查
-- GitHub 同步：`.shots/api-push.mjs`
+完整服务器操作手册（systemd 双服务 / Caddy / 数据库迁移 / 备份 / 验证清单）：
+**[deploy/DEPLOY.md](deploy/DEPLOY.md)**
+
+- 管理后台：`/admin`（scio-admin 服务，账号密码环境变量初始化）
+- 发布=写库即时生效（秒级在线）；发布历史可回滚（posts 快照）
+- 部署红线：`git status` 确认无 `*测试*.md`；数据库文件不进 git（.gitignore 已含）
+
 
 ## 首页银河（src/components/BrainGraph.astro）
 
