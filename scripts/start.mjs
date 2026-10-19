@@ -1,7 +1,7 @@
 // SSR 站点启动入口：起服务 → 等就绪 → pagefind 索引兜底（干净部署后搜索可用）
 // 用法: node scripts/start.mjs   （环境变量 SCIO_DB / PORT 同站点服务）
 import { spawn, execSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,15 +31,23 @@ async function waitReady(timeoutMs = 30000) {
 const ok = await waitReady();
 if (!ok) {
   console.error("[start] 站点未在 30s 内就绪，跳过 pagefind 兜底");
-} else if (!existsSync(join(dir, "../dist/client/pagefind/pagefind.js"))) {
-  console.log("[start] pagefind 索引缺失（干净部署）→ 重建 …");
-  try {
-    execSync(`node ${join(dir, "build-pagefind.mjs")} http://127.0.0.1:${PORT}`, { stdio: "inherit" });
-  } catch (e) {
-    console.error("[start] pagefind 兜底失败（不影响站点）:", e.message);
-  }
 } else {
-  console.log("[start] pagefind 索引已存在，跳过兜底");
+  // ★ 判断「索引是否真有内容」而不是「文件在不在」（2026-10-20）：
+  //   抓取全失败时 pagefind 照样产出 pagefind.js，但只有 1 页 → 搜索等于没有。
+  //   必须看 fragment 目录是否存在且非空。
+  const fragDir = join(dir, "../dist/client/pagefind/fragment");
+  let hasFragments = false;
+  try { hasFragments = readdirSync(fragDir).length > 0; } catch { hasFragments = false; }
+  if (hasFragments) {
+    console.log("[start] pagefind 索引完整，跳过兜底");
+  } else {
+    console.log("[start] pagefind 索引缺失或不完整 → 重建 …");
+    try {
+      execSync(`node ${join(dir, "build-pagefind.mjs")} http://127.0.0.1:${PORT}`, { stdio: "inherit" });
+    } catch (e) {
+      console.error("[start] pagefind 兜底失败（不影响站点）:", e.message);
+    }
+  }
 }
 
 // ★ 信号转发（2026-10-20 修）：systemd stop/restart 只给父进程发 SIGTERM，

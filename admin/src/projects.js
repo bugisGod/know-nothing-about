@@ -81,6 +81,7 @@ projects.get('/projects/edit', (c) => {
     status: row.status || '已完成', link: row.link || undefined, repo: row.repo || undefined,
     date: row.date,
   };
+  db.prepare("DELETE FROM drafts WHERE kind='project' AND lower(slug)=lower(?)").run(slug);
   const r = db.prepare("INSERT INTO drafts (kind, slug, title, fm, content_md, published_path) VALUES ('project',?,?,?,?,?)")
     .run(row.slug.toLowerCase(), row.title, JSON.stringify(fm), row.content_md, `project//${row.slug.toLowerCase()}`);
   return c.redirect(`/admin/projects/${r.lastInsertRowid}/edit`);

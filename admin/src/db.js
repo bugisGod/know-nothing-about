@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS drafts (
   fm TEXT DEFAULT '{}',          -- frontmatter JSON（除 title/正文外全部字段）
   content_md TEXT DEFAULT '',
   published_path TEXT DEFAULT '',
-  published_at TEXT, -- 发布后对应的仓库文件路径（跟踪用）
+  published_at TEXT, -- 上次成功发布的时间（脏过滤：只发「未发过或发后又改过」的草稿）
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );

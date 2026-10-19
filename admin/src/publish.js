@@ -216,6 +216,22 @@ export function rollback() {
   try {
     db.prepare('DELETE FROM posts').run();
     for (const row of snapshot) ins.run(row);
+    // ★ 脏标记必须一起清（2026-10-20 复审发现）：发布管线只发「未发过或改过」的草稿，
+    //   回滚后若不 reset published_at，那批草稿会被判定为「已发且未改」→ 下次发布不再重写，
+    //   回滚掉的那些文章就永久缺失（除非手动去改一遍草稿）。
+    // ★ 精准标记（2026-10-20 连锁修复）：回滚后按「文章是否还在库」重置 published_at——
+    //   还在（别的草稿/迁移已发过同 slug）→ 视为已发未改，不重发；不在 → 清标记待重发。
+    //   原全量清空 + 历次转入编辑的重复草稿 = 回滚后下一次发布把所有旧副本重上线（实测 +N 行）
+    db.exec(`UPDATE drafts SET published_at=datetime('now')
+             WHERE title != '' AND slug != '' AND published_at IS NOT NULL
+             AND EXISTS (SELECT 1 FROM posts p WHERE p.kind = drafts.kind
+               AND p.category = CASE WHEN drafts.kind = 'note' THEN drafts.category ELSE '' END
+               AND p.slug = lower(drafts.slug))`);
+    db.exec(`UPDATE drafts SET published_at=NULL
+             WHERE title != '' AND slug != ''
+             AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.kind = drafts.kind
+               AND p.category = CASE WHEN drafts.kind = 'note' THEN drafts.category ELSE '' END
+               AND p.slug = lower(drafts.slug))`);
     db.exec('COMMIT');
   } catch (e) {
     try { db.exec('ROLLBACK'); } catch {}

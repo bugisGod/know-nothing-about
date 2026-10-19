@@ -95,6 +95,8 @@ notes.get('/notes/edit', (c) => {
   const data = noteAsDraftData(cat, slug);
   if (!data) return c.text('找不到文章', 404);
   const { fm, body } = data;
+  // ★ 去重（2026-10-20）：重复转入编辑会堆副本，回滚后一起重发——先清同目标旧草稿
+  db.prepare("DELETE FROM drafts WHERE kind='note' AND category=? AND lower(slug)=lower(?)").run(cat, slug);
   const r = db.prepare("INSERT INTO drafts (kind, category, slug, title, fm, content_md, published_path) VALUES ('note',?,?,?,?,?,?)")
     .run(cat, slug, fm.title || slug, JSON.stringify({ ...fm, title: undefined }), body, `src/content/notes/${cat}/${slug}.md`);
   return c.redirect(`/admin/notes/${r.lastInsertRowid}/edit`);
