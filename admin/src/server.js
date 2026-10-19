@@ -112,7 +112,12 @@ app.get('/aa', (c) => {
 
 app.use('/admin/*', async (c, next) => {
   const user = auth(c);
-  if (!user) return c.redirect('/admin/login');
+  if (!user) {
+    // ★ API 路径返回 401 JSON（fetch 客户端需要状态码判断，302 跳登录页会让
+    //   编辑器在会话过期时拿到 HTML 报「保存失败」）；页面路径才跳登录
+    if (c.req.path.startsWith('/admin/api/')) return c.json({ ok: false, error: '未登录' }, 401);
+    return c.redirect('/admin/login');
+  }
   c.set('user', user);
   await next();
 });
