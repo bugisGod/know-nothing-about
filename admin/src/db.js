@@ -8,12 +8,21 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const ADMIN_HOME = join(__dirname, '..');
 export const DATA_DIR = process.env.SCIO_DATA_DIR || join(ADMIN_HOME, 'data');
+// ★ SCIO_DB 优先（2026-10-20 修）：后台与站点必须同一个库文件。
+//   此前 admin 只认 SCIO_DATA_DIR，而部署手册给 admin 配的是 SCIO_DB → 环境变量被静默忽略，
+//   后台写 admin/data/admin.db、站点读 /var/lib/scio/admin.db，发布成功但线上不变。
+export const DB_PATH = process.env.SCIO_DB || join(DATA_DIR, 'admin.db');
+// 快照/发布留档一律放在库文件旁边（避免 DB 外置、快照留在代码目录 → 重部署后回滚失效）
+export const SNAPSHOT_DIR = process.env.SCIO_SNAPSHOT_DIR || dirname(DB_PATH);
 mkdirSync(DATA_DIR, { recursive: true });
+mkdirSync(dirname(DB_PATH), { recursive: true });
+mkdirSync(SNAPSHOT_DIR, { recursive: true });
 
-export const db = new DatabaseSync(join(DATA_DIR, 'admin.db'));
+export const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA busy_timeout = 5000;');
 
+try { db.exec('ALTER TABLE drafts ADD COLUMN published_at TEXT'); } catch {}
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY,
@@ -35,7 +44,8 @@ CREATE TABLE IF NOT EXISTS drafts (
   title TEXT DEFAULT '',
   fm TEXT DEFAULT '{}',          -- frontmatter JSON（除 title/正文外全部字段）
   content_md TEXT DEFAULT '',
-  published_path TEXT DEFAULT '', -- 发布后对应的仓库文件路径（跟踪用）
+  published_path TEXT DEFAULT '',
+  published_at TEXT, -- 发布后对应的仓库文件路径（跟踪用）
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );

@@ -42,4 +42,15 @@ if (!ok) {
   console.log("[start] pagefind 索引已存在，跳过兜底");
 }
 
-child.on("exit", (code) => process.exit(code ?? 0));
+// ★ 信号转发（2026-10-20 修）：systemd stop/restart 只给父进程发 SIGTERM，
+//   spawn 出来的 SSR 子进程收不到 → 变成孤儿继续占着端口，重启必 EADDRINUSE。
+let exiting = false;
+for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) {
+  process.on(sig, () => {
+    if (exiting) return;
+    exiting = true;
+    try { child.kill(sig); } catch { /* 子进程已退出 */ }
+    setTimeout(() => process.exit(0), 3000).unref();
+  });
+}
+child.on("exit", (code, sig) => process.exit(code ?? (sig ? 1 : 0)));

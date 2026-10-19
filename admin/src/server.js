@@ -7,7 +7,9 @@ import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { DATA_DIR } from './db.js';
+import { SRC_DIR } from './repo.js';
 import {
   db, createSession, getSessionUser, cleanSessions,
   loginThrottled, recordLoginFail, clearLoginFails,
@@ -200,9 +202,17 @@ app.get('/admin/publishes', (c) => {
   const rows = db.prepare('SELECT * FROM publishes ORDER BY id DESC LIMIT 50').all();
   return c.html(renderPublishes({ user: c.get('user'), rows }));
 });
-app.post('/admin/publishes/rollback', (c) => {
-  try { rollback(); return c.redirect('/admin/publishes?ok=1'); }
+app.post('/admin/publishes/rollback', async (c) => {
+  let msg = '';
+  try { msg = rollback(); }
   catch (e) { return c.text('回滚失败: ' + e.message, 500); }
+  // ★ 回滚后搜索索引仍指向已回滚的内容 → 尽力重建（失败不影响回滚结果）
+  try {
+    execFileSync(process.execPath, [join(SRC_DIR, 'scripts/build-pagefind.mjs'), process.env.SCIO_SITE_URL || 'http://127.0.0.1:4321'],
+      { cwd: SRC_DIR, stdio: 'ignore', timeout: 180000 });
+  } catch { /* 索引重建失败不阻塞 */ }
+  void msg;
+  return c.redirect('/admin/publishes?ok=1');
 });
 app.post('/admin/api/publish', (c) => {
   const ct = c.req.header('content-type') || '';

@@ -3,17 +3,39 @@
 import { DatabaseSync } from "node:sqlite";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-export const DB_PATH = process.env.SCIO_DB || join(__dirname, "../../admin/data/admin.db");
+// ★ 库路径解析（2026-10-20 修）：构建产物里 __dirname = dist/server/chunks，
+//   "../../admin/data/admin.db" 会落到 dist/admin/...（目录不存在）→ node:sqlite 直接
+//   "unable to open database file"，首页 500。现在：SCIO_DB 优先 → 其次源码树路径 →
+//   其次 CWD 路径 → 取第一个已存在的；都不存在则用源码树路径并自动建目录。
+function resolveDb(): string {
+  if (process.env.SCIO_DB) return process.env.SCIO_DB;
+  const cands = [
+    join(__dirname, "../../admin/data/admin.db"), // 源码树（src/lib 下）
+    join(process.cwd(), "admin/data/admin.db"),   // 从仓库根启动
+  ];
+  return cands.find((p) => existsSync(p)) || cands[0];
+}
+export const DB_PATH = resolveDb();
 
 let _db: any = null;
 export function db() {
   if (!_db) {
+    mkdirSync(dirname(DB_PATH), { recursive: true });
     _db = new DatabaseSync(DB_PATH);
     _db.exec("PRAGMA journal_mode = WAL;");
     _db.exec("PRAGMA busy_timeout = 5000;");
     ensurePosts(_db);
+    // ★ 历史库清理（2026-10-20 实测事故）：早期建的库残留 FTS5 虚表+触发器（代码已删 DDL
+    //   但 CREATE IF NOT EXISTS 不会拆已有实体）——回滚 DELETE 时触发器写腐坏的影子表
+    //   → "database disk image is malformed"。打开时自动拆除
+    _db.exec('DROP TRIGGER IF EXISTS posts_ai');
+    _db.exec('DROP TRIGGER IF EXISTS posts_ad');
+    _db.exec('DROP TRIGGER IF EXISTS posts_au');
+    _db.exec('DROP TABLE IF EXISTS posts_fts');
     // ★ 空库告警（部署静默空站的防线——DB 没上服务器时页面全空但 HTTP 200）
     const n = _db.prepare('SELECT COUNT(*) c FROM posts').get().c;
     if (n === 0) console.error('[posts] ⚠️ posts 表为空——站点将无内容。若刚部署：检查 SCIO_DB 路径 / 跑 scripts/migrate-content.mjs / 从后台发布一次');

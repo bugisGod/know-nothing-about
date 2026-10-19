@@ -4,8 +4,9 @@
 //   SCIO_WEB_DIR  静态站根（如 /var/www/scio）
 //   SCIO_GIT_PUSH 1=发布时 push GitHub（本地测试可不推）
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { db } from './db.js';
 
 export const SRC_DIR = process.env.SCIO_SRC_DIR || '';
 export const WEB_DIR = process.env.SCIO_WEB_DIR || '';
@@ -35,7 +36,6 @@ export function noteAsDraftData(cat, slug) {
     body: row.content_md,
   };
 }
-import { db } from './db.js';
 
 export function noteFileContent(cat, slug) {
   const p = join(SRC_DIR, 'src/content/notes', cat, `${slug}.md`);

@@ -5,7 +5,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { db, DATA_DIR } from './db.js';
+import { db, DATA_DIR, SNAPSHOT_DIR } from './db.js';
 import { SRC_DIR, WEB_DIR, git } from './repo.js';
 import { buildFrontmatter } from './notes.js';
 import { registryJson } from './tags.js';
@@ -73,9 +73,20 @@ export function publishStream() {
 
           // 1.5 ★ posts 表快照（真回滚的依据——v2 不再备份 dist，DB 快照即版本）
           const snapshot = db.prepare('SELECT * FROM posts ORDER BY id').all();
-          writeFileSync(join(DATA_DIR, `rollback-p${pubId}.json`), JSON.stringify(snapshot));
-          db.prepare('DELETE FROM rollback WHERE restored=0').run();
-          db.prepare('INSERT INTO rollback (publish_id, rows) VALUES (?,?)').run(pubId, snapshot.length);
+          // ★ 快照存库文件旁（SNAPSHOT_DIR），并只保留最近 3 份（旧 JSON 不再无限堆积）
+          writeFileSync(join(SNAPSHOT_DIR, `rollback-p${pubId}.json`), JSON.stringify(snapshot));
+          const keep = db.prepare('SELECT publish_id FROM rollback ORDER BY id DESC LIMIT 3').all().map((r) => r.publish_id);
+          db.prepare('DELETE FROM rollback').run();
+          for (const pid of [...keep, pubId]) {
+            db.prepare('INSERT OR IGNORE INTO rollback (publish_id, rows) VALUES (?,?)').run(pid, snapshot.length);
+          }
+          try {
+            for (const f of readdirSync(SNAPSHOT_DIR)) {
+              if (!/^rollback-p\d+\.json$/.test(f)) continue;
+              const pid = Number(f.match(/p(\d+)/)[1]);
+              if (![...keep, pubId].includes(pid)) rmSync(join(SNAPSHOT_DIR, f), { force: true });
+            }
+          } catch {}
 
           // 2. ★ 直写 posts 表（SSR 即时生效，2026-10-18）：html 预渲染 + UPSERT
           const drafts = db.prepare("SELECT * FROM drafts WHERE kind IN ('note','project')").all();
@@ -91,12 +102,17 @@ export function publishStream() {
               status=@status, link=@link, repo=@repo, content_md=@content_md, html=@html,
               updated_at=datetime('now')`);
           for (const d of drafts) {
+            // ★ 脏过滤（2026-10-20 实测设计缺陷）：只发「从未发布或发后又改过」的草稿——
+            //   原全量重发把历次转入编辑的旧副本一起发（+3 行），回滚语义也被搅乱
+            const dirty = !d.published_at || d.updated_at > d.published_at;
+            if (!dirty) continue;
             const fm = JSON.parse(d.fm || '{}');
             if (fm.draft) {
               // ★ 下架：勾「隐藏」= 从线上移除（原 v2 只跳过写入，旧行一直在线）
               const del = db.prepare("DELETE FROM posts WHERE kind=? AND category=? AND slug=? COLLATE NOCASE")
                 .run(d.kind, d.kind === 'note' ? d.category : '', d.slug);
               if (del.changes > 0) { cap(`- 下架: ${d.category ? d.category + '/' : ''}${d.slug}`); }
+              db.prepare("UPDATE drafts SET published_at=datetime('now') WHERE id=?").run(d.id);
               continue;
             }
             if (!d.title || !d.slug || (d.kind === 'note' && !d.category)) continue;
@@ -112,6 +128,7 @@ export function publishStream() {
               content_md: d.content_md || '', html,
             };
             upsert.run(row);
+            db.prepare("UPDATE drafts SET published_at=datetime('now') WHERE id=?").run(d.id);
             db.prepare('UPDATE drafts SET published_path=? WHERE id=?').run(`${row.kind}/${row.category}/${row.slug}`, d.id);
             written++;
             cap(`+ posts: ${row.category ? row.category + '/' : ''}${row.slug}`);
@@ -184,19 +201,26 @@ export function publishStream() {
 export function rollback() {
   const last = db.prepare('SELECT publish_id FROM rollback WHERE restored=0 ORDER BY id DESC LIMIT 1').get();
   if (!last) throw new Error('没有可回滚的快照');
-  const file = join(DATA_DIR, `rollback-p${last.publish_id}.json`);
+  const file = join(SNAPSHOT_DIR, `rollback-p${last.publish_id}.json`);
   if (!existsSync(file)) throw new Error('快照文件缺失: ' + file);
   const snapshot = JSON.parse(readFileSync(file, 'utf8'));
-  const restore = db.transaction(() => {
+  // ★ node:sqlite 没有 better-sqlite3 的 db.transaction()（实测 TypeError：
+  //   db.transaction is not a function）——用显式 BEGIN/COMMIT/ROLLBACK 保证原子性
+  // id 一并写回（保留原 rowid，且避免快照对象多出未使用参数 → "Unknown named parameter 'id'"）
+  const ins = db.prepare(`INSERT INTO posts
+    (id, kind, category, slug, title, description, date, tags, related, pinned, series,
+     period, role, tech, status, link, repo, content_md, html, created_at, updated_at)
+    VALUES (@id,@kind,@category,@slug,@title,@description,@date,@tags,@related,@pinned,@series,
+            @period,@role,@tech,@status,@link,@repo,@content_md,@html,@created_at,@updated_at)`);
+  db.exec('BEGIN');
+  try {
     db.prepare('DELETE FROM posts').run();
-    const ins = db.prepare(`INSERT INTO posts
-      (kind, category, slug, title, description, date, tags, related, pinned, series,
-       period, role, tech, status, link, repo, content_md, html, created_at, updated_at)
-      VALUES (@kind,@category,@slug,@title,@description,@date,@tags,@related,@pinned,@series,
-              @period,@role,@tech,@status,@link,@repo,@content_md,@html,@created_at,@updated_at)`);
     for (const row of snapshot) ins.run(row);
-  });
-  restore();
+    db.exec('COMMIT');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw e;
+  }
   db.prepare('UPDATE rollback SET restored=1 WHERE publish_id=?').run(last.publish_id);
   db.prepare("UPDATE publishes SET status='rolled_back' WHERE status='ok' AND id=?").run(last.publish_id);
   return `已回滚到发布 #${last.publish_id} 之前（${snapshot.length} 篇）`;

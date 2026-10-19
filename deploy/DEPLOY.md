@@ -26,10 +26,15 @@ npm run build          # 产出 dist/server + dist/client
 
 ```bash
 mkdir -p /var/lib/scio
-# 全新库：跑一次迁移把 md 里的现有内容入库
+# 全新库：跑一次迁移把 md 里的现有内容入库（脚本已支持 SCIO_DB）
 SCIO_DB=/var/lib/scio/admin.db node scripts/migrate-content.mjs
-chown -R scio:scio /var/lib/scio   # 见第 4 步建用户（或直接 root 跑，略降安全性）
 ```
+
+> ⚠️ **同一个库文件，三个入口都要指向它**：
+> `SCIO_DB` 是站点（`src/lib/posts.ts`）、后台（`admin/src/db.js`）、迁移脚本
+> （`scripts/migrate-content.mjs`）**共同认的唯一变量名**。
+> 后台另有 `SCIO_DATA_DIR`（媒体暂存区，默认 `admin/data`）；回滚快照固定写在库文件旁边，
+> 不需要单独配置。不要只给后台配 `SCIO_DATA_DIR` 而给站点配 `SCIO_DB`——那会变成两个库。
 
 ## 3. systemd 两个服务
 
@@ -64,7 +69,8 @@ After=network.target scio-site.service
 WorkingDirectory=/opt/scio/site/admin
 # SCIO_ADMIN_PASS 首次启动建管理员；改密码：删除 users 表行后重启
 EnvironmentFile=/etc/scio/admin.env   # chmod 600，内容见下
-Environment=SCIO_DB=/var/lib/scio/admin.db
+Environment=SCIO_DB=/var/lib/scio/admin.db      # ★ 与站点同一个库文件
+Environment=SCIO_DATA_DIR=/var/lib/scio/media   # 媒体暂存区（可不设，默认 admin/data）
 Environment=SCIO_SRC_DIR=/opt/scio/site
 Environment=SCIO_SITE_URL=http://127.0.0.1:4321
 ExecStart=/usr/bin/node src/server.js
@@ -86,7 +92,16 @@ SCIO_ADMIN_PASS=<正式密码，第一次部署时设置>
 ```bash
 systemctl daemon-reload
 systemctl enable --now scio-site scio-admin
-curl -s http://127.0.0.1:4321/admin/health   # {"ok":true}
+curl -s http://127.0.0.1:4322/admin/health   # {"ok":true}  ← 后台在 4322，不是 4321
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4321/   # 200
+```
+
+**git 身份（发布管线要 commit，没配会导致 SRC_DIR 变脏 → 下次发布被护栏拒绝）**：
+
+```bash
+git config --global user.email "scio@nihilscire.com"
+git config --global user.name "scio"
+git -C /opt/scio/site status --porcelain   # 必须为空，否则发布会被拒绝
 ```
 
 ## 4. Caddy 配置（替换现有静态段）
@@ -132,9 +147,22 @@ curl -s -o /dev/null -w "%{http_code}" https://nihilscire.com/admin/login   # 20
 ## 6. 备份（内容真身 = SQLite 一个文件）
 
 ```bash
-# crontab -e：每天 4 点备份库（保留 14 天）+ 每周备份上传图片
-0 4 * * * sqlite3 /var/lib/scio/admin.db ".backup /var/lib/scio/backup-$(date +\%F).db" && find /var/lib/scio -name "backup-*" -mtime +14 -delete
+# 备份脚本（不依赖 sqlite3 CLI，用 node 的 online backup API，服务运行中也能安全备份）
+cat > /opt/scio/backup.sh <<'SH'
+#!/usr/bin/env bash
+set -e
+out=/var/lib/scio/backup-$(date +%F).db
+node -e "new (require('node:sqlite').DatabaseSync)('/var/lib/scio/admin.db').exec('VACUUM INTO \"$out\"')"
+find /var/lib/scio -name 'backup-*' -mtime +14 -delete
+SH
+chmod +x /opt/scio/backup.sh
+
+# crontab -e：每天 4 点
+0 4 * * * /opt/scio/backup.sh
 ```
+
+> 另一道保险：发布管线本身会在每次发布前对 posts 表做快照（存库文件旁，保留最近 3 份），
+> 后台「一键回滚」就是恢复这份快照。
 
 ## 7. 日常更新代码（本地 push 后）
 
@@ -147,6 +175,10 @@ systemctl restart scio-site scio-admin
 ## 已知边界
 
 - **发布管线护栏**：SRC_DIR（=代码目录）有未提交改动时发布会被拒绝——服务器上正常
-  （部署态干净）；本地开发机绝不要对主仓库跑发布（事故教训）
+  （部署态干净，见第 3 步 git 身份与 status 检查）；本地开发机绝不要对主仓库跑发布（事故教训）
 - 2G 内存：SSR 进程 ~150MB + admin ~50MB，充裕；`npm run build` 峰值 ~1G 也能过
 - 浏览器端银河等静态资源走 SSR 服务的 client 目录，Caddy 无需额外静态配置
+- **重启不会漏进程**：`scio-site` 用 `scripts/start.mjs` 启动，它会把 SIGTERM/SIGINT
+  转发给真正的 SSR 子进程，`systemctl restart` 不会留下占端口的孤儿进程
+- 服务以 root 运行（现状）；若要降权，建 `scio` 用户并把 `/var/lib/scio`、`/opt/scio/site`
+  属主改掉，再在两个 unit 里加 `User=scio`

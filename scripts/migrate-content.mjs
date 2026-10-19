@@ -3,10 +3,15 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+import { mkdirSync } from "node:fs";
 import { renderMarkdown } from "../src/lib/md.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const db = new DatabaseSync(join(root, "admin/data/admin.db"));
+// ★ 与 admin/src/db.js、src/lib/posts.ts 统一：SCIO_DB 优先（此前硬编码 admin/data，
+//   部署手册里 `SCIO_DB=... node scripts/migrate-content.mjs` 会迁移到错误位置）
+const DB_PATH = process.env.SCIO_DB || join(root, "admin/data/admin.db");
+mkdirSync(dirname(DB_PATH), { recursive: true });
+const db = new DatabaseSync(DB_PATH);
 db.exec("PRAGMA journal_mode = WAL");
 db.exec(`
 CREATE TABLE IF NOT EXISTS posts (
