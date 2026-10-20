@@ -47,7 +47,7 @@ a{color:inherit;text-decoration:none}
 .wrap{max-width:1080px;margin:0 auto;padding:22px 20px 72px}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:14px 0;border-bottom:1px solid var(--bd);margin-bottom:24px}
-.brand{font-family:var(--font-display);font-size:20px;font-weight:600;letter-spacing:.02em;line-height:1.4}
+.brand{font-family:var(--font-display);font-style:italic;font-weight:400;font-size:22px;letter-spacing:.02em;line-height:1.4}
 .brand .dot{color:var(--ac)}                    /* 站点标识：琥珀句点 */
 .brand small{font-family:var(--font-sans);font-size:12.5px;color:var(--muted);font-weight:400;margin-left:9px;letter-spacing:.08em}
 .nav{display:flex;gap:2px;margin-right:6px;flex-wrap:wrap}
@@ -57,8 +57,8 @@ a{color:inherit;text-decoration:none}
 .who{font-size:13px;color:var(--muted)}
 
 /* ── 标题／文本 ── */
-h1,h2,h3{font-family:var(--font-display);font-weight:600;line-height:1.35}
-h2{font-size:19px;margin-bottom:14px}
+h1,h2,h3{font-family:var(--font-display);font-weight:400;line-height:1.35}
+h2{font-size:20px;margin-bottom:14px}
 h3{font-size:16px;margin-bottom:10px}
 .muted{color:var(--muted);font-size:13px}
 .hint{color:var(--muted);font-size:13px;line-height:1.7}
@@ -69,12 +69,12 @@ h3{font-size:16px;margin-bottom:10px}
 .grid{display:grid;gap:14px}
 .g3{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
 .g2{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
-.stat .n{font-family:var(--font-display);font-size:30px;line-height:1.2;margin:2px 0 4px}
+.stat .n{font-family:var(--font-display);font-style:italic;font-size:30px;line-height:1.2;margin:2px 0 4px}
 .stat .k{font-size:12.5px;color:var(--muted);letter-spacing:.04em}
 
 /* ── 按钮 ── */
 .btn{display:inline-block;background:var(--ac);color:#0b0d14;border:1px solid var(--ac);
-  border-radius:8px;padding:8px 15px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;
+  border-radius:999px;padding:8px 17px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;
   transition:filter .15s,transform .08s;text-align:center}
 .btn:hover{filter:brightness(1.08)}
 .btn:active{transform:translateY(1px)}

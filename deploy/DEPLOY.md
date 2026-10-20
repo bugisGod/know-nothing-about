@@ -165,7 +165,15 @@ node /opt/scio/site/scripts/db-maintenance.mjs
 
 启动日志会有 `ExperimentalWarning`——API 有小变动风险。对策：
 - **版本钉住**：DEPLOY 里装的是 Node 22.x（`nodesource setup_22.x`），升级 Major 前
-  必须在本地先跑 `.shots/self-audit.mjs`（32 项）+ `rollback-proof.mjs`（3 项）回归
+  必须跑回归（脚本已入库，不会随本地工作区丢失）：
+
+  ```bash
+  cd /opt/scio/site
+  SCIO_AUDIT_PASS=<后台密码> node scripts/self-audit.mjs      # 32 项全站+后台
+  SCIO_AUDIT_PASS=<后台密码> node scripts/rollback-proof.mjs   # 3 项回滚语义
+  ```
+
+  两者退出码非 0 即失败，回归没过不要升 Major。
 - 不换 better-sqlite3：原生模块在升 Node 时要重装编译，部署依赖越少越好（用户定案）
 ## 7. 日常更新代码（本地 push 后）
 
