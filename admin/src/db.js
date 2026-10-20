@@ -80,6 +80,11 @@ CREATE TABLE IF NOT EXISTS rollback (
   restored INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS locks (
+  name TEXT PRIMARY KEY,
+  owner TEXT,
+  acquired_at TEXT DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS analytics (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts TEXT DEFAULT (datetime('now')),
@@ -129,3 +134,17 @@ export function recordLoginFail(ip) {
   if (a) a.n++;
 }
 export function clearLoginFails(ip) { attempts.delete(ip); }
+
+// ★ 跨进程互斥锁（2026-10-20 用户评审）：running 变量只防同进程并发；
+// systemd 重启残留双实例时两个进程会各跑一遍发布。库级锁 + 过期回收
+export function acquireLock(name, owner, ttlSec = 600) {
+  // 先清过期锁（持有超过 ttl 视为进程已死）
+  db.prepare("DELETE FROM locks WHERE name=? AND acquired_at < datetime('now', ? || ' seconds')").run(name, '-' + ttlSec);
+  try {
+    db.prepare('INSERT INTO locks (name, owner) VALUES (?,?)').run(name, owner);
+    return true; // INSERT 主键冲突 = 别人持有 → 抢不到
+  } catch { return false; }
+}
+export function releaseLock(name, owner) {
+  db.prepare('DELETE FROM locks WHERE name=? AND owner=?').run(name, owner);
+}

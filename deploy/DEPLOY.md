@@ -144,26 +144,29 @@ curl -s -o /dev/null -w "%{http_code}" https://nihilscire.com/admin/login   # 20
 # 浏览器：搜索页搜任意已发布标题 → 有结果（首次由 start.mjs 兜底建索引）
 ```
 
-## 6. 备份（内容真身 = SQLite 一个文件）
+## 6. 备份 + 每日体检（内容真身 = SQLite 一个文件）
+
+⚠️ **不能只 cp admin.db**——WAL 模式下主库+`-wal` 是分离的，只拷主库拿到的是
+malformed 半拷贝（实测踩过）。用 `VACUUM INTO`（原子产出含 WAL 的一致镜像），
+脚本还带完整性双验（源库 + 备份镜像回读）和 WAL checkpoint：
 
 ```bash
-# 备份脚本（不依赖 sqlite3 CLI，用 node 的 online backup API，服务运行中也能安全备份）
-cat > /opt/scio/backup.sh <<'SH'
-#!/usr/bin/env bash
-set -e
-out=/var/lib/scio/backup-$(date +%F).db
-node -e "new (require('node:sqlite').DatabaseSync)('/var/lib/scio/admin.db').exec('VACUUM INTO \"$out\"')"
-find /var/lib/scio -name 'backup-*' -mtime +14 -delete
-SH
-chmod +x /opt/scio/backup.sh
+# 手动跑一次（输出单行结论，异常退出码非 0）
+node /opt/scio/site/scripts/db-maintenance.mjs
 
-# crontab -e：每天 4 点
-0 4 * * * /opt/scio/backup.sh
+# crontab -e：每天 4 点体检+备份（保留 14 份，自动轮转），异常时接你的告警方式
+0 4 * * * node /opt/scio/site/scripts/db-maintenance.mjs >> /var/log/scio-maint.log 2>&1 || <告警命令>
 ```
 
-> 另一道保险：发布管线本身会在每次发布前对 posts 表做快照（存库文件旁，保留最近 3 份），
-> 后台「一键回滚」就是恢复这份快照。
+脚本做五件事：源库 `integrity_check` → `VACUUM INTO` 备份 → **备份镜像回读校验**
+（别等恢复那天才发现备份是坏的）→ `wal_checkpoint(TRUNCATE)` → 过期锁回收。
 
+## 6.5 Node 版本纪律（node:sqlite 是 experimental）
+
+启动日志会有 `ExperimentalWarning`——API 有小变动风险。对策：
+- **版本钉住**：DEPLOY 里装的是 Node 22.x（`nodesource setup_22.x`），升级 Major 前
+  必须在本地先跑 `.shots/self-audit.mjs`（32 项）+ `rollback-proof.mjs`（3 项）回归
+- 不换 better-sqlite3：原生模块在升 Node 时要重装编译，部署依赖越少越好（用户定案）
 ## 7. 日常更新代码（本地 push 后）
 
 ```bash

@@ -5,7 +5,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { db, DATA_DIR, SNAPSHOT_DIR } from './db.js';
+import { db, DATA_DIR, SNAPSHOT_DIR, acquireLock, releaseLock } from './db.js';
 import { SRC_DIR, WEB_DIR, git } from './repo.js';
 import { buildFrontmatter } from './notes.js';
 import { registryJson } from './tags.js';
@@ -39,8 +39,12 @@ export function publishStream() {
         const pubId = db.prepare("INSERT INTO publishes (trigger) VALUES ('web')").run().lastInsertRowid;
         let logText = '';
         const cap = (s) => { logText += s + '\n'; };
+        // ★ 库级互斥（双实例防线）：抢不到锁=另一进程在发，直接拒绝。
+        //   lockOwner 声明在 try 外——finally 里 releaseLock 要用，try 内 const 会作用域隔离
+        const lockOwner = `admin-${process.pid}`;
         try {
           if (running) throw new Error('已有发布在进行中');
+          if (!acquireLock('publish', lockOwner)) throw new Error('另一进程正在发布（库锁被占）');
           running = true;
           log('── scio 发布管线 ──');
           if (!SRC_DIR) throw new Error('SCIO_SRC_DIR 未配置');
@@ -190,6 +194,7 @@ export function publishStream() {
           send({ t: 'err', line: String(e.message || e) });
         } finally {
           running = false;
+          releaseLock('publish', lockOwner);
         }
       })();
     },
