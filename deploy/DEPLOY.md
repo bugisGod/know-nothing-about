@@ -20,6 +20,9 @@ cd /opt/scio
 git clone https://github.com/bugisGod/know-nothing-about.git site
 cd site && npm ci --no-audit --no-fund
 npm run build          # 产出 dist/server + dist/client
+# ★ admin 是独立 package（有自己 package.json），必须单独装依赖——
+#   只装根目录的话 scio-admin 起不来（ERR_MODULE_NOT_FOUND @hono/node-server，实测踩过）
+cd admin && npm ci --no-audit --no-fund && cd ..
 ```
 
 **数据库放代码目录外**（重部署不丢内容）：
@@ -172,8 +175,9 @@ node /opt/scio/site/scripts/db-maintenance.mjs
 
   ```bash
   cd /opt/scio/site
-  SCIO_AUDIT_PASS=<后台密码> node scripts/self-audit.mjs      # 32 项全站+后台
-  SCIO_AUDIT_PASS=<后台密码> node scripts/rollback-proof.mjs   # 3 项回滚语义
+  # rollback-proof 直连库文件，必须带 SCIO_DB（self-audit 走 HTTP 不需要）
+  SCIO_DB=/var/lib/scio/admin.db SCIO_AUDIT_PASS=<后台密码> node scripts/self-audit.mjs      # 32 项全站+后台
+  SCIO_DB=/var/lib/scio/admin.db SCIO_AUDIT_PASS=<后台密码> node scripts/rollback-proof.mjs   # 3 项回滚语义
   ```
 
   两者退出码非 0 即失败，回归没过不要升 Major。
