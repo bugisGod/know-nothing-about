@@ -140,6 +140,9 @@ caddy validate --config /etc/caddy/Caddyfile && systemctl restart caddy
 curl -s https://nihilscire.com/ | grep -c graph-data        # 银河数据非空
 curl -s https://nihilscire.com/notes/ | grep -c 笔记          # 知识库有内容
 curl -s -o /dev/null -w "%{http_code}" https://nihilscire.com/admin/login   # 200
+# 压缩生效（node 裸服务不压静态资产，全靠 Caddy encode；无 content-encoding 即 Caddy 配置没加载）
+curl -s -D- -o /dev/null -H "Accept-Encoding: gzip" https://nihilscire.com/_astro/ | head -1
+curl -s -D- -o /dev/null -H "Accept-Encoding: gzip" "https://nihilscire.com/$(curl -s https://nihilscire.com/ | grep -oE '/_astro/three[^"]*\.js' | head -1)" | grep -i content-encoding   # 应输出 content-encoding: gzip
 # 浏览器：登录后台 → 写一篇测试 → 发布 → 2 秒内线上可见 → 删除/下架 → 确认消失
 # 浏览器：搜索页搜任意已发布标题 → 有结果（首次由 start.mjs 兜底建索引）
 ```
