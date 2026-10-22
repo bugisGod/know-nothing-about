@@ -195,6 +195,10 @@ export function publishStream() {
         } finally {
           running = false;
           releaseLock('publish', lockOwner);
+          // ★ 2026-10-23 终审实修：流从不关闭——管线发完 t:'ok' 后响应永不结束，
+          //   读到 EOF 的客户端（脚本/UI 读循环）全部永久挂起；rollback-proof 没暴露
+          //   是因为它只 await 响应头不读 body。close() 放 finally 保证成功/失败都收口。
+          try { controller.close(); } catch { /* 客户端已断开时 close 会抛，忽略 */ }
         }
       })();
     },

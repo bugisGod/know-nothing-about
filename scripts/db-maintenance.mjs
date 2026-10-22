@@ -48,6 +48,10 @@ try {
 try { db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get(); } catch {}
 // 过期锁回收（防异常退出留下死锁）
 try { db.prepare("DELETE FROM locks WHERE acquired_at < datetime('now', '-600 seconds')").run(); } catch {}
+// 埋点保留期清理（★ 2026-10-23 终审补：analytics 只增不减，爬虫流量也写入；
+//   统计页最多看 14 天趋势，180 天保留绰绰有余）
+let aDel = 0;
+try { aDel = db.prepare("DELETE FROM analytics WHERE ts < datetime('now', '-180 days')").run().changes; } catch {}
 
 // ⑤ 轮转保留 KEEP 份（★ 2026-10-21：unlink 包 try/catch——文件被占用时抛未捕获异常
 //   会让 cron 收到非零退出码=误告警；删不掉就留着，下次再试，不值得报警）
@@ -59,4 +63,4 @@ for (const old of backups.slice(KEEP)) {
 }
 
 db.close();
-console.log(`[db-maintenance] ✓ 源库 ok | 备份 ${out} 镜像 ok（posts=${verifyPosts}${srcPosts !== null ? `，与源库一致` : ''}）| WAL 已 checkpoint | 保留 ${Math.min(backups.length, KEEP)} 份${removed ? `，清理 ${removed} 份旧档` : ''}`);
+console.log(`[db-maintenance] ✓ 源库 ok | 备份 ${out} 镜像 ok（posts=${verifyPosts}${srcPosts !== null ? `，与源库一致` : ''}）| WAL 已 checkpoint | 保留 ${Math.min(backups.length, KEEP)} 份${removed ? `，清理 ${removed} 份旧档` : ''}${aDel ? `，清理 ${aDel} 条过期埋点` : ''}`);

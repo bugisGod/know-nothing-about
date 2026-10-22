@@ -10,7 +10,7 @@ export async function getStaticPaths() {
 }
 
 const entry: any = Astro.props.entry ?? getProject(String(Astro.params.slug));
-if (!entry) return Astro.redirect("/404");
+if (!entry) return Astro.rewrite("/404");
 const entryHtml: string = entry.html;
 const headings = [...entryHtml.matchAll(/<h([1-6]) id="([^"]*)"/g)].map((m) => ({
   depth: Number(m[1]), slug: m[2], text: '',
