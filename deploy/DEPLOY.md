@@ -115,6 +115,15 @@ git -C /opt/scio/site status --porcelain   # 必须为空，否则发布会被�
 nihilscire.com {
     encode zstd gzip
 
+    # 安全响应头（2026-10-23 终审补：后台登录页可被 iframe 套框等）
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        -Server
+    }
+
     # 管理后台 → admin 服务
     handle /admin/* {
         reverse_proxy 127.0.0.1:4322
