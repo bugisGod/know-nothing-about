@@ -2166,8 +2166,11 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       const sepOf = (k: number, j: number) => {
         const hk = clusterRadOf(k) * 2.5, hj = clusterRadOf(j) * 2.5;
         // 光晕相切 = 中心距等于两半径之和；×0.82 允许光晕边缘轻吻（光晕是加性淡光，
-        // 完全不相切在小屏/多团时无解），但密度云主体（半径×0.88 一档）绝不叠
-        return Math.min(300, (hk + hj) * pxScale * 0.82);
+        // 完全不相切在小屏/多团时无解），但密度云主体（半径×0.88 一档）绝不叠。
+        // ★ 标签级下限 44px（2026-10-24 避让矩阵实测）：小屏 pxScale 小，NC=6/8 手机端
+        //   两团标签会叠字（NC8 实测 0px）。44 = 标签宽 33 + 间隙；NC=3 现有布局最小
+        //   团距 210px+，此下限零触发、已验收布局不动。
+        return Math.max(44, Math.min(300, (hk + hj) * pxScale * 0.82));
       };
       // hero 文字 / EXPLORE / 标语 / 页脚 / 视图切换的屏幕矩形：团不得压在上面（含光晕外扩）
       const heroRects: { x1: number; y1: number; x2: number; y2: number }[] = [];
@@ -2213,12 +2216,15 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         }
         return c;
       };
-      for (let pass = 0; pass < (NC > 4 ? 3 : 2); pass++) {
+      // ★ 高团数加搜索力度（2026-10-24 避让矩阵实测）：NC≤4 保持原参数（已验收布局
+      //   一个比特都不动）；NC>4 更多 pass/迭代、更宽径向窗口、更远推离——
+      //   否则 NC=8 手机端两团标签 0px 叠字（44px 下限有了也搜不出来）
+      for (let pass = 0; pass < (NC > 6 ? 5 : NC > 4 ? 4 : 2); pass++) {
         for (let k = 0; k < NC; k++) {
           const rBase = Math.hypot(clusPos[k * 3], clusPos[k * 3 + 1]) || 1;
           const branch = k % ARMS;
           const baseTh = branch * ((Math.PI * 2) / ARMS);
-          for (let it = 0; it < 24; it++) {
+          for (let it = 0; it < (NC > 4 ? 40 : 24); it++) {
             const c0 = cost(k);
             if (c0 <= 0.5) break;
             const th = Math.atan2(clusPos[k * 3 + 1], clusPos[k * 3]);
@@ -2229,7 +2235,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
             for (const dTh of [0.05, -0.05, 0.1, -0.1, 0.16, -0.16]) {
               const thN = th + dTh;
               const rrN = ((thN - baseTh) / SWEEP) * GR;
-              if (rrN > rBase * 1.25 || rrN < rBase * 0.75) continue;       // 径向变化限 ±25%
+              if (rrN > rBase * (NC > 4 ? 1.35 : 1.25) || rrN < rBase * (NC > 4 ? 0.65 : 0.75)) continue;       // 径向变化限 ±25%（NC>4 放宽到 ±35%）
               opts.push({ dx: Math.cos(thN) * rrN - clusPos[k * 3], dy: Math.sin(thN) * rrN - clusPos[k * 3 + 1] });
             }
             // 跳邻臂：半径不变、角向换到相邻臂脊 —— 拥挤时本臂无处可退的逃逸通道
@@ -2251,7 +2257,9 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
                 const dxw = clusPos[k * 3] - clusPos[worst.j * 3];
                 const dyw = clusPos[k * 3 + 1] - clusPos[worst.j * 3 + 1];
                 const L = Math.hypot(dxw, dyw) || 1;
-                for (const push of [0.9, 1.8]) {
+                // NC>6 加 6 单位大步长：手机投影横向压缩后，小步长逃不出堆叠对
+                // （NC=8 手机实测 摄影+项目 0px 叠字，3.2 以内无解）
+                for (const push of NC > 6 ? [0.9, 1.8, 3.2, 6.0] : NC > 4 ? [0.9, 1.8, 3.2] : [0.9, 1.8]) {
                   opts.push({ dx: (dxw / L) * push, dy: (dyw / L) * push });
                 }
               }
