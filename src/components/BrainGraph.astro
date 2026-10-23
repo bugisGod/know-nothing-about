@@ -2206,6 +2206,14 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         const r = el.getBoundingClientRect();
         if (r.width > 0) heroRects.push({ x1: r.left - 40, y1: r.top - 34, x2: r.right + 40, y2: r.bottom + 52 });
       });
+      // ★ 太阳彩蛋也是障碍物（2026-10-23 手机端用户抓包：AI 团贴上「猎户臂 · 你在这里」标记，
+      //   标签互压）。太阳与团同盘共转 → 屏幕距离不随自转变，布局期用与团一致的 tilt 系
+      //   投影一次即可。矩形 = 光点 + 右侧标注文字（.sun-mark 是 flex 行，文字向右展开）。
+      {
+        const sxx = Math.cos(2.36) * GR * 0.54, syy = Math.sin(2.36) * GR * 0.54 * 0.9;
+        const sp = projOf(sxx, syy, 0.15);
+        heroRects.push({ x1: sp.x - 10, y1: sp.y - 16, x2: sp.x + Math.min(w0 * 0.56, 230), y2: sp.y + 30 });
+      }
       const cost = (k: number) => {
         const p = sy(k);
         const d = Math.hypot(p.x - core.x, p.y - core.y);
