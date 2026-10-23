@@ -315,83 +315,6 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     text-shadow: 0 1px 8px rgba(7, 8, 14, 0.95);
   }
 
-  /* ★ 太阳位置彩蛋（维基/SpaceScope：太阳在猎户支臂内缘，距银心 2.6 万光年）——
-     一枚带十字星芒的脉冲光点 + 默认可见的诗意标注（hover 提亮）。
-     「观察者」在自家银河里的存在感——用户：加的东西起码要能看到 */
-  .graph-frame :global(.sun-mark) {
-    position: absolute;
-    left: 0;
-    top: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    pointer-events: auto;
-    cursor: default;
-    will-change: transform;
-  }
-  .graph-frame :global(.sun-mark i) {
-    position: relative;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: #cfe4f7;
-    box-shadow:
-      0 0 6px rgba(190, 222, 248, 0.95),
-      0 0 14px rgba(168, 205, 238, 0.55);
-    flex: none;
-    animation: sun-pulse 3.2s ease-in-out infinite;
-  }
-  /* 十字星芒：太阳是全天空最亮恒星，给两条细芒与普通背景星拉开身份 */
-  .graph-frame :global(.sun-mark i::before),
-  .graph-frame :global(.sun-mark i::after) {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    background: linear-gradient(90deg, transparent, rgba(207, 228, 247, 0.85), transparent);
-    transform: translate(-50%, -50%);
-  }
-  .graph-frame :global(.sun-mark i::before) {
-    width: 15px;
-    height: 1px;
-  }
-  .graph-frame :global(.sun-mark i::after) {
-    width: 1px;
-    height: 15px;
-    background: linear-gradient(180deg, transparent, rgba(207, 228, 247, 0.85), transparent);
-  }
-  @keyframes sun-pulse {
-    0%, 100% { box-shadow: 0 0 6px rgba(190, 222, 248, 0.95), 0 0 14px rgba(168, 205, 238, 0.55); }
-    50% { box-shadow: 0 0 9px rgba(190, 222, 248, 1), 0 0 20px rgba(168, 205, 238, 0.8); }
-  }
-  .graph-frame :global(.sun-mark span) {
-    font-family: var(--font-display);
-    font-size: 12.5px;
-    letter-spacing: 0.08em;
-    color: rgba(178, 212, 240, 0.6);
-    text-shadow: 0 1px 8px rgba(7, 8, 14, 0.95);
-    white-space: nowrap;
-    opacity: 1;
-    transform: translateX(0);
-    transition: opacity 0.4s ease, color 0.4s ease;
-  }
-  .graph-frame :global(.sun-mark:hover span) {
-    color: rgba(200, 226, 246, 0.95);
-  }
-  /* ★ 探索态收起标注（与探索面板文字重叠），只留脉冲光点；hover 仍可展开 */
-  .graph-frame :global(.sun-mark.sun-quiet span) {
-    opacity: 0;
-  }
-  /* ★ 小高度视口（IAB 534px 一类）标注默认收起：与 hero 文字挤，hover 展开 */
-  @media (max-height: 640px) {
-    .graph-frame :global(.sun-mark span) {
-      opacity: 0;
-    }
-    .graph-frame :global(.sun-mark:hover span) {
-      opacity: 1;
-    }
-  }
-
   .graph-frame :global(.cl-count) {
     position: absolute;   /* ★ 脱流：盒子高度=团名，横线能贴到文字正下方 */
     top: calc(100% + 7px);
@@ -2206,14 +2129,6 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         const r = el.getBoundingClientRect();
         if (r.width > 0) heroRects.push({ x1: r.left - 40, y1: r.top - 34, x2: r.right + 40, y2: r.bottom + 52 });
       });
-      // ★ 太阳彩蛋也是障碍物（2026-10-23 手机端用户抓包：AI 团贴上「猎户臂 · 你在这里」标记，
-      //   标签互压）。太阳与团同盘共转 → 屏幕距离不随自转变，布局期用与团一致的 tilt 系
-      //   投影一次即可。矩形 = 光点 + 右侧标注文字（.sun-mark 是 flex 行，文字向右展开）。
-      {
-        const sxx = Math.cos(2.36) * GR * 0.54, syy = Math.sin(2.36) * GR * 0.54 * 0.9;
-        const sp = projOf(sxx, syy, 0.15);
-        heroRects.push({ x1: sp.x - 10, y1: sp.y - 16, x2: sp.x + Math.min(w0 * 0.56, 230), y2: sp.y + 30 });
-      }
       const cost = (k: number) => {
         const p = sy(k);
         const d = Math.hypot(p.x - core.x, p.y - core.y);
@@ -2689,13 +2604,6 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     homeLabel.className = 'home-label';
     homeLabel.textContent = 'scio.';
     frame.appendChild(homeLabel);
-
-    // ★ 太阳位置彩蛋：一枚淡蓝小点挂在猎户支臂位（臂 1/臂 3 之间的臂间空隙）
-    const sunMark = document.createElement('div');
-    sunMark.className = 'sun-mark';
-    sunMark.innerHTML = '<i></i><span>太阳系 · 猎户臂 — 你在这里</span>';
-    frame.appendChild(sunMark);
-    (window as any).__sunMark = sunMark;
 
     // ===== 文章星的贴身亮光（第三层的身份证明）=====
     // 视觉图：文章星是「带可见光晕的亮星」——光晕 = 域色发光，让亮光在团里跳出来。
@@ -4143,17 +4051,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         const p = screenOfRaw(0, 0, 0);
         const rectG = mount.getBoundingClientRect();
       homeLabel.style.transform = `translate(${p.x - rectG.left + 26}px, ${p.y - rectG.top - 30}px)`;
-      // ★ 太阳位置（猎户支臂）：世界坐标固定，随银河自转
-      const sunW = new THREE.Vector3(Math.cos(2.36) * GR * 0.54, Math.sin(2.36) * GR * 0.54 * 0.9, 0.15)
-        .applyMatrix4(galaxySpin.matrixWorld);
-      const sunP = sunW.clone().project(camera);
-      const sunSX = (sunP.x * 0.5 + 0.5) * mount.clientWidth;
-      const sunSY = (-sunP.y * 0.5 + 0.5) * mount.clientHeight;
-      (window as any).__sunMark.style.transform = `translate(${sunSX}px, ${sunSY}px)`;
-      // ★ 默认全亮（用户：彩蛋要能看到）；锁定某团时随内容层淡出，不让它抢焦点；
-      //   探索态加 sun-quiet（标注与探索面板文字重叠）
-      (window as any).__sunMark.style.opacity = sunP.z < 1 ? String(0.95 * (1 - focusT)) : '0';
-      (window as any).__sunMark.classList.toggle('sun-quiet', exploreT > 0.5);
+      // 太阳彩蛋已整体删除（2026-10-23 用户：和星团挤在一起，删掉）
       homeLabel.style.opacity = focusT > 0.02 ? '0' : '0.62';
       }
       // （旧锁定环逐帧更新已随 focusRing 一并删除：锁定轨道视觉由本团轨道弧承担）
