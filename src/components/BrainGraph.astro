@@ -315,19 +315,22 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     text-shadow: 0 1px 8px rgba(7, 8, 14, 0.95);
   }
 
-  /* ★ 太阳位置彩蛋（2026-10-24 定稿）：只留脉冲光点，不挂文字——文字在手机端
-     与星团标签互压（用户：挤）；含义收进 title，hover 可见 */
+  /* ★ 太阳位置彩蛋（2026-10-24 定稿）：光点 + 短标注「太阳系 · 猎户臂」。
+     原标注的「— 你在这里」按用户要求删除；避让由布局障碍覆盖（矩形含文字宽） */
   .graph-frame :global(.sun-mark) {
     position: absolute;
     left: 0;
     top: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     pointer-events: auto;
     cursor: default;
     will-change: transform;
   }
   .graph-frame :global(.sun-mark i) {
     position: relative;
-    display: block;
+    flex: none;
     width: 5px;
     height: 5px;
     border-radius: 50%;
@@ -359,6 +362,32 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
   @keyframes sun-pulse {
     0%, 100% { box-shadow: 0 0 6px rgba(190, 222, 248, 0.95), 0 0 14px rgba(168, 205, 238, 0.55); }
     50% { box-shadow: 0 0 9px rgba(190, 222, 248, 1), 0 0 20px rgba(168, 205, 238, 0.8); }
+  }
+  .graph-frame :global(.sun-mark span) {
+    font-family: var(--font-display);
+    font-size: 12.5px;
+    letter-spacing: 0.08em;
+    color: rgba(178, 212, 240, 0.6);
+    text-shadow: 0 1px 8px rgba(7, 8, 14, 0.95);
+    white-space: nowrap;
+    opacity: 1;
+    transition: opacity 0.4s ease, color 0.4s ease;
+  }
+  .graph-frame :global(.sun-mark:hover span) {
+    color: rgba(200, 226, 246, 0.95);
+  }
+  /* ★ 探索态收起标注（与探索面板文字重叠），只留脉冲光点；hover 仍可展开 */
+  .graph-frame :global(.sun-mark.sun-quiet span) {
+    opacity: 0;
+  }
+  /* ★ 小高度视口（IAB 534px 一类）标注默认收起：与 hero 文字挤，hover 展开 */
+  @media (max-height: 640px) {
+    .graph-frame :global(.sun-mark span) {
+      opacity: 0;
+    }
+    .graph-frame :global(.sun-mark:hover span) {
+      opacity: 1;
+    }
   }
 
   .graph-frame :global(.cl-count) {
@@ -2178,13 +2207,14 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         const r = el.getBoundingClientRect();
         if (r.width > 0) heroRects.push({ x1: r.left - 40, y1: r.top - 34, x2: r.right + 40, y2: r.bottom + 52 });
       });
-      // ★ 太阳光点也是障碍物（2026-10-23 用户抓包：AI 团贴上太阳标记）。光点已无文字，
-      //   障碍矩形只需罩住点本体 + 星芒（±56px）。太阳与团同盘共转 → 屏距自转不变，
-      //   布局期用与团一致的 tilt 系投影一次即可。
+      // ★ 太阳标记也是障碍物（2026-10-23 用户抓包：AI 团贴上太阳标记）。
+      //   矩形 = 光点 + 短标注「太阳系 · 猎户臂」（12.5px 字距 0.08em 约 8 字 ≈ 115px，
+      //   加点和间隙取 150 封顶）。太阳与团同盘共转 → 屏距自转不变，布局期用与团
+      //   一致的 tilt 系投影一次即可。
       {
         const sxx = Math.cos(2.36) * GR * 0.54, syy = Math.sin(2.36) * GR * 0.54 * 0.9;
         const sp = projOf(sxx, syy, 0.15);
-        heroRects.push({ x1: sp.x - 56, y1: sp.y - 44, x2: sp.x + 56, y2: sp.y + 44 });
+        heroRects.push({ x1: sp.x - 12, y1: sp.y - 16, x2: sp.x + Math.min(w0 * 0.5, 150), y2: sp.y + 30 });
       }
       const cost = (k: number) => {
         const p = sy(k);
@@ -2667,12 +2697,11 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     homeLabel.textContent = 'scio.';
     frame.appendChild(homeLabel);
 
-    // ★ 太阳位置彩蛋：一枚淡蓝光点挂在猎户支臂位。原带文字标注，手机端与 AI 团
-    //   标签互压（用户拍板：只删文字，光点保留），含义收进 title hover 可见
+    // ★ 太阳位置彩蛋：一枚淡蓝光点挂猎户支臂位，标注「太阳系 · 猎户臂」。
+    //   （2026-10-24 定稿：只删「— 你在这里」四个字，其余保留——用户原话）
     const sunMark = document.createElement('div');
     sunMark.className = 'sun-mark';
-    sunMark.title = '太阳系 · 猎户臂 — 你在这里';
-    sunMark.innerHTML = '<i></i>';
+    sunMark.innerHTML = '<i></i><span>太阳系 · 猎户臂</span>';
     frame.appendChild(sunMark);
     (window as any).__sunMark = sunMark;
 
@@ -4129,7 +4158,9 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       const sunSX = (sunP.x * 0.5 + 0.5) * mount.clientWidth;
       const sunSY = (-sunP.y * 0.5 + 0.5) * mount.clientHeight;
       (window as any).__sunMark.style.transform = `translate(${sunSX}px, ${sunSY}px)`;
+      // ★ 默认全亮；锁定某团时随内容层淡出；探索态收起标注（与探索面板文字重叠）
       (window as any).__sunMark.style.opacity = sunP.z < 1 ? String(0.95 * (1 - focusT)) : '0';
+      (window as any).__sunMark.classList.toggle('sun-quiet', exploreT > 0.5);
       homeLabel.style.opacity = focusT > 0.02 ? '0' : '0.62';
       }
       // （旧锁定环逐帧更新已随 focusRing 一并删除：锁定轨道视觉由本团轨道弧承担）
