@@ -6,12 +6,16 @@ interface Props {
   size?: number;
   color?: string;
   seed?: string;
+  /** 形态覆盖种子（CATEGORIES.shape，2026-10-26 预留）：与首页 BrainGraph 同款
+      「seed@shape」再播种，不配置时与历史逐比特一致 */
+  shape?: string;
 }
-const { size = 150, color = '#9db8ff', seed = 'c' } = Astro.props;
+const { size = 150, color = '#9db8ff', seed = 'c', shape = '' } = Astro.props;
 
+const _seedStr = shape ? `${seed}@${shape}` : seed;
 let seedState = 2166136261;
-for (let i = 0; i < seed.length; i++) {
-  seedState = Math.imul(seedState ^ seed.charCodeAt(i), 16777619) >>> 0;
+for (let i = 0; i < _seedStr.length; i++) {
+  seedState = Math.imul(seedState ^ _seedStr.charCodeAt(i), 16777619) >>> 0;
 }
 seedState = seedState || 88;
 const rand = () => {

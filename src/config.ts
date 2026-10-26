@@ -39,7 +39,10 @@ export const SERIES: Record<string, { title: string; color?: string; desc?: stri
 // 知识库分类的展示信息：文件夹名 → 中文名 + 一句话描述 + 域色
 // ★ 全部可选——这是「覆盖位」不是「必填项」：没配置的分类自动走 autoColor（哈希取色）
 //   + 文件夹名当显示名。框架化目标：新增分类 = 建文件夹放文章，其余零操作。
-export const CATEGORIES: Record<string, { label: string; desc: string; color?: string }> = {
+//   shape（2026-10-26 预留）：形态覆盖种子——不喜欢某团自动生成的形状时给个任意字符串，
+//   首页与知识库卡片都会以「分类名@shape」重新生成形态（不配置则完全走原哈希，零影响）。
+//   改这个字符串 = 换形状，改到满意为止；两侧渲染器同改同验，勿单边动。
+export const CATEGORIES: Record<string, { label: string; desc: string; color?: string; shape?: string }> = {
   frontend: { label: '前端', desc: '框架 · 工程化 · 浏览器', color: '#a892d8' },
 };
 

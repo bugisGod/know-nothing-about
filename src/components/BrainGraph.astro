@@ -2056,8 +2056,10 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         //   有长轴 + 1~2 个次级团块（clumps）+ 链状/纤维状星链（chains，Laverde-Villarreal
         //   2025：「chains and clumpy substructure」）——唯独没有旋臂（那是星系特征）。
         //   与知识库 MiniGalaxy 卡同源同流：FNV(`cat:key`) + LCG，同序消费（卡侧同款改版）
+        // ★ 形态覆盖位（2026-10-26 预留）：CATEGORIES.shape 配置时以「key@shape」重新
+        //   播种——换字符串=换形状。不配置时输入串与历史逐比特一致（零影响保证）
         let s = 2166136261;
-        const mkey = clusters[k].key;
+        const mkey = clusters[k].key + (clusters[k].shape ? "@" + clusters[k].shape : "");
         for (let i = 0; i < mkey.length; i++) s = Math.imul(s ^ mkey.charCodeAt(i), 16777619) >>> 0;
         s = s || 88;
         const rng = () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };

@@ -4,6 +4,7 @@ import { listNotes, listProjects } from "./posts";
 
 export interface ClusterDef {
   key: string; title: string; url: string; color?: string; desc?: string;
+  shape?: string;
   count: number; form?: string; topics?: number; topicList?: string[];
 }
 export interface StarDef {
@@ -55,6 +56,7 @@ export async function buildGalaxyData() {
       url: `/notes/?category=${encodeURIComponent(cat)}`,
       color: meta?.color,
       desc: meta?.desc,
+      shape: meta?.shape,
     });
     clusters[ci].count++;
     noteBirth(key, n.data.date);
