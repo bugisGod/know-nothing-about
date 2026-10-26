@@ -134,7 +134,6 @@ const zOf = (x: number, y: number) => {
 for (const s of stars) s.z = zOf(s.x, s.y); // stars 存的是中心相对坐标
 
 const C = size / 2;
-const gid = `mg-${size}-${vc.replace('#', '')}-${seedState.toString(36)}`;
 const vcRgb = (() => { const c = hex2rgb(vc); return c.map((v) => Math.round(v * 255)); })();
 // ★ 形状显式成像 v2（2026-10-16 用户「这样有形状区分吗」——v1 均匀采样把结构搅成点浆）：
 //   分带采样保真结构：星链=珠串（大点亮）、团块=密实亮核、基底=薄雾小点。
@@ -146,7 +145,10 @@ const cloud: { x: number; y: number; r: number; a: number }[] = [];
     const cx = Math.cos(ch.th0) * ch.rr0, cy = Math.sin(ch.th0) * ch.rr0 * fy;
     let tx = -Math.sin(ch.th0), ty = Math.cos(ch.th0) * fy;
     const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
-    const nBead = Math.round(12 + ch.arc * 16);
+    // ★ nBead 下限 2（2026-10-26 审查实锤）：arc≈-0.69 时 round(12+arc*16)=1 →
+    //   下一行分母 (nBead-1)=0 → 坐标 NaN → JSON null → 整条珠串丢失
+    //   （frontend 团卡片实测 1 个 null 点，首页有形卡片无形）
+    const nBead = Math.max(2, Math.round(12 + ch.arc * 16));
     for (let i = 0; i < nBead; i++) {
       const al = -ch.arc / 2 + (ch.arc * i) / (nBead - 1);
       const w = (rand() - 0.5) * ch.w * 0.7;

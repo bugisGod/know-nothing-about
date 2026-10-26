@@ -1,3 +1,7 @@
+# ⚠️ 已废弃（2026-10-21 SSR 上线）：静态上传链不再使用，当前部署走 deploy/DEPLOY.md
+#    （git pull + systemd 双服务 + Caddy reverse_proxy；搜索索引由 scripts/start.mjs
+#    启动时兜底、发布管线发布时重建，不再依赖构建产物里的 pagefind）。
+#    本文件仅留档回溯，勿再执行。
 # 一键部署：增量上传 dist 到服务器并热更新（配合 deploy.sh 使用）
 # - 上传前校验关键构建产物，缺一件就中止（绝不传半成品）
 # - 跳过 astro 服务端中间产物（pages/ chunks/ *.mjs），它们不属于静态站

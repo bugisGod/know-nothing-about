@@ -58,6 +58,22 @@ export const AUTO_PALETTE = [
   '#b58fc2', // 288° 紫
   '#c28fa8', // 324° 粉
 ];
+// ★ 扩容段（2026-10-26 审查 P1）：18° 间隔 10 档。**必须独立于 AUTO_PALETTE**——
+//   直接追加进主色板会改变哈希遍历顺序，已分配的自动色团会换色（实测 ai
+//   #8fc27a → #81cf89，违反「老团永不换色」红线）。pickColorFromPalette 两段式：
+//   主色板耗尽才轮到本段。
+export const AUTO_PALETTE_EXTRA = [
+  '#cf9981', // 18° 陶土
+  '#cfc881', // 54° 沙金
+  '#a8cf81', // 90° 嫩绿
+  '#81cf89', // 126° 苔绿
+  '#81cfb8', // 162° 薄荷
+  '#81b8cf', // 198° 湖蓝
+  '#8189cf', // 234° 鸢尾蓝
+  '#a881cf', // 270° 紫罗兰
+  '#cf81c8', // 306° 海棠紫
+  '#cf8199', // 342° 绯粉
+];
 // 项目团固定色（纳入自动分配的占用表，防止自动色与它撞色）
 export const PROJECT_COLOR = '#ffc46b';
 
@@ -76,7 +92,9 @@ export const hueOf = (hex: string): number => {
 };
 
 // ★ 纯探针取色：key 哈希定起点，已占用/近色相（<20°）跳过，色板耗尽取「距离最大」候选。
-//   分配与记录由 lib/cluster-colors.server.ts 在构建期完成（新团只从未占用色里挑，老团永不换色）
+//   分配与记录由下方 assignClusterColors 无状态完成（新团只从未占用色里挑，老团永不换色）
+//   ★ 两段式色板（2026-10-26）：第一段 AUTO_PALETTE 与历史行为逐比特一致（遍历顺序
+//   变了会移动已分配团的颜色，实测踩过）；第二段 AUTO_PALETTE_EXTRA 仅在一段耗尽后参与。
 export const pickColorFromPalette = (
   key: string,
   usedHex: Set<string>,
@@ -87,30 +105,34 @@ export const pickColorFromPalette = (
     h ^= key.charCodeAt(i);
     h = Math.imul(h, 16777619) >>> 0;
   }
-  const base = h % AUTO_PALETTE.length;
-  let picked: string | null = null;
-  let bestT = -1, bestDist = -1;
-  for (let t = 0; t < AUTO_PALETTE.length; t++) {
-    const cand = AUTO_PALETTE[(base + t) % AUTO_PALETTE.length];
-    if (usedHex.has(cand.toLowerCase())) continue;
-    const hu = hueOf(cand);
-    const dist = hu >= 0 && usedHues.length ? Math.min(...usedHues.map((uh) => Math.min(Math.abs(uh - hu), 360 - Math.abs(uh - hu)))) : 999;
-    if (hu >= 0 && usedHues.length && dist < 20) continue;
-    picked = cand;
-    break;
-  }
-  if (!picked) {
-    for (let t = 0; t < AUTO_PALETTE.length; t++) {
-      const cand = AUTO_PALETTE[(base + t) % AUTO_PALETTE.length];
+  const stages = [AUTO_PALETTE, AUTO_PALETTE_EXTRA];
+  for (const stage of stages) {
+    const base = h % stage.length;
+    let picked: string | null = null;
+    for (let t = 0; t < stage.length; t++) {
+      const cand = stage[(base + t) % stage.length];
       if (usedHex.has(cand.toLowerCase())) continue;
       const hu = hueOf(cand);
       const dist = hu >= 0 && usedHues.length ? Math.min(...usedHues.map((uh) => Math.min(Math.abs(uh - hu), 360 - Math.abs(uh - hu)))) : 999;
-      if (dist > bestDist) { bestDist = dist; bestT = t; }
+      if (hu >= 0 && usedHues.length && dist < 20) continue;
+      picked = cand;
+      break;
     }
-    if (bestT >= 0) picked = AUTO_PALETTE[(base + bestT) % AUTO_PALETTE.length];
-    else picked = AUTO_PALETTE[base];
+    if (picked) return picked;
   }
-  return picked;
+  // 两段都无「未占用且非近色」候选：全色板里取色相距离最大的未占用色
+  let best: string | null = null, bestDist = -1;
+  for (const stage of stages) {
+    const base = h % stage.length;
+    for (let t = 0; t < stage.length; t++) {
+      const cand = stage[(base + t) % stage.length];
+      if (usedHex.has(cand.toLowerCase())) continue;
+      const hu = hueOf(cand);
+      const dist = hu >= 0 && usedHues.length ? Math.min(...usedHues.map((uh) => Math.min(Math.abs(uh - hu), 360 - Math.abs(uh - hu)))) : 999;
+      if (dist > bestDist) { bestDist = dist; best = cand; }
+    }
+  }
+  return best ?? AUTO_PALETTE[h % AUTO_PALETTE.length];
 };
 
 export interface ClusterColorRequest {

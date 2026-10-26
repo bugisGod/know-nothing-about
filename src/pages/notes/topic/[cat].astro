@@ -2,12 +2,14 @@
 import Base from "../../../layouts/Base.astro";
 import NebulaBand from "../../../components/NebulaBand.astro";
 import MiniGalaxy from "../../../components/MiniGalaxy.astro";
-import { CATEGORIES, SERIES, PROJECT_COLOR } from "../../../config";
+import { CATEGORIES, SERIES, PROJECT_COLOR, assignClusterColors } from "../../../config";
 import { listNotes } from "../../../lib/posts";
 
 export async function getStaticPaths() {
   const notes = listNotes();
-  const catOf = (id: string) => (id.includes("/") ? id.split("/")[0] : "未分类");
+  const catOf = (id: string) => (id.includes("/") ? id.split("/")[0] : "");
+  // ★ 双写对齐（2026-10-26 审查 P2）：这里原用「未分类」而 SSR 分支用 ""，兜底语义不一致；
+  //   SSR 模式 getStaticPaths 不参与，纯对齐。空 cat 在 galaxy-data 已有防护。
   const cats = new Map<string, typeof notes>();
   for (const n of notes) {
     const cat = catOf(n.id);
@@ -63,7 +65,24 @@ if (!entries) {
   loose = looseArr;
 }
 const meta = CATEGORIES[cat];
-const color = Astro.props.color as string;
+// ★ P0 修复（2026-10-26 审查报告实锤）：此前 color = Astro.props.color，但 props 从未传过
+//   color（SSR 模式 getStaticPaths 也不参与）→ 恒 undefined → 所有专题页塌成默认雾蓝。
+//   正确做法不是只给本团单独配色（会与全局分配结果不一致），而是与知识库列表页
+//   完全同款：全量分类 + 相同 births 语义 + reserved=[PROJECT_COLOR]，再取本团色。
+const _allNotes = listNotes();
+const _births: Record<string, string> = {};
+const _cats = new Set<string>();
+for (const _n of _allNotes) {
+  const _c = _n.id.includes("/") ? _n.id.split("/")[0] : "未分类";
+  _cats.add(_c);
+  const _b = _n.data.date ? new Date(_n.data.date).toISOString().slice(0, 10) : "9999-99-99";
+  if (!_births[_c] || _b < _births[_c]) _births[_c] = _b;
+}
+const _assigned = assignClusterColors(
+  [..._cats].map((c0) => ({ key: `cat:${c0}`, color: CATEGORIES[c0]?.color ?? "", birth: _births[c0] })),
+  [PROJECT_COLOR],
+);
+const color = _assigned[`cat:${cat}`] ?? CATEGORIES[cat]?.color ?? "#9db8ff";
 const label = meta?.label ?? cat;
 const desc = meta?.desc ?? "";
 const fmt = (date?: Date) =>

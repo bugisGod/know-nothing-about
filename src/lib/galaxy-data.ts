@@ -44,6 +44,9 @@ export async function buildGalaxyData() {
 
   for (const n of allNotes) {
     const cat = n.id.includes("/") ? n.id.split("/")[0] : "未分类";
+    // ★ 空 category 防护（2026-10-26 审查 P2）：后台漏填分类时 id=/slug → split[0]=""
+    //   → 会生成 key="cat:" 的无名空星团。跳过之（正常内容不存在此形态，纯防御）
+    if (!cat) continue;
     const meta = CATEGORIES[cat];
     const key = `cat:${cat}`;
     const ci = ensureCluster(key, {
@@ -113,8 +116,12 @@ export async function buildGalaxyData() {
   }
 
   {
+    // ★ reserved=[PROJECT_COLOR]（2026-10-26 审查实锤）：此前未传，首页配色没把项目团
+    //   琥珀 38° 记入占用——新分类 birth 早于项目团时，首页可能取到 36° 琥珀金而知识库
+    //   不会（math/life/python/rust 四例实锤异色）。与知识库列表页同款传参。
     const assigned = assignClusterColors(
       clusters.map((c) => ({ key: c.key, color: c.color, birth: births[c.key] })),
+      [PROJECT_COLOR],
     );
     for (const c of clusters) c.color = assigned[c.key];
   }
