@@ -4,7 +4,9 @@
 interface Props {
   height?: number;
 }
-const height = 440;
+// ★ 修复（2026-10-27 提案实缺）：此前未解构 props、写死 440——知识库页传 180、
+//   专题页传 360 全部被无视，页头比设计高出一大截
+const { height = 440 } = Astro.props;
 ---
 <div class="nebula-band" style={`height:${height}px`} aria-hidden="true">
   <canvas data-nebula data-height={height}></canvas>
