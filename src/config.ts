@@ -3,6 +3,12 @@ export const SITE = {
   // 站点名（浏览器标签页 / 页头 Logo）
   title: 'scio',
 
+  // ★ 绝对域名（sitemap.xml 拼 <loc> 用；2026-10-26 第二次审查 P1-C）：
+  //   此前站点只有 astro.config.mjs 的 site，SITE 里没有 url →
+  //   sitemap.xml.js 里 ${SITE.url} 取到 undefined → 每条 <loc> 都是 "undefined/notes/"，
+  //   爬虫视整份站点地图为无效。改域名必须与 astro.config.mjs 的 site 同步。
+  url: 'https://nihilscire.com',
+
   // 作者名：首页大标题、页脚署名
   author: 'scio',
 

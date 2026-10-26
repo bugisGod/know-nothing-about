@@ -1,35 +1,25 @@
 // scio 管理后台 · 标签管理（P3）
-// 注册表 CRUD + 从仓库文章自动发现未注册标签 + 发布时导出 src/data/tags.json
+// 注册表 CRUD + 从已发布文章自动发现未注册标签 + 发布时导出 src/data/tags.json
 import { Hono } from 'hono';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { db } from './db.js';
 import { renderLayout } from './views.js';
-import { SRC_DIR } from './repo.js';
 
 export const tags = new Hono();
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 
-// 仓库文章里实际用到的标签（key → 次数）
+// 已发布文章里实际用到的标签（key → 次数）
+// ★ 改读 posts 表（2026-10-26 第二次审查 P1-B 同款）：原实现遍历 src/content/**/*.md，
+//   而发布 v2 只写库、不再落 md → 发现区永远只看到迁移期那几篇旧文件，新文章的标签进不来
 export function discoverRepoTags() {
-  const root = join(SRC_DIR, 'src/content');
   const used = new Map();
-  const walk = (dir) => {
-    for (const f of readdirSync(dir, { withFileTypes: true })) {
-      const p = join(dir, f.name);
-      if (f.isDirectory()) walk(p);
-      else if (f.name.endsWith('.md')) {
-        const m = readFileSync(p, 'utf8').match(/^---[\s\S]*?---/);
-        if (!m) continue;
-        const tm = m[0].match(/^tags:\s*\[(.*)\]$/m);
-        if (!tm) continue;
-        for (const t of tm[1].split(',').map((x) => x.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)) {
-          used.set(t, (used.get(t) || 0) + 1);
-        }
-      }
+  for (const r of db.prepare("SELECT tags FROM posts WHERE kind='note'").all()) {
+    let arr = [];
+    try { arr = JSON.parse(r.tags || '[]'); } catch { arr = []; }
+    for (const t of Array.isArray(arr) ? arr : []) {
+      const k = String(t).trim();
+      if (k) used.set(k, (used.get(k) || 0) + 1);
     }
-  };
-  walk(root);
+  }
   return used;
 }
 

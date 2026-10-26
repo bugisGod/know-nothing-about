@@ -9,6 +9,7 @@ import { db, DATA_DIR, SNAPSHOT_DIR, acquireLock, releaseLock } from './db.js';
 import { SRC_DIR, WEB_DIR, git } from './repo.js';
 import { buildFrontmatter } from './notes.js';
 import { registryJson } from './tags.js';
+import { registryJson as categoryRegistryJson } from './categories.js';
 const { renderMarkdown } = await import('../../src/lib/md.ts');
 
 let running = false;
@@ -113,7 +114,8 @@ export function publishStream() {
             const fm = JSON.parse(d.fm || '{}');
             if (fm.draft) {
               // ★ 下架：勾「隐藏」= 从线上移除（原 v2 只跳过写入，旧行一直在线）
-              const del = db.prepare("DELETE FROM posts WHERE kind=? AND category=? AND slug=? COLLATE NOCASE")
+              //   category 加 COLLATE NOCASE：历史库可能存过大写 key，草稿里是小写 → 匹配不上就删不掉
+              const del = db.prepare("DELETE FROM posts WHERE kind=? AND category=? COLLATE NOCASE AND slug=? COLLATE NOCASE")
                 .run(d.kind, d.kind === 'note' ? d.category : '', d.slug);
               if (del.changes > 0) { cap(`- 下架: ${d.category ? d.category + '/' : ''}${d.slug}`); }
               db.prepare("UPDATE drafts SET published_at=datetime('now') WHERE id=?").run(d.id);
@@ -121,8 +123,11 @@ export function publishStream() {
             }
             if (!d.title || !d.slug || (d.kind === 'note' && !d.category)) continue;
             const html = await renderMarkdown(d.content_md || '');
+            // ★ 分类 key 写入侧归一小写（2026-10-26 审查 P2-1）：UNIQUE(kind,category,slug) 里
+            //   category 大小写敏感，AI 与 ai 会各存一行 → 首页长出两个团（哈希不同、形状不同）。
+            //   归一必须在进库前做，只在读取侧兼容治不了根。
             const row = {
-              kind: d.kind, category: d.kind === 'note' ? d.category : '',
+              kind: d.kind, category: d.kind === 'note' ? String(d.category).toLowerCase() : '',
               slug: d.slug.toLowerCase(), title: d.title,
               description: fm.description || '', date: fm.date || new Date().toISOString().slice(0, 10),
               tags: JSON.stringify(fm.tags || []), related: JSON.stringify(fm.related || []),
@@ -158,11 +163,13 @@ export function publishStream() {
             }
           }
 
-          // 3.5 标签注册表 → src/data/tags.json（站点按显示名渲染）
+          // 3.5 标签 + 分类注册表 → src/data/*.json（站点按显示名/描述渲染，构建期静态导入）
           const reg = registryJson();
+          const catReg = categoryRegistryJson();
           mkdirSync(join(SRC_DIR, 'src/data'), { recursive: true });
           writeFileSync(join(SRC_DIR, 'src/data/tags.json'), JSON.stringify(reg, null, 2) + String.fromCharCode(10), 'utf8');
-          log(`· 标签注册表 ${Object.keys(reg).length} 项`);
+          writeFileSync(join(SRC_DIR, 'src/data/categories.json'), JSON.stringify(catReg, null, 2) + String.fromCharCode(10), 'utf8');
+          log(`· 标签注册表 ${Object.keys(reg).length} 项 · 分类注册表 ${Object.keys(catReg).length} 项`);
           const st = git(['status', '--porcelain']);
           if (st) {
             git(['add', '-A']);
@@ -231,15 +238,17 @@ export function rollback() {
     // ★ 精准标记（2026-10-20 连锁修复）：回滚后按「文章是否还在库」重置 published_at——
     //   还在（别的草稿/迁移已发过同 slug）→ 视为已发未改，不重发；不在 → 清标记待重发。
     //   原全量清空 + 历次转入编辑的重复草稿 = 回滚后下一次发布把所有旧副本重上线（实测 +N 行）
+    //   ★ category 用 lower() 比较（2026-10-26）：草稿可能是大写 key 而库里已归一为小写，
+    //     精确相等会判「库里没有」→ 下次发布把已存在的文章重发一遍
     db.exec(`UPDATE drafts SET published_at=datetime('now')
              WHERE title != '' AND slug != '' AND published_at IS NOT NULL
              AND EXISTS (SELECT 1 FROM posts p WHERE p.kind = drafts.kind
-               AND p.category = CASE WHEN drafts.kind = 'note' THEN drafts.category ELSE '' END
+               AND lower(p.category) = CASE WHEN drafts.kind = 'note' THEN lower(drafts.category) ELSE '' END
                AND p.slug = lower(drafts.slug))`);
     db.exec(`UPDATE drafts SET published_at=NULL
              WHERE title != '' AND slug != ''
              AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.kind = drafts.kind
-               AND p.category = CASE WHEN drafts.kind = 'note' THEN drafts.category ELSE '' END
+               AND lower(p.category) = CASE WHEN drafts.kind = 'note' THEN lower(drafts.category) ELSE '' END
                AND p.slug = lower(drafts.slug))`);
     db.exec('COMMIT');
   } catch (e) {

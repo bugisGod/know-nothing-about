@@ -131,6 +131,8 @@ import { notes, buildFrontmatter } from './notes.js';
 app.route('/admin', notes);
 import { tags as tagsR } from './tags.js';
 app.route('/admin', tagsR);
+import { categories as catR } from './categories.js';
+app.route('/admin', catR);
 import { projects } from './projects.js';
 app.route('/admin', projects);
 const api = new Hono();
@@ -140,9 +142,11 @@ api.put('/drafts/:id', async (c) => {
   const d = db.prepare('SELECT * FROM drafts WHERE id=?').get(c.req.param('id'));
   if (!d) return c.json({ ok: false, error: '草稿不存在' }, 404);
   const b = await c.req.json();
+  // ★ 分类 key 写入侧归一小写（2026-10-26 审查 P2-1）：草稿的 category 会进 posts 表，
+  //   而 UNIQUE(kind,category,slug) 的 category 大小写敏感——AI/ai 各存一行就会长出两个星团
   db.prepare("UPDATE drafts SET title=?, category=?, slug=?, fm=?, content_md=?, updated_at=datetime('now') WHERE id=?")
-    .run(String(b.title || '').slice(0, 200), String(b.category || '').replace(/[^\w一-龥-]/g, ''),
-      String(b.slug || '').replace(/[^\w一-龥-]/g, ''),
+    .run(String(b.title || '').slice(0, 200), String(b.category || '').replace(/[^\w一-龥-]/g, '').toLowerCase(),
+      String(b.slug || '').replace(/[^\w一-龥-]/g, '').toLowerCase(),
       JSON.stringify(b.fm || {}), String(b.content_md || ''), d.id);
   return c.json({ ok: true });
 });

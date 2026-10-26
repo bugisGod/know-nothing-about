@@ -143,24 +143,38 @@ const vcRgb = (() => { const c = hex2rgb(vc); return c.map((v) => Math.round(v *
 //   分带采样保真结构：星链=珠串（大点亮）、团块=密实亮核、基底=薄雾小点。
 //   三个形态元素视觉对比拉开，形状一眼可辨
 const cloud: { x: number; y: number; r: number; a: number }[] = [];
+// 星链珠串铺开的最大半径（团半径为单位）——供 payload.morph 自检
+let beadR = 0;
 {
-  // ① 星链珠串：沿链轴等距 + 横向微抖，2.2px 亮珠
+  // ① 星链珠串：沿链轴等距 + 横向微抖
+  //   ★ 亮度档（2026-10-26 用户「链有点抢眼」→ 温和降一档）：珠径 1.05~1.5px、
+  //     透明度 0.22~0.34（原 1.2~1.75 / 0.30~0.46）。团块是 0.9~1.45px / 0.20~0.32，
+  //     降档后链仍是「结构高光」但不再压过团块——卡片是首页的缩小投影，首页链本就比
+  //     团块亮，故不做等比压平（那是「保持现状」方案，已由用户否掉）。
+  //   ★ 坐标必须 ×rad（2026-10-26 第二次审查 P1-A）：th0/rr0/arc/w 都是「团半径为单位」
+  //     的归一形态值（与首页 clusterFrame/clusCorePts 同尺度语义）。同函数下方团块(×rad)
+  //     与基底(×rad)都乘了，唯独这里漏乘 → 链长 0.5~1.05 被当像素用，整条缩进团心主星
+  //     辉光（size×0.13≈17px）里看不见 = 卡片上根本没有星链，与首页形状不一致
   for (const ch of chains) {
-    const cx = Math.cos(ch.th0) * ch.rr0, cy = Math.sin(ch.th0) * ch.rr0 * fy;
+    const cx = Math.cos(ch.th0) * ch.rr0 * rad, cy = Math.sin(ch.th0) * ch.rr0 * fy * rad;
     let tx = -Math.sin(ch.th0), ty = Math.cos(ch.th0) * fy;
     const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
     // ★ nBead 下限 2（2026-10-26 审查实锤）：arc≈-0.69 时 round(12+arc*16)=1 →
     //   下一行分母 (nBead-1)=0 → 坐标 NaN → JSON null → 整条珠串丢失
     //   （frontend 团卡片实测 1 个 null 点，首页有形卡片无形）
-    const nBead = Math.max(2, Math.round(12 + ch.arc * 16));
+    // ★ ×0.6 稀珠（2026-10-26 用户「珠子更稀一点」）：加性混合下珠子排太密会叠成亮斑，
+    //   读成「一串大点」而不是纤维状星链。降到六成 → 长链 17 颗、短链 7 颗，点列可辨、
+    //   不再糊成斑。只改循环次数，不改每次消费的 rand() 个数（形态流消费顺序不变）
+    const nBead = Math.max(2, Math.round((12 + ch.arc * 16) * 0.6));
     for (let i = 0; i < nBead; i++) {
-      const al = -ch.arc / 2 + (ch.arc * i) / (nBead - 1);
-      const w = (rand() - 0.5) * ch.w * 0.7;
+      const al = (-ch.arc / 2 + (ch.arc * i) / (nBead - 1)) * rad;
+      const w = (rand() - 0.5) * ch.w * 0.7 * rad;
+      beadR = Math.max(beadR, Math.hypot(cx + tx * al + tx * w, cy + ty * al + ty * w) / rad);
       cloud.push({
         x: +(C + cx + tx * al + tx * w).toFixed(1),
         y: +(C + cy + ty * al + ty * w).toFixed(1),
-        r: +(1.2 + rand() * 0.55).toFixed(2),
-        a: +(0.30 + rand() * 0.16).toFixed(3),
+        r: +(1.05 + rand() * 0.45).toFixed(2),
+        a: +(0.22 + rand() * 0.12).toFixed(3),
       });
     }
   }
@@ -199,6 +213,11 @@ const payload = JSON.stringify({
   size,
   vcRgb,
   cloud,
+  // ★ 结构自检字段（2026-10-26 第二次审查后加）：卡片形状与首页一致性是用户长期诉求，
+  //   但「珠串漏乘团半径」这类错从页面 200、点云数量、甚至半径分布上都看不出来
+  //   （珠子和团块的 a/r 区间重叠）。让组件自报「我算出的星链到底铺在多大半径上」，
+  //   self-audit 就能直接断言：有链（nChains>0）却全贴在团心 = 尺度算错了。
+  morph: { nChains, nClumps, beadR: +beadR.toFixed(3) },
   stars: stars.map((s) => ({ x: +s.x.toFixed(1), y: +s.y.toFixed(1), r: +s.r.toFixed(2), z: +s.z.toFixed(2) })),
 });
 
@@ -228,6 +247,7 @@ const payload = JSON.stringify({
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, size, size);
     // ① 形状点云 v2（加性，按 a 升序 = 基底在下、珠串在上）：结构分层的形状成像
+    //    亮度档 基底 0.10~0.20 < 团块 0.20~0.32 < 珠串 0.22~0.34（2026-10-26 降档后）
     const [vr, vg, vb] = d.vcRgb; // ★ 必须在最前：esbuild 会把解构提升，循环先于它使用 l,i,d = TDZ 崩溃
     const ordered = [...d.cloud].sort((p, q) => p.a - q.a);
     for (const s of ordered) {

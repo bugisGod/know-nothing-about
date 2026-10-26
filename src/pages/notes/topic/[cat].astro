@@ -2,7 +2,8 @@
 import Base from "../../../layouts/Base.astro";
 import NebulaBand from "../../../components/NebulaBand.astro";
 import MiniGalaxy from "../../../components/MiniGalaxy.astro";
-import { CATEGORIES, SERIES, PROJECT_COLOR, assignClusterColors } from "../../../config";
+import { SERIES, PROJECT_COLOR, assignClusterColors } from "../../../config";
+import { categoryRegistry } from "../../../lib/category-meta";
 import { listNotes } from "../../../lib/posts";
 
 export async function getStaticPaths() {
@@ -10,6 +11,7 @@ export async function getStaticPaths() {
   const catOf = (id: string) => (id.includes("/") ? id.split("/")[0] : "");
   // ★ 双写对齐（2026-10-26 审查 P2）：这里原用「未分类」而 SSR 分支用 ""，兜底语义不一致；
   //   SSR 模式 getStaticPaths 不参与，纯对齐。空 cat 在 galaxy-data 已有防护。
+  //   catOf 取到的 id 段已由 posts.toNote 统一小写，此处不再可能出现大写
   const cats = new Map<string, typeof notes>();
   for (const n of notes) {
     const cat = catOf(n.id);
@@ -43,13 +45,21 @@ export async function getStaticPaths() {
   });
 }
 
+// ★ 分类元信息（2026-10-26）：label/desc/color/shape 走「代码默认 + 后台注册表」合并，
+//   新分类的中文名与一句话描述可在后台填，不必再改 config.ts
+const CATS = categoryRegistry();
 const { cat } = Astro.params;
+// ★ 大小写归一（2026-10-26 审查 P2-1）：分类 key 一律小写。非规范 URL（/notes/topic/AI/）
+//   301 到小写版，避免同一专题两个地址（SEO 重复内容）；
+//   未知分类不再渲染空壳 banner（实测 /notes/topic/AI/ 曾返回 200 + 0 篇 + 默认雾蓝），改走 404。
+const norm = (cat ?? "").toLowerCase();
+if (norm !== cat) return Astro.redirect(`/notes/topic/${norm}/`, 301);
 // SSR：无 props 时（直接 URL 访问）就地构建与 getStaticPaths 同构的数据
 let { entries, seriesList, loose } = Astro.props as any;
 if (!entries) {
   const all = listNotes();
   const sorted = all
-    .filter((n) => (n.id.includes("/") ? n.id.split("/")[0] : "") === cat)
+    .filter((n) => (n.id.includes("/") ? n.id.split("/")[0] : "") === norm)
     .sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0));
   const seriesMap = new Map();
   const looseArr = [];
@@ -64,26 +74,27 @@ if (!entries) {
   seriesList = [...seriesMap.values()];
   loose = looseArr;
 }
-const meta = CATEGORIES[cat];
+// ★ 未知分类 → 404（此处 entries 已定：props 走 getStaticPaths 参数，或上面按 norm 过滤）
+if (!entries.length) return Astro.rewrite("/404");
 // ★ P0 修复（2026-10-26 审查报告实锤）：此前 color = Astro.props.color，但 props 从未传过
 //   color（SSR 模式 getStaticPaths 也不参与）→ 恒 undefined → 所有专题页塌成默认雾蓝。
 //   正确做法不是只给本团单独配色（会与全局分配结果不一致），而是与知识库列表页
 //   完全同款：全量分类 + 相同 births 语义 + reserved=[PROJECT_COLOR]，再取本团色。
-const _allNotes = listNotes();
 const _births: Record<string, string> = {};
 const _cats = new Set<string>();
-for (const _n of _allNotes) {
-  const _c = _n.id.includes("/") ? _n.id.split("/")[0] : "未分类";
+for (const _n of listNotes()) {
+  const _c = _n.id.split("/")[0] || "未分类";
   _cats.add(_c);
   const _b = _n.data.date ? new Date(_n.data.date).toISOString().slice(0, 10) : "9999-99-99";
   if (!_births[_c] || _b < _births[_c]) _births[_c] = _b;
 }
 const _assigned = assignClusterColors(
-  [..._cats].map((c0) => ({ key: `cat:${c0}`, color: CATEGORIES[c0]?.color ?? "", birth: _births[c0] })),
+  [..._cats].map((c0) => ({ key: `cat:${c0}`, color: CATS[c0]?.color ?? "", birth: _births[c0] })),
   [PROJECT_COLOR],
 );
-const color = _assigned[`cat:${cat}`] ?? CATEGORIES[cat]?.color ?? "#9db8ff";
-const label = meta?.label ?? cat;
+const meta = CATS[norm];
+const color = _assigned[`cat:${norm}`] ?? meta?.color ?? "#9db8ff";
+const label = meta?.label ?? norm;
 const desc = meta?.desc ?? "";
 const fmt = (date?: Date) =>
   date?.toISOString().slice(0, 10).replaceAll("-", ".") ?? "";
@@ -97,7 +108,7 @@ const fmt = (date?: Date) =>
       <a class="tp-back" href="/notes/">← 返回知识库</a>
       <div class="tp-banner" style={`--tc: ${color}`}>
         <div class="tp-galaxy">
-          <MiniGalaxy size={130} color={color} seed={`cat:${cat}`} shape={CATEGORIES[cat]?.shape} />
+          <MiniGalaxy size={130} color={color} seed={`cat:${norm}`} shape={meta?.shape} />
         </div>
         <div class="tp-head">
           <small>⭐ 专题</small>

@@ -158,7 +158,7 @@ code{font-family:var(--mono);font-size:12.5px}
 export function renderLayout({ title, body, user, active }) {
   const NAV = [
     ['/admin', '概览'], ['/admin/notes', '笔记'], ['/admin/projects', '项目'],
-    ['/admin/tags', '标签'], ['/admin/stats', '统计'], ['/admin/publishes', '发布'],
+    ['/admin/tags', '标签'], ['/admin/categories', '分类'], ['/admin/stats', '统计'], ['/admin/publishes', '发布'],
   ];
   const nav = NAV.map(([href, label]) =>
     `<a href="${href}"${active === href ? ' class="on"' : ''}>${label}</a>`).join('');

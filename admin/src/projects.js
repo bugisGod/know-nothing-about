@@ -1,36 +1,24 @@
 // scio 管理后台 · 项目复盘管理（P3）
 // 与笔记同款编辑器，字段换成 projects schema；发布管线已支持 kind='project'
 import { Hono } from 'hono';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { db } from './db.js';
 import { renderLayout } from './views.js';
-import { SRC_DIR } from './repo.js';
 
 export const projects = new Hono();
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 // slug 会拼进文件路径 → 白名单
 const SAFE = (s) => String(s ?? '').replace(/[^\w一-龥-]/g, '');
 
+// 已发布项目 = 查 posts 表（2026-10-26 第二次审查 P1-B）
+// ★ 原实现读 src/content/projects/*.md 目录——发布管线 v2 只写库、不再落 md（笔记侧
+//   早已改成 listRepoNotes() 查库，项目侧漏改）。后果：发布一个项目，线上 /projects/ 有它、
+//   首页银河有它，后台列表却显示「已发布 0」且没有「转入编辑」入口 → 已上线项目改不了。
+//   仓库里那篇迁移期孤儿 md 还让自审「项目列表含真实项目」假通过，掩盖了这个 bug。
 function repoProjects() {
-  const root = SRC_DIR ? join(SRC_DIR, 'src/content/projects') : '';
-  const out = [];
-  try {
-    // ★ 原写法在 ESM 里用 require('node:fs') → ReferenceError 被 try 吞掉 → 已发布项目永远读不到（显示 0）
-    for (const f of readdirSync(root)) {
-      if (!f.endsWith('.md')) continue;
-      const text = readFileSync(join(root, f), 'utf8');
-      const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] || '';
-      out.push({
-        slug: f.slice(0, -3),
-        title: fm.match(/^title:\s*(.+)$/m)?.[1]?.replace(/^['"]|['"]$/g, '') || f,
-        date: fm.match(/^date:\s*(.+)$/m)?.[1]?.trim() || '',
-        draft: /^draft:\s*true/m.test(fm),
-      });
-    }
-  } catch {}
-  out.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  return out;
+  return db
+    .prepare("SELECT slug, title, date FROM posts WHERE kind='project' ORDER BY date DESC")
+    .all()
+    .map((r) => ({ slug: r.slug.toLowerCase(), title: r.title, date: r.date }));
 }
 
 projects.get('/projects', (c) => {

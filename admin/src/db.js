@@ -56,6 +56,18 @@ CREATE TABLE IF NOT EXISTS tags (
   color TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 );
+-- ★ 分类注册表（2026-10-26）：原先 label/desc/color/shape 只写在 src/config.ts 的
+--   CATEGORIES 里，新分类想有中文名或一句话描述必须改码重部署。照 tags 的同款链路
+--   搬到后台：本表 → 发布时导出 src/data/categories.json → 站点构建期静态导入。
+--   key 一律小写（与 posts.category 的归一化一致）；color/shape 留空 = 走自动配色/自动形态。
+CREATE TABLE IF NOT EXISTS categories (
+  key TEXT PRIMARY KEY,
+  label TEXT DEFAULT '',
+  desc TEXT DEFAULT '',
+  color TEXT DEFAULT '',
+  shape TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS media (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   filename TEXT NOT NULL,

@@ -2,10 +2,13 @@
 import Base from "../../layouts/Base.astro";
 import NebulaBand from "../../components/NebulaBand.astro";
 import MiniGalaxy from "../../components/MiniGalaxy.astro";
-import { CATEGORIES, PROJECT_COLOR, assignClusterColors } from "../../config";
+import { PROJECT_COLOR, assignClusterColors } from "../../config";
+import { categoryRegistry } from "../../lib/category-meta";
 import { listNotes } from "../../lib/posts";
 import { tagLabel } from "../../lib/tags";
 
+// 分类元信息（后台可配 label/desc/color/shape）：代码默认值 + 注册表逐字段覆盖
+const CATS = categoryRegistry();
 const notes = listNotes().sort(
   (a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0),
 );
@@ -27,7 +30,7 @@ for (const n of notes) {
   const b = n.data.date ? new Date(n.data.date).toISOString().slice(0, 10) : "9999-99-99";
   if (!births[cat] || b < births[cat]) births[cat] = b;
   if (!clusterMap.has(cat)) {
-    const meta = CATEGORIES[cat];
+    const meta = CATS[cat];
     clusterMap.set(cat, {
       key: cat,
       label: meta?.label ?? cat,
@@ -76,7 +79,7 @@ const fmt = (date?: Date) =>
           {topics.map((t) => (
             <a class="topic-card" href={`/notes/topic/${t.key}/`} style={`--tc: ${t.color}`}>
               <div class="topic-galaxy">
-                <MiniGalaxy size={132} color={t.color} seed={`cat:${t.key}`} shape={CATEGORIES[t.key]?.shape} />
+                <MiniGalaxy size={132} color={t.color} seed={`cat:${t.key}`} shape={CATS[t.key]?.shape} />
               </div>
               <div class="topic-info">
                 <strong>{t.label}</strong>
@@ -106,7 +109,7 @@ const fmt = (date?: Date) =>
       <ol class="kb-timeline" id="kb-list">
         {notes.map((n) => {
           const cat = catOf(n.id);
-          const meta = CATEGORIES[cat];
+          const meta = CATS[cat];
           const label = meta?.label ?? cat;
           const searchText = `${n.data.title} ${n.data.description ?? ''} ${(n.data.tags ?? []).join(' ')}`.toLowerCase();
           return (

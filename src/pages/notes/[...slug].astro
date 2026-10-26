@@ -2,7 +2,8 @@
 import Base from "../../layouts/Base.astro";
 import SkyBand from "../../components/SkyBand.astro";
 import ArticleToc from "../../components/ArticleToc.astro";
-import { SERIES, CATEGORIES } from "../../config";
+import { SERIES } from "../../config";
+import { categoryRegistry } from "../../lib/category-meta";
 import { tagLabel } from "../../lib/tags";
 import { listNotes, getNote } from "../../lib/posts";
 export async function getStaticPaths() {
@@ -11,6 +12,7 @@ export async function getStaticPaths() {
 }
 const entry: any = Astro.props.entry ?? getNote(String(Astro.params.slug));
 if (!entry) return Astro.rewrite("/404");
+const CATS = categoryRegistry();
 // md 正文（预渲染 html）+ 标题锚点（与 render() 的 headings 同构）
 const entryHtml: string = entry.html;
 const headings = [...entryHtml.matchAll(/<h([1-6]) id="([^"]*)"/g)].map((m) => ({
@@ -45,7 +47,7 @@ const fmt = (date?: Date) =>
       <a href="/notes/">知识库</a>
       <span> / </span>
       <a href={`/notes/?category=${encodeURIComponent(category)}`}>
-        {CATEGORIES[category]?.label ?? category}
+        {CATS[category]?.label ?? category}
       </a>
     </div>
     <h1>{entry.data.title}</h1>

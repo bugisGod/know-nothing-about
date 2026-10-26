@@ -1,5 +1,6 @@
 // 首页银河数据：从 posts 表实时构建（逻辑与原静态版逐行同构——视觉零变化的保证）
-import { CATEGORIES, PROJECT_COLOR, assignClusterColors } from "../config";
+import { PROJECT_COLOR, assignClusterColors } from "../config";
+import { categoryRegistry } from "./category-meta";
 import { listNotes, listProjects } from "./posts";
 
 export interface ClusterDef {
@@ -14,6 +15,8 @@ export interface StarDef {
 }
 
 export async function buildGalaxyData() {
+  // 分类元信息（后台可配）：显示名/描述/色/形态种子
+  const CATS = categoryRegistry();
   const allNotes = listNotes();
   const allProjects = listProjects();
 
@@ -48,7 +51,7 @@ export async function buildGalaxyData() {
     // ★ 空 category 防护（2026-10-26 审查 P2）：后台漏填分类时 id=/slug → split[0]=""
     //   → 会生成 key="cat:" 的无名空星团。跳过之（正常内容不存在此形态，纯防御）
     if (!cat) continue;
-    const meta = CATEGORIES[cat];
+    const meta = CATS[cat];
     const key = `cat:${cat}`;
     const ci = ensureCluster(key, {
       key,
