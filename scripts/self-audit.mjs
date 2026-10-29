@@ -34,6 +34,21 @@ T('不存在文章 → 404/302', nf.status === 404 || nf.redirected || nf.status
 const pf = await fetch(B1 + '/pagefind/pagefind.js');
 T('pagefind.js 200', pf.ok);
 
+// ★ pagefind 索引必须真有内容：只校验 pagefind.js 200 拦不住静默失效 ——
+//   抓取全部失败时 pagefind 照样产出 pagefind.js，但只索引 1 页，搜索框能开却什么都搜不到
+//   （历史事故：11 页里 10 页被静默丢弃，索引只剩首页）。
+//   故再校验：索引页数 ≥ 详情页数（笔记 + 项目各一个详情页）。
+try {
+  const ent = await (await fetch(B1 + '/pagefind/pagefind-entry.json')).json();
+  const pages = Object.values(ent?.languages ?? {}).reduce(
+    (a, l) => a + (l?.page_count ?? 0), 0);
+  const expect = gd.stars.length;
+  T('pagefind 索引页数 ≥ 详情页数', pages > 0 && pages >= expect,
+    `索引 ${pages} 页 / 期望 ≥ ${expect}`);
+} catch (e) {
+  T('pagefind 索引页数 ≥ 详情页数', false, e.message);
+}
+
 // ===== 后台侧 =====
 const lp = await fetch(B2 + '/admin/login', { method: 'POST', body: new URLSearchParams({ username: 'scio', password: PASS }), redirect: 'manual' });
 T('登录 302 + cookie', lp.status === 302 && lp.headers.get('set-cookie')?.includes('scio_admin'));

@@ -403,10 +403,60 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     transition: opacity 0.3s ease, color 0.3s ease;
   }
 
-  .graph-frame :global(.cluster-label[data-state="hover"]) .cl-count,
-  .graph-frame :global(.cluster-label[data-state="focus"]) .cl-count {
+  /* ★ 整段后代选择器必须一起包进 :global()：.cl-count / .cl-topics 是 JS 动态创建的，
+     不带 data-astro-cid；只把父级包 global、子级留在括号外，Astro 会给子级补上 scope
+     属性选择器 → 选择器永不匹配（实测：hover 时篇数一直出不来，是个长期失效的隐藏 bug） */
+  .graph-frame :global(.cluster-label[data-state="hover"] .cl-count),
+  .graph-frame :global(.cluster-label[data-state="focus"] .cl-count) {
     opacity: 1;
     color: #ffc46b;
+  }
+
+  /* ★ 描述行（方案 B 第 2 层）：与 .cl-count 同样脱流绝对定位 —— 标签盒子高度仍等于团名，
+     避让公式（lh = offsetHeight）不受影响；显隐由主循环按「漫游态 + 屏幕尺度」写 opacity */
+  .graph-frame :global(.cl-desc) {
+    position: absolute;
+    top: calc(100% + 22px);
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    opacity: 0;
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--text-2);
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+  }
+
+  /* ★ 话题词胶囊（方案 B 第 3 层，用户拍板「只 hover 出现」）：与描述行同样脱流，
+     纵向错开 16px 不叠字；显隐纯 CSS —— hover 时 data-state 已被主循环写成 "hover" */
+  .graph-frame :global(.cl-topics) {
+    position: absolute;
+    top: calc(100% + 38px);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 5px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+
+  /* ★ 同上：整段包 global，否则子级被补 scope 属性后选择器不生效 */
+  .graph-frame :global(.cluster-label[data-state="hover"] .cl-topics) {
+    opacity: 0.85;
+  }
+
+  .graph-frame :global(.cl-topic) {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    letter-spacing: 0.03em;
+    color: var(--text-2);
+    background: rgba(150, 170, 230, 0.14);
+    border-radius: 999px;
+    padding: 2px 8px;
   }
 
   /* 聚焦态：团名居中并带上一条极淡的下划隔离线（参考图锁定态的星团标题） */
@@ -492,10 +542,11 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
   .graph-frame :global(.explore-help.show) {
     opacity: 1;
   }
-  /* 探索态隐藏顶部胶囊条（方案图探索态无顶部胶囊，边界+EXIT 即模式标识） */
-  .graph-frame :global(.galaxy-focus.hidden-for-explore) {
-    opacity: 0 !important;
-    pointer-events: none !important;
+  /* 探索·漫游态：顶部胶囊只当「模式名牌」，不放出口——退出统一走底部 ✦ EXIT EXPLORE，
+     避免同一屏两个都写着退出的按钮（原 .galaxy-focus.hidden-for-explore 那条死规则想解决的
+     就是这个，但整条隐藏会把聚焦态的「团名 + 篇数」信息一起砍掉，故改为只隐藏按钮） */
+  .graph-frame :global(.galaxy-focus.explore .gf-back) {
+    display: none;
   }
 
   /* P1 探索层操作提示：底部居中，进入探索态时短暂浮现 */
@@ -885,6 +936,12 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     // P1 EXPLORE 自由漫游态（声明提前：主循环 camZ 收敛速率用到）
     let exploreMode = false;
     let exploreT = 0;
+    // ★ 状态真值（2026-10-27 审查）：聚焦某团是「探索态内部的相机状态」，不是退出探索。
+    //   原实现在 flyTo 里调 exitExplore(true) 把 exploreMode 清成 false，只为了保住探索层
+    //   外观 —— 于是所有按 exploreMode 分支的逻辑（相机速率/自转/标签禁区/按钮行为）在
+    //   聚焦态全部拿到假值，底部那颗「EXIT EXPLORE」因此变成「点了反而重新进入探索」。
+    //   现在 exploreMode 全程如实，「漫游态」单独派生：探索中 且 未聚焦任何团。
+    const roam = () => exploreMode && focusIdx < 0;
     camera.position.set(0, 0, camZ);
 
     // 滚动进度：星空是整个页面的铺底，环随页面滚动沿对角线缓缓转动下沉
@@ -3118,10 +3175,37 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     clusters.forEach((c, k) => {
       const el = document.createElement('div');
       el.className = 'cluster-label';
-      el.innerHTML = `<span class="cl-name"></span><span class="cl-count"></span>`;
+      el.innerHTML = `<span class="cl-name"></span><span class="cl-count"></span><span class="cl-desc"></span>`;
       (el.querySelector('.cl-name') as HTMLElement).textContent = c.title;
       // 星图风计数：零填充两位 + ARTICLES —— 是「星团的信息」，不是列表页的分类徽标
       (el.querySelector('.cl-count') as HTMLElement).textContent = `${String(c.count).padStart(2, '0')} ARTICLES`;
+      // ★ 常驻描述行（2026-10-27 审查方案 B 第 2 层）：探索·漫游态才显形，且只在团在屏幕上
+      //   够大时显示（远处小团维持单行，避免糊成一片文字）。内容降级：
+      //   注册表 desc → topicList 前 3 个话题 → 空（不硬凑）
+      {
+        const d = c.desc?.trim() || (c.topicList?.length ? c.topicList.slice(0, 3).join(' · ') : '');
+        (el.querySelector('.cl-desc') as HTMLElement).textContent = d;
+        if (!d) el.querySelector('.cl-desc')!.remove();   // 没内容就别留空节点
+      }
+      // ★ 话题词胶囊（方案 B 第 3 层，用户拍板「只 hover 出现」）：
+      //   仅在分类有【正式 desc】时才生成 —— 若无 desc、描述行是用 topicList 降级的
+      //   （此刻 desc 行已经是「AI · ZCode」），hover 再浮一遍话题词就是同一份内容重复两遍。
+      {
+        const hasOwnDesc = !!c.desc?.trim();
+        const tp = (c.topicList ?? []).slice(0, 3);
+        if (hasOwnDesc && tp.length) {
+          const tw = document.createElement('span');
+          tw.className = 'cl-topics';
+          // textContent 逐个写入，不用 innerHTML 拼 —— 话题词来自文章 frontmatter，不可信输入
+          tp.forEach((t) => {
+            const s = document.createElement('span');
+            s.className = 'cl-topic';
+            s.textContent = t;
+            tw.appendChild(s);
+          });
+          el.appendChild(tw);
+        }
+      }
       if (c.color) el.style.color = c.color;
       // 星团标签：探索态 → 页内拉近聚焦；默认态 → 直接进分类页（相机不动）
       el.addEventListener('click', () => {
@@ -3541,7 +3625,6 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     let spinFreeze = -1; // 聚焦时刻的自转时钟（聚焦期间星系静止，凝视不追转）
     let spinRate = 1;      // 当前自转速率（平滑变速：探索2/常态1/聚焦0，杜绝速度阶跃）
     let pendingListK = -1; // 延迟显示的星团列表（flyTo 触发，主循环 focusT>0.5 时真正 showList）
-    let resumeExplore = false; // 聚焦前处于探索态 → 退出聚焦时回到探索态（而不是掉回默认态）
     let focusRel: THREE.Vector3 | null = null; // 星团相对 tilt 的坐标（冻结时刻缓存）
     const focusBar = document.getElementById('galaxy-focus') as HTMLElement;
     const FOCUS_DIST = 6.1;   // 拉近后相机距星团的距离（z 向）→ 星团占大半屏
@@ -3551,12 +3634,11 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
 
     function flyTo(k: number) {
       if (k < 0 || k >= NC) return;
-      // ★ 从漫游态进入分类聚焦：记住来路，退出聚焦时回到【探索态】而不是掉回默认态
-      //   （用户：探索态点团拉近 → 点空白 → 探索态没了，不合理）
-      resumeExplore = exploreMode;
-      // ★ keepUI（2026-10-16 用户「明明是探索态，按钮还是 explore」）：聚焦期间保留
-      //   探索层 UI（EXIT EXPLORE / 边框 / hero 隐藏）——聚焦是探索内的相机状态
-      if (exploreMode) exitExplore(true);
+      // ★ 不再 exitExplore(true)：聚焦是探索态内的相机状态，exploreMode 保持为真。
+      //   探索层外观（底部 EXIT / 顶部返回按钮）改由 syncExploreLayer() 按「漫游 or 聚焦」
+      //   统一驱动（见主循环），不再靠「假退出」维持假外观。
+      //   原实现的副作用链：exitExplore 会 focusBar.classList.remove('show')，而 flyTo 下一行
+      //   又 add('show') —— 同一函数里自打；且它把 exploreMode 清掉，导致底部按钮说谎。
       focusIdx = k;
       hovCluster = -1;
       // 锁定轨道视觉由本团轨道弧承担（focT 分级渐现），不再叠加闭合环
@@ -3575,27 +3657,34 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       (focusBar.querySelector('.gf-name') as HTMLElement).textContent = c.title;
       (focusBar.querySelector('.gf-count') as HTMLElement).textContent = `${c.count} 篇 · ${c.topics ?? 0} 个话题`;
       (focusBar.querySelector('.gf-open') as HTMLAnchorElement).href = c.url;
-      focusBar.classList.add('show');
-      focusBar.setAttribute('aria-hidden', 'false');
+      // ★ .show / aria 交给 syncExploreLayer（下方末尾调用）统一接管，这里只写团名文案
       clearSelection();
       tip.classList.remove('show', 'tap');
       // ★ showList 延迟（2026-10-17 用户「拉近后跳变」）：点击同步路径零 DOM——
       //   列表重建（innerHTML+逐项 createElement+绑事件）在主线程卡一拍 = 冻结后快进 = 跳变。
       //   推迟到飞行中段（focusT>0.5 时主循环触发），面板浮现被相机运动掩盖
       pendingListK = k;
+      syncExploreLayer();   // 状态一变立即同步出口（不能只等主循环：页面不可见时 rAF 被节流）
     }
     function flyBack() {
       if (focusIdx < 0 && focusT <= 0.001) return;
       focusIdx = -1;
       // 恢复同样交给状态机（他团降权系数回到 1）
-      focusBar.classList.remove('show');
-      focusBar.setAttribute('aria-hidden', 'true');
+      // ★ 胶囊的 .show / aria 已统一交给 syncExploreLayer 接管（原先这里的 remove('show')
+      //   会让退回漫游态时胶囊整个消失——而它是漫游态唯一的顶部模式标识）
       clearSelection();
       hideList();
-      // ★ 来路是探索态 → 回到探索态（镜头退回全景，但保留探索的边框/EXIT/自由漫游）
-      if (resumeExplore) { resumeExplore = false; enterExplore(); }
+      // ★ 不再需要 resumeExplore：exploreMode 在聚焦期间保持为真，退回全景即自然回到漫游态
+      syncExploreLayer();   // 退回漫游态后底部 EXIT 要立刻亮（同上，不等主循环）
     }
-    (focusBar.querySelector('.gf-back') as HTMLElement).addEventListener('click', flyBack);
+    // 单一绑定（原 3598 处还有一次 addEventListener('click', flyBack)，聚焦时点一次会跑两遍
+    //   flyBack，靠首行守卫幂等才没出问题——删掉，只留下面这个带分支的版本）
+    (focusBar.querySelector('.gf-back') as HTMLElement).addEventListener('click', () => {
+      // ★ roam() 而非 exploreMode：聚焦态下 exploreMode 为真但按钮含义是「退回全景」，
+      //   用 exploreMode 判断会误退出探索（实测：退完停在团上、既不是聚焦也不是漫游）
+      if (roam()) { exitExplore(); return; }
+      flyBack();
+    });
     // P1 EXPLORE = 自由漫游模式：镜头向后拉，第一次完整展示整个银河，
     // 然后用户自己决定靠近哪个星团（探索某分类 = 点星团，不归 EXPLORE 管）
     // 吸附感：hover 星团时标签向鼠标轻微偏移（方案「靠近星团 → 轻微响应」）
@@ -3611,20 +3700,13 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       if (exploreMode) return;
       if (focusIdx >= 0) flyBack();
       exploreMode = true;
-      focusBar.classList.add('explore');
-      (focusBar.querySelector('.gf-name') as HTMLElement).textContent = '自由探索';
-      (focusBar.querySelector('.gf-count') as HTMLElement).textContent = '靠近星团查看 · 点击进入分类';
-      (focusBar.querySelector('.gf-open') as HTMLElement).style.display = 'none';
-      (focusBar.querySelector('.gf-back') as HTMLElement).textContent = '← 退出探索';
-      focusBar.classList.add('show');
-      focusBar.setAttribute('aria-hidden', 'false');
+      // 顶部胶囊的文案 / 出口显隐 / .show / aria 全部交给 syncExploreLayer（单一真源，
+      // 避免 enter/exit/flyTo/flyBack 四处手工 toggle 走偏），本函数只负责模式状态与 hero 淡出
       clearSelection();
-      // 探索层视觉：视口边框浮现 + 底部 EXIT（方案模块 2 的模式标识）
-      exploreBorder.classList.add('show');
-      exploreExit.classList.add('show');
-      exploreExit.setAttribute('aria-hidden', 'false');
+      // 探索层视觉：底部 EXIT / 视口边框交给 syncExploreLayer 按状态决定（漫游态才亮）
       // hero 整体淡出：EXPLORE（进入）与 EXIT（退出）是互斥 CTA，不能同屏
       document.body.classList.add('explore-on');
+      syncExploreLayer();
       // 首次进入探索层：短暂显示操作提示（会话内一次）
       if (!sessionStorage.getItem('explore-tip-seen')) {
         sessionStorage.setItem('explore-tip-seen', '1');
@@ -3634,34 +3716,56 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       const sh = document.getElementById('sky-hint');
       if (sh) sh.classList.add('sky-hint-faded'); // 探索态隐藏常驻提示，避免三层文字打架
     }
-    function exitExplore(keepUI = false) {
+    // ★ 探索层外观的唯一出口（2026-10-27 审查方案 A）：一个状态一个主出口，且按钮文案
+    //   必须等于它的真实行为。
+    //     漫游态（探索中、未聚焦）→ 顶部那颗「退出探索」由 CSS 隐藏，底部 ✦ EXIT EXPLORE 是唯一出口
+    //     聚焦态（探索中、已聚焦）→ 顶部「← 返回全景」是唯一出口，底部 EXIT 收起
+    //     默认态                 → 两者都不显示
+    //   由主循环每帧调用，避免 enter/exit/flyTo/flyBack 四处手工 toggle 走偏
+    function syncExploreLayer() {
+      const showExit = roam();
+      exploreExit.classList.toggle('show', showExit);
+      exploreExit.setAttribute('aria-hidden', String(!showExit));
+      exploreBorder.classList.toggle('show', exploreMode);
+      // ★ .explore 类必须跟着「漫游态」而非「进过一次探索」：CSS 用它隐藏顶部返回按钮，
+      //   若聚焦后仍留着该类，顶部「← 返回全景」也会被藏 → 聚焦态一个出口都不剩（实测踩过）
+      focusBar.classList.toggle('explore', showExit);
+      // ★ 胶囊显隐也必须在这一处统一：漫游态与聚焦态都该在（聚焦时它显示团名），默认态才隐藏。
+      //   此前 .show 散在 enterExplore(add) / flyBack(remove) / flyTo(add) 三处各管一段，导致两个
+      //   方向相反的 bug：漫游态直接退出探索 → 胶囊残留；聚焦退回漫游 → 胶囊消失（2026-10-27 实测）。
+      //   现在只认 exploreMode：在探索里（无论漫游还是聚焦）就显示，退出探索就隐藏。
+      focusBar.classList.toggle('show', exploreMode);
+      focusBar.setAttribute('aria-hidden', String(!exploreMode));
+      (focusBar.querySelector('.gf-open') as HTMLElement).style.display = showExit ? 'none' : '';
+      // ★ 漫游态文案在这里写回：聚焦态文案由 flyTo 写入（团名），此处不覆盖。
+      //   全部加脏检查 —— syncExploreLayer 每帧调用，无条件写 textContent 是 60fps 的无效 DOM 写
+      if (showExit) {
+        const nm = focusBar.querySelector('.gf-name') as HTMLElement;
+        const ct = focusBar.querySelector('.gf-count') as HTMLElement;
+        if (nm.textContent !== '自由探索') nm.textContent = '自由探索';
+        const hint = '靠近星团查看 · 点击进入分类';
+        if (ct.textContent !== hint) ct.textContent = hint;
+      }
+      // 文案 = 行为：漫游态那颗按钮（若可见）意味着退出探索；聚焦态意味着退回全景
+      const bk = focusBar.querySelector('.gf-back') as HTMLElement;
+      const bkTxt = showExit ? '← 退出探索' : '← 返回全景';
+      if (bk.textContent !== bkTxt) bk.textContent = bkTxt;
+    }
+    function exitExplore() {
       if (!exploreMode) return;
       exploreMode = false;
       userZoomed = false;
       camZTarget = fitZ(); // 镜头退回全景距离
-      // ★ keepUI（2026-10-16 用户「明明是探索态，按钮还是 explore」）：探索态内点团聚焦时，
-      //   探索层 UI（EXIT EXPLORE / 边框 / hero 隐藏）原样保留——聚焦是探索态内的相机状态，
-      //   不是退出探索。退出聚焦时 flyBack → enterExplore 会原样接回漫游模式
-      if (!keepUI) {
-        exploreBorder.classList.remove('show');
-        exploreExit.classList.remove('show');
-        exploreExit.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('explore-on');
-      }
-      focusBar.classList.remove('explore');
-      (focusBar.querySelector('.gf-open') as HTMLElement).style.display = '';
-      (focusBar.querySelector('.gf-back') as HTMLElement).textContent = '← 返回全景';
-      focusBar.classList.remove('show');
-      focusBar.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('explore-on');
+      // ★ 不再管顶部胶囊：exploreMode 在聚焦期间保持为真，退出探索时若还聚焦着某个团，
+      //   胶囊应继续显示「团名 + 返回全景」，那是 flyBack 的职责
+      syncExploreLayer();
     }
-    (focusBar.querySelector('.gf-back') as HTMLElement).addEventListener('click', () => {
-      if (exploreMode) { exitExplore(); return; }
-      flyBack();
-    });
-    exploreExit.addEventListener('click', () => { exitExplore(); flyBack(); });
+    exploreExit.addEventListener('click', () => { exitExplore(); });
     addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      exitExplore(); flyBack();
+      if (focusIdx >= 0) flyBack();
+      exitExplore();
     });
     document.addEventListener('galaxy:explore', () => {
       if (focusIdx >= 0) flyBack();
@@ -3836,7 +3940,9 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       rotX += (tRotX - rotX) * 0.07;
       rotY += (tRotY - rotY) * 0.07;
       // 探索拉远时收敛放慢：3 秒缓缓后退（其他缩放保持原速）
-      camZ += (camZTarget - camZ) * (exploreMode ? 0.028 : 0.1);
+      // ★ roam() 而非 exploreMode：聚焦态（exploreMode 现在也为真）要维持原来的 0.1 速率，
+      //   否则拉近手感会莫名变肉（旧实现靠 exitExplore 把 exploreMode 清成 false 才碰巧如此）
+      camZ += (camZTarget - camZ) * (roam() ? 0.028 : 0.1);
       camera.position.z = camZ;
       const scrollK = frame.classList.contains('bare') ? 0.05 : 1;
       scrollPSmooth += (scrollP - scrollPSmooth) * 0.06;
@@ -3850,7 +3956,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         // ★ 自转速率平滑（2026-10-17 用户「拉近时银河往左抽动一下」）：
         //   原 spinSpeed 硬开关（探索×2 ⇄ 常态×1 ⇄ 聚焦×0）——点击聚焦瞬间 2 倍速
         //   突然刹停 = 整个银河的速度阶跃，视觉=反方向抽动。改 lerp 缓变速再冻结
-        let spinTarget = exploreMode ? 2 : 1;
+        let spinTarget = roam() ? 2 : 1;   // ★ roam()：聚焦时仍走下面的 spinTarget = 0
         if (focusIdx >= 0) spinTarget = 0;
         spinRate += (spinTarget - spinRate) * Math.min(1, dt * 2.2);
         if (spinRate > 0.002) {
@@ -3915,7 +4021,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       });
       // P1 EXPLORE 探索态：星尘涌动渐强（自由漫游时银河更「活」）
       // 探索拉远收敛放慢：镜头缓缓后退（~3s），给「进入银河」的仪式感
-      exploreT += ((exploreMode && focusIdx < 0 ? 1 : 0) - exploreT) * Math.min(1, dt * 0.9);
+      exploreT += ((roam() ? 1 : 0) - exploreT) * Math.min(1, dt * 0.9);
       const wanderK = Math.max(focusT, exploreT);
       dustMats.forEach((m) => {
         if (!m.uniforms.uChurn) return; // 旧层（topDust 等）无此 uniform
@@ -3923,7 +4029,9 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         if (base > 0) m.uniforms.uChurn.value = base * (1 + wanderK * 1.6);
       });
       // 自由漫游：镜头缓缓后退 14 单位（银河明显缩小，完整展示整片星空的探索起点）
-      if (exploreMode && focusIdx < 0) camZTarget = fitZ() + 14;
+      if (roam()) camZTarget = fitZ() + 14;
+      // 探索层外观每帧按状态收敛（漫游→底部EXIT亮；聚焦→底部EXIT收、顶部「返回全景」在）
+      syncExploreLayer();
       // 鼠标引力：鼠标射线与星系盘面求交 → 盘面局部坐标（Explore 态渐强；默认态 0 = 不回应）。
       // 用 three.js 射线求交 + worldToLocal，精确处理 tilt.z/x 与自转的全部旋转（手推逆旋转会漏轴导致象限错位）
       {
@@ -4226,7 +4334,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           // 禁区用 hero 的【文字子块】而非 .hero 容器：容器横贯整屏（含两侧大片空白），
           // 按容器剔除会把落在两侧空白处的星团标签误杀（如右侧的「前端」）；
           // 探索态 hero 已整体淡出，其禁区解除（标签可自由出现），页脚/切换按钮仍可见仍避让
-          for (const sel of (exploreMode
+          for (const sel of (roam()
             ? ['.site-footer', '.view-switch']
             : ['.hero h1', '.hero .origin', '.hero .explore', '.hero .whisper', '.site-footer', '.view-switch'])) {
             const el = document.querySelector(sel);
@@ -4298,7 +4406,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           L.el.dataset.dy = String(Math.round(dy));
           L.el.dataset.px = String(Math.round(x));
           L.el.dataset.py = String(Math.round(y));
-          return { L, x, y, z: tmp.z, ok, dy, box };
+          return { L, x, y, z: tmp.z, ok, dy, box, rPx };
         });
         const taken: Box[] = [];
         items.filter((p) => p.ok).sort((a, b) => a.z - b.z).forEach((p) => {
@@ -4325,6 +4433,20 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           p.L.el.dataset.state = focusIdx === p.L.k ? 'focus'
             : hovCluster === p.L.k ? 'hover' : clusDimT[p.L.k] < 0.8 ? 'dim' : 'idle';
           p.L.el.style.pointerEvents = busy ? 'none' : 'auto';
+          // 描述行：只在「漫游态 / hover / 聚焦」且团在屏幕上有足够尺度时出现（默认态不显示，
+          // 避免首页一进来就是三行文字压住星图）
+          {
+            const de = p.L.el.querySelector('.cl-desc') as HTMLElement | null;
+            p.L.el.dataset.rpx = String(Math.round(p.rPx));   // 排障/调阈值用：团在屏上的视觉半径
+            if (de) {
+              // ★ 判据用「团比标签宽」而非固定像素：实测 3 团时 rPx 只有 31~45px（固定 55 阈值
+              //   会一条都不显示），而内容变多、团数上升后 rPx 只会更小 —— 自适应判据让描述行
+              //   在团数少时正常出现、团多到标签放不下时自动收起，不必再回来改数字。
+              const showDesc = (roam() || hovCluster === p.L.k || focusIdx === p.L.k)
+                && p.rPx * 2 >= p.L.el.offsetWidth;
+              de.style.opacity = (!busy && showDesc && op > 0.5) ? '0.72' : '0';
+            }
+          }
           if (!busy) {
             // 吸附后位置会小偏移（≤6px），占位矩形同步平移，否则互撞判定会失准
             const sx = px - p.x, sy = py - p.y;
