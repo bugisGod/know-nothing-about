@@ -3557,6 +3557,10 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // ★ keepUI（2026-10-16 用户「明明是探索态，按钮还是 explore」）：聚焦期间保留
       //   探索层 UI（EXIT EXPLORE / 边框 / hero 隐藏）——聚焦是探索内的相机状态
       if (exploreMode) exitExplore(true);
+      // ★ 聚焦态隐藏底部按钮（2026-10-28 用户拍板）：顶部「← 返回全景」/点空白/Esc 都能
+      //   退出聚焦，底部按钮纯冗余。退出聚焦时 flyBack → enterExplore 会原样接回
+      exploreExit.classList.remove('show');
+      exploreExit.setAttribute('aria-hidden', 'true');
       focusIdx = k;
       hovCluster = -1;
       // 锁定轨道视觉由本团轨道弧承担（focT 分级渐现），不再叠加闭合环
@@ -3658,9 +3662,14 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       if (exploreMode) { exitExplore(); return; }
       flyBack();
     });
-    exploreExit.addEventListener('click', () => { exitExplore(); flyBack(); });
+    exploreExit.addEventListener('click', () => {
+      // 聚焦态下按钮已隐藏；此分支兜底——聚焦时点击=退聚焦回全景，不退出探索
+      if (focusIdx >= 0) { flyBack(); return; }
+      exitExplore(); flyBack();
+    });
     addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
+      if (focusIdx >= 0) { flyBack(); return; } // Esc 分级退出：聚焦→全景探索
       exitExplore(); flyBack();
     });
     document.addEventListener('galaxy:explore', () => {
