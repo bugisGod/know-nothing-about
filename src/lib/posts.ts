@@ -80,7 +80,8 @@ export interface NoteEntry {
     title: string; description?: string; date?: Date; tags: string[];
     related?: string[]; pinned: boolean; draft: boolean; series?: string;
   };
-  html: string; content_md: string;
+  /** 仅 getNote() 返回全文；listNotes 列表查询为省 IO 不带这两列 */
+  html?: string; content_md?: string;
 }
 export interface ProjectEntry {
   id: string; slug: string; collection: "projects";
@@ -133,9 +134,13 @@ export function listNotes(category?: string): NoteEntry[] {
   // ★ 分类过滤加 COLLATE NOCASE（2026-10-26）：写入侧已统一小写，但历史库可能存过大写
   //   key，且用户手敲 /notes/?category=AI 也要能筛出东西
   const category_ = category ? String(category).toLowerCase() : "";
+  // ★ 列表场景轻量查询（2026-10-27 审查 P2-2）：不再 SELECT html/content_md 全文——
+  //   列表/银河/RSS/sitemap 只需要元数据，详情页走 getNote()（全列）。
+  //   全表全文查询在内容到几十篇后是每次开页 O(n) 次全文读
+  const COLS = "id,kind,category,slug,title,description,date,tags,related,pinned,series,period,role,tech,status,link,repo,updated_at,created_at";
   const rows = category_
-    ? db().prepare("SELECT * FROM posts WHERE kind='note' AND lower(category)=? ORDER BY date DESC").all(category_)
-    : db().prepare("SELECT * FROM posts WHERE kind='note' ORDER BY title").all();
+    ? db().prepare(`SELECT ${COLS} FROM posts WHERE kind='note' AND lower(category)=? ORDER BY date DESC`).all(category_)
+    : db().prepare(`SELECT ${COLS} FROM posts WHERE kind='note' ORDER BY title`).all();
   return rows.map(toNote);
 }
 export function getNote(id: string): NoteEntry | undefined {

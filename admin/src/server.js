@@ -99,18 +99,9 @@ app.post('/admin/login', async (c) => {
 
 app.get('/admin/health', (c) => c.json({ ok: true }));
 
-// 访问统计接收端点（公开、无 cookie、1x1 gif）
-app.get('/aa', (c) => {
-  const q = c.req.query();
-  const sid = crypto.createHash('sha256')
-    .update((c.req.header('x-forwarded-for') || '') + '|' + (c.req.header('user-agent') || '') + '|' + new Date().toISOString().slice(0, 10))
-    .digest('hex').slice(0, 16);
-  db.prepare('INSERT INTO analytics (path, ref, sid, ua) VALUES (?,?,?,?)')
-    .run(String(q.p || '/').slice(0, 300), String(q.r || '').slice(0, 300), sid, (c.req.header('user-agent') || '').slice(0, 180));
-  // 1x1 透明 gif
-  const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
-  return c.body(gif, 200, { 'content-type': 'image/gif', 'cache-control': 'no-store' });
-});  // 探活：不鉴权（在下面的中间件之前）
+// /aa 归一（2026-10-27 审查 P2-7）：埋点统一由站点 src/pages/aa.ts 承接
+// （Caddy 的 /aa 特殊分流移除后回落到站点默认代理）
+
 
 app.use('/admin/*', async (c, next) => {
   const user = auth(c);
@@ -127,7 +118,7 @@ app.use('/admin/*', async (c, next) => {
 app.get('/admin', (c) => c.html(renderDashboard({ user: c.get('user') })));
 
 // ===== P2：笔记 / 草稿 API / 媒体 / 发布 =====
-import { notes, buildFrontmatter } from './notes.js';
+import { notes, SAFE } from './notes.js';
 app.route('/admin', notes);
 import { tags as tagsR } from './tags.js';
 app.route('/admin', tagsR);
@@ -145,8 +136,8 @@ api.put('/drafts/:id', async (c) => {
   // ★ 分类 key 写入侧归一小写（2026-10-26 审查 P2-1）：草稿的 category 会进 posts 表，
   //   而 UNIQUE(kind,category,slug) 的 category 大小写敏感——AI/ai 各存一行就会长出两个星团
   db.prepare("UPDATE drafts SET title=?, category=?, slug=?, fm=?, content_md=?, updated_at=datetime('now') WHERE id=?")
-    .run(String(b.title || '').slice(0, 200), String(b.category || '').replace(/[^\w一-龥-]/g, '').toLowerCase(),
-      String(b.slug || '').replace(/[^\w一-龥-]/g, '').toLowerCase(),
+    .run(String(b.title || '').slice(0, 200), SAFE(b.category || '').toLowerCase(),
+      SAFE(b.slug || '').toLowerCase(),
       JSON.stringify(b.fm || {}), String(b.content_md || ''), d.id);
   return c.json({ ok: true });
 });
@@ -219,8 +210,6 @@ app.post('/admin/publishes/rollback', async (c) => {
   return c.redirect('/admin/publishes?ok=1');
 });
 app.post('/admin/api/publish', (c) => {
-  const ct = c.req.header('content-type') || '';
-  void ct;
   return new Response(publishStream(), { headers: { 'content-type': 'application/x-ndjson', 'cache-control': 'no-store' } });
 });
 app.post('/admin/logout', (c) => {

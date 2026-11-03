@@ -7,7 +7,6 @@ import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFile
 import { join } from 'node:path';
 import { db, DATA_DIR, SNAPSHOT_DIR, acquireLock, releaseLock } from './db.js';
 import { SRC_DIR, WEB_DIR, git } from './repo.js';
-import { buildFrontmatter } from './notes.js';
 import { registryJson } from './tags.js';
 import { registryJson as categoryRegistryJson } from './categories.js';
 const { renderMarkdown } = await import('../../src/lib/md.ts');
@@ -172,7 +171,7 @@ export function publishStream() {
           log(`· 标签注册表 ${Object.keys(reg).length} 项 · 分类注册表 ${Object.keys(catReg).length} 项`);
           const st = git(['status', '--porcelain']);
           if (st) {
-            git(['add', '-A']);
+            git(['add', 'public/images', 'src/data']); // ★ 白名单（2026-10-27 审查 P2-8）：防服务器仓库残留的未忽略临时文件被连带提交
             git(['commit', '-m', `后台发布 ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`]);
             const sha = git(['rev-parse', '--short', 'HEAD']);
             log(`· commit ${sha}`);

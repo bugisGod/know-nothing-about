@@ -9,7 +9,7 @@ export const notes = new Hono();
 
 // ★ 分类/slug 直接进文件路径（src/content/notes/<cat>/<slug>.md）——必须白名单，
 //   否则 cat=../../.. 就是任意文件读写（发布时还会落到仓库里）
-const SAFE = (s) => String(s ?? '').replace(/[^\w一-龥-]/g, '');
+export const SAFE = (s) => String(s ?? '').replace(/[^\w一-龥-]/g, '');
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 
@@ -32,17 +32,6 @@ export function parseMd(text) {
   return { fm, body: m[2] };
 }
 
-export function buildFrontmatter(fm, body) {
-  const lines = ['---'];
-  for (const [k, v] of Object.entries(fm)) {
-    if (v === undefined || v === null || v === '') continue;
-    if (Array.isArray(v)) lines.push(`${k}: [${v.map((x) => String(x).includes(' ') ? `"${x}"` : x).join(', ')}]`);
-    else if (typeof v === 'boolean') lines.push(`${k}: ${v}`);
-    else lines.push(`${k}: ${String(v).includes(':') ? JSON.stringify(String(v)) : v}`);
-  }
-  lines.push('---', '');
-  return lines.join('\n') + body.replace(/\r\n/g, '\n');
-}
 
 notes.get('/notes', (c) => {
   const repo = listRepoNotes();

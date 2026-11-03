@@ -2,109 +2,69 @@
 
 > scio — 拉丁语「我知道」，出自 *Scio me nihil scire*（我知道我一无所知）。
 
-个人名片 + 知识库 + 项目复盘，一个纯静态站点：内容全部是 Markdown，构建产物部署在自家服务器（Caddy）。
+个人名片 + 知识库 + 项目复盘。**SSR 动态站（2026-10-19 起）**：内容真身在 SQLite
+（admin.db），页面实时渲染，后台写库即时上线——不再走「md 构建」的静态流程。
 
-技术栈：[Astro](https://astro.build) · TypeScript · [three.js](https://threejs.org)（首页银河）· [Pagefind](https://pagefind.app)（静态搜索）· 原生 CSS，无 UI 框架依赖。
+技术栈：[Astro](https://astro.build)（SSR）· TypeScript · [three.js](https://threejs.org)（首页银河）·
+[Pagefind](https://pagefind.app)（搜索）· SQLite（node:sqlite）· [Hono](https://hono.dev)（后台）。
 
 ## 快速开始
 
 ```bash
 npm install
-npm run dev        # 本地开发，http://localhost:4321
-npm run build      # 构建（含搜索索引），输出到 dist/
-npm run preview    # 本地预览构建结果（搜索在这里可用）
-```
-
-> 搜索索引在构建时生成，`npm run dev` 下搜索页会提示先执行构建。
-> **改代码后必须重启 preview**（sirv 缓存旧 bundle）。
-
-## 日常维护（全部零配置，不改代码）
-
-### 加一篇笔记
-
-`src/content/notes/<分类>/<slug>.md`：
-
-```yaml
----
-title: 标题
-description: 一句话摘要（列表页/分享卡用）
-date: 2026-10-17
-tags: [ai, zcode]        # 自由填写
-series: 专栏名            # 可选：同 series 在专题页聚成专栏
-pinned: true              # 可选：银河里的置顶亮星
-related: [其它文章slug]    # 可选：手工知识连线（银河星际航线）
-draft: true               # 可选：草稿不构建
----
-```
-
-写完发布**即时生效**（写库秒级在线）：首页自动多一颗文章星、星团按 √n 自动长大、知识库自动收录。
-
-### 加一个分类（= 新星团 + 新专题卡）
-
-```
-mkdir src/content/notes/<新分类>
-```
-
-放文章即生效，三处全自动：首页星团（自动配色 + 独立形状——分类名哈希派生，
-与知识库卡同种子同流）、知识库专题卡、`/notes/?category=<分类>` 筛选。
-想覆盖默认色/中文名，才在 `src/config.ts` 的 `CATEGORIES` 加条目。
-
-### 加一个项目
-
-`src/content/projects/<slug>.md`，frontmatter 见现有项目
-（`period / role / tech / status / link / repo`）。
-
-## 部署
-
-**架构（2026-10-19 SSR 化）**：站点=Node SSR 服务（实时渲染，数据在 SQLite），
-后台=独立 Node 服务，Caddy 分流 `/admin`、`/aa` 与其余流量。
-内容真身在数据库（admin.db）——**持久化路径 + 备份是生命线**。
-
-```bash
+npm ci 前注意：admin/ 是独立 package，需在 admin/ 目录再执行一次 npm ci
 npm run build     # 构建产物 dist/server + dist/client
-npm run start     # 本地/服务器：起 SSR + pagefind 索引兜底
+npm run start     # 起 SSR（127.0.0.1:4321）+ pagefind 索引兜底
 ```
 
-完整服务器操作手册（systemd 双服务 / Caddy / 数据库迁移 / 备份 / 验证清单）：
-**[deploy/DEPLOY.md](deploy/DEPLOY.md)**
+后台：`cd admin && npm ci && SCIO_ADMIN_PASS=<密码> SCIO_DB=<库路径> node src/server.js`
+→ http://localhost:4322/admin/
 
-- 管理后台：`/admin`（scio-admin 服务，账号密码环境变量初始化）
-- 发布=写库即时生效（秒级在线）；发布历史可回滚（posts 快照）
-- 部署红线：`git status` 确认无 `*测试*.md`；数据库文件不进 git（.gitignore 已含）
+## 日常维护（唯一入口：管理后台）
 
+一切内容操作在 **`/admin`**（笔记编辑器 / 项目 / 标签 / 分类元信息 / 发布历史+一键回滚）：
+
+- **写文章**：后台新建 → 编辑器（自动保存 / 预览 / 图片粘贴拖入）→ 发布，**写库秒级上线**
+- **加分类**：后台笔记选新分类名即可——首页星团（自动配色+形状）、知识库专题卡、
+  筛选地址三处全自动；想覆盖中文名/描述/颜色/形状种子，才动 `src/config.ts` 的 `CATEGORIES`
+- **下架 / 回滚**：发布历史页，一键操作（发布前自动做内容快照）
+
+> ⚠️ `src/content/` 下的 md 文件**不是线上内容的来源**——它只是首次部署时
+> `scripts/migrate-content.mjs` 的迁移源数据。改这些 md 不会上线，别被误导。
+
+## 架构与部署
+
+```
+访客 → Caddy（encode + 安全头 + 分流）
+        ├─ /admin*        → scio-admin（Hono 后台，127.0.0.1:4322）
+        └─ 其余           → scio-site（Astro SSR，127.0.0.1:4321）
+                                └─ 两者共用 SQLite：/var/lib/scio/admin.db（内容真身）
+```
+
+- 发布=写库即时生效；搜索索引由启动脚本兜底 + 发布时重建
+- 回滚两层：**内容级**＝后台一键回滚（发布前自动快照）；**代码级**＝服务器
+  `git checkout 上一版 && npm run build && systemctl restart scio-site`
+- 完整服务器手册（Node 22 / systemd 双服务 / Caddy / 首次部署 / 验证清单）：
+  **[deploy/DEPLOY.md](deploy/DEPLOY.md)**——服务器操作只看这份
+
+## 本地开发注意
+
+- 数据库路径：环境变量 `SCIO_DB`（站点、后台、迁移脚本、回滚验证四处必须指向同一个库）
+- 搜索索引是异步重建的：`start.mjs` 起服后**等几秒再跑 self-audit**，否则假失败
+- 自审回归：`SCIO_DB=... SCIO_SITE_URL=... SCIO_ADMIN_URL=... SCIO_AUDIT_PASS=...
+  node scripts/self-audit.mjs`（46 项值级断言；rollback-proof.mjs 验回滚语义）
 
 ## 首页银河（src/components/BrainGraph.astro）
 
-- 知识专题 = 星团（形状/颜色由分类名哈希自动生成）；文章 = 星；
-  探索态（EXPLORE）自由漫游，点星团页内聚焦，点文章星进文章
-- 调试口：URL 加 `?debug=1` 暴露 `__gal`——`state()`（逐帧信号采样）、
-  `clusterInfo(k)`、`pickTest(x,y)`、`starScreen(i)`
-- 视觉改动验收工具（`.shots/`，不入库）：`state-verify.mjs`（聚焦跳变）、
-  `fog-matrix.mjs`（雾团矩阵）、`full-test.mjs`（全站 28 项回归）
-- 排障铁律：**先枚举点击时所有变化的量、逐帧采值找离散跳变，再改代码**
-  （截图法抓不到分支类 bug）
-
-## 目录结构
-
-```
-src/
-├── config.ts            # 个人信息 + 分类/系列覆盖位 + 自动配色
-├── content.config.ts    # 内容集合 frontmatter schema
-├── content/
-│   ├── notes/           # 知识库（子文件夹 = 分类 = 星团）
-│   └── projects/        # 项目复盘
-├── layouts/Base.astro   # 页面骨架（head / 主题初始化）
-├── components/
-│   ├── BrainGraph.astro # 首页 3D 银河（星团/文章星/探索态）
-│   ├── MiniGalaxy.astro # 知识库专题卡星图（与首页团同源同形状）
-│   └── ...
-├── pages/               # 路由：首页、notes、projects、search、404
-└── styles/global.css    # 全局样式与主题变量
-```
+- 知识专题 = 星团（形状/颜色由分类名哈希自动生成，`CATEGORIES.shape` 可覆盖）；
+  文章 = 星；探索态自由漫游，点星团页内聚焦，文章行点击进文章
+- 调试口：URL 加 `?debug=1` 暴露 `__gal`
+- 排障铁律：**先枚举点击时所有变化的量、逐帧采值找离散跳变，再改代码**；
+  交互层改动上线前必须做真实点击命中测试（elementFromPoint），构建过 ≠ 能用
 
 ## 其它
 
-- 知识库支持 `?category=分类名` 直接分享分类地址
+- 知识库支持 `?category=分类名` 分享地址；大写分类名 301 归一
 - 阅读页宽屏右侧目录（ArticleToc），窄屏折叠
 - `prefers-reduced-motion` 会关闭星尘动画与流星
 - 自定义主题色板：`src/styles/global.css` 顶部 `:root` 变量
