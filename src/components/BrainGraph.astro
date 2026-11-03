@@ -492,10 +492,14 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
   .graph-frame :global(.explore-help.show) {
     opacity: 1;
   }
-  /* 探索态隐藏顶部胶囊条（方案图探索态无顶部胶囊，边界+EXIT 即模式标识） */
-  .graph-frame :global(.galaxy-focus.hidden-for-explore) {
-    opacity: 0 !important;
-    pointer-events: none !important;
+  /* ★ 漫游态隐藏顶部那颗返回按钮（2026-10-30 补，原为一条从未被 JS 添加的死规则）：
+     漫游态顶部胶囊只当「模式名牌」——显示「自由探索」+操作引导，出口统一交给底部
+     ✦ EXIT EXPLORE，避免同一屏出现两颗都写着退出的按钮。
+     不整条隐藏胶囊：聚焦态仍要靠它显示「团名 + ← 返回全景」，那时是唯一出口。
+     靠 .explore 类切换：enterExplore 加上它；进入聚焦时 exitExplore(keepUI)
+     会移除它（在 keepUI 分支之外），返回按钮随即恢复。 */
+  .graph-frame :global(.galaxy-focus.explore .gf-back) {
+    display: none;
   }
 
   /* P1 探索层操作提示：底部居中，进入探索态时短暂浮现 */
@@ -3599,7 +3603,10 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // ★ 来路是探索态 → 回到探索态（镜头退回全景，但保留探索的边框/EXIT/自由漫游）
       if (resumeExplore) { resumeExplore = false; enterExplore(); }
     }
-    (focusBar.querySelector('.gf-back') as HTMLElement).addEventListener('click', flyBack);
+    // ★ 此处原先还有一次 addEventListener('click', flyBack)，与下方 3665 的分支版重复：
+    //   点一次会连跑两个 handler —— 第一个 flyBack 经 resumeExplore 刚把状态接回漫游，
+    //   第二个看到 exploreMode 已为 true 立刻 exitExplore 又退掉，表现是
+    //   「聚焦态点返回 = 直接退出探索」而不是回到漫游（2026-10-30 实测复现）。已删，只留分支版。
     // P1 EXPLORE = 自由漫游模式：镜头向后拉，第一次完整展示整个银河，
     // 然后用户自己决定靠近哪个星团（探索某分类 = 点星团，不归 EXPLORE 管）
     // 吸附感：hover 星团时标签向鼠标轻微偏移（方案「靠近星团 → 轻微响应」）
