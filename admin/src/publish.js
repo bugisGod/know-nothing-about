@@ -57,24 +57,12 @@ export function publishStream() {
               throw new Error('SRC_DIR 有未提交改动，拒绝发布（防误清工作区）。先在 ' + SRC_DIR + ' 提交或清理，或设 SCIO_ALLOW_DIRTY=1 强制');
             }
           }
-          if (existsSync(join(SRC_DIR, '.git'))) {
-            const remotes = git(['remote']);
-            if (remotes) {
-              log('· git pull --rebase …');
-              // 服务器仓库是一次性镜像（真身在草稿库+远端）——冲突时直接重置到远端，
-              // 发布产物（md/图片/tags.json）随后全部由管线从数据库重新生成，零损失
-              try {
-                run('git', ['pull', '--rebase', '--autostash'], SRC_DIR, (l) => { log(l); cap(l); });
-              } catch (e) {
-                log(`· rebase 冲突（${String(e.message).split(String.fromCharCode(10))[0]}）→ 重置到远端`);
-                try { run('git', ['rebase', '--abort'], SRC_DIR, () => {}); } catch {}
-                run('git', ['fetch'], SRC_DIR, log);
-                run('git', ['reset', '--hard', 'origin/main'], SRC_DIR, log);
-                run('git', ['clean', '-fd'], SRC_DIR, log);
-              }
-            }
-          }
-
+          // ★ 「同步远端」整段移除（2026-10-28 事故第二轮实锤）：本段对 SRC_DIR 执行
+          //   git pull --rebase --autostash，冲突时 reset --hard origin/main + clean -fd。
+          //   服务器一次性镜像上没事，但 SRC_DIR 指向有本地提交史的主仓库时，会把
+          //   本地整条提交链重置掉（实测 144 条，reflog 找回；10-19 事故同款代码）。
+          //   代码更新属于部署流程（人工 git pull + build + restart），发布管线永远
+          //   不碰 git 状态，只做上方脏检查。
           // 1.5 ★ posts 表快照（真回滚的依据——v2 不再备份 dist，DB 快照即版本）
           const snapshot = db.prepare('SELECT * FROM posts ORDER BY id').all();
           // ★ 快照存库文件旁（SNAPSHOT_DIR），并只保留最近 3 份（旧 JSON 不再无限堆积）
