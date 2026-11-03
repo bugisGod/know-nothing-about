@@ -135,7 +135,7 @@ api.put('/drafts/:id', async (c) => {
   const b = await c.req.json();
   // ★ 分类 key 写入侧归一小写（2026-10-26 审查 P2-1）：草稿的 category 会进 posts 表，
   //   而 UNIQUE(kind,category,slug) 的 category 大小写敏感——AI/ai 各存一行就会长出两个星团
-  db.prepare("UPDATE drafts SET title=?, category=?, slug=?, fm=?, content_md=?, updated_at=datetime('now') WHERE id=?")
+  db.prepare("UPDATE drafts SET title=?, category=?, slug=?, fm=?, content_md=?, updated_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=?")
     .run(String(b.title || '').slice(0, 200), SAFE(b.category || '').toLowerCase(),
       SAFE(b.slug || '').toLowerCase(),
       JSON.stringify(b.fm || {}), String(b.content_md || ''), d.id);

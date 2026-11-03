@@ -92,7 +92,7 @@ export function publishStream() {
               title=@title, description=@description, date=@date, tags=@tags, related=@related,
               pinned=@pinned, series=@series, period=@period, role=@role, tech=@tech,
               status=@status, link=@link, repo=@repo, content_md=@content_md, html=@html,
-              updated_at=datetime('now')`);
+              updated_at=strftime('%Y-%m-%d %H:%M:%f','now')`);
           for (const d of drafts) {
             // ★ 脏过滤（2026-10-20 实测设计缺陷）：只发「从未发布或发后又改过」的草稿——
             //   原全量重发把历次转入编辑的旧副本一起发（+3 行），回滚语义也被搅乱
@@ -105,7 +105,7 @@ export function publishStream() {
               const del = db.prepare("DELETE FROM posts WHERE kind=? AND category=? COLLATE NOCASE AND slug=? COLLATE NOCASE")
                 .run(d.kind, d.kind === 'note' ? d.category : '', d.slug);
               if (del.changes > 0) { cap(`- 下架: ${d.category ? d.category + '/' : ''}${d.slug}`); }
-              db.prepare("UPDATE drafts SET published_at=datetime('now') WHERE id=?").run(d.id);
+              db.prepare("UPDATE drafts SET published_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=?").run(d.id);
               continue;
             }
             if (!d.title || !d.slug || (d.kind === 'note' && !d.category)) continue;
@@ -124,7 +124,7 @@ export function publishStream() {
               content_md: d.content_md || '', html,
             };
             upsert.run(row);
-            db.prepare("UPDATE drafts SET published_at=datetime('now') WHERE id=?").run(d.id);
+            db.prepare("UPDATE drafts SET published_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=?").run(d.id);
             db.prepare('UPDATE drafts SET published_path=? WHERE id=?').run(`${row.kind}/${row.category}/${row.slug}`, d.id);
             written++;
             cap(`+ posts: ${row.category ? row.category + '/' : ''}${row.slug}`);
@@ -227,7 +227,7 @@ export function rollback() {
     //   原全量清空 + 历次转入编辑的重复草稿 = 回滚后下一次发布把所有旧副本重上线（实测 +N 行）
     //   ★ category 用 lower() 比较（2026-10-26）：草稿可能是大写 key 而库里已归一为小写，
     //     精确相等会判「库里没有」→ 下次发布把已存在的文章重发一遍
-    db.exec(`UPDATE drafts SET published_at=datetime('now')
+    db.exec(`UPDATE drafts SET published_at=strftime('%Y-%m-%d %H:%M:%f','now')
              WHERE title != '' AND slug != '' AND published_at IS NOT NULL
              AND EXISTS (SELECT 1 FROM posts p WHERE p.kind = drafts.kind
                AND lower(p.category) = CASE WHEN drafts.kind = 'note' THEN lower(drafts.category) ELSE '' END
