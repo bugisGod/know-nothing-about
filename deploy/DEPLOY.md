@@ -131,10 +131,9 @@ nihilscire.com {
     handle /admin {
         reverse_proxy 127.0.0.1:4322
     }
-    # 统计埋点 → admin 服务
-    handle /aa {
-        reverse_proxy 127.0.0.1:4322
-    }
+    # ★ /aa 埋点由站点 src/pages/aa.ts 承接（管理后台侧的 /aa 路由已删除），
+    #   不要给它加 handle 分流 —— 让它回落到下方默认的 4321 反向代理。
+    #   若误反代到 4322 会返回 404 页，每次页面访问都白下载整张 HTML。
     # 其余全部 → SSR 站点
     handle {
         reverse_proxy 127.0.0.1:4321
@@ -185,7 +184,7 @@ node /opt/scio/site/scripts/db-maintenance.mjs
   ```bash
   cd /opt/scio/site
   # rollback-proof 直连库文件，必须带 SCIO_DB（self-audit 走 HTTP 不需要）
-  SCIO_DB=/var/lib/scio/admin.db SCIO_AUDIT_PASS=<后台密码> node scripts/self-audit.mjs      # 32 项全站+后台
+  SCIO_DB=/var/lib/scio/admin.db SCIO_AUDIT_PASS=<后台密码> node scripts/self-audit.mjs      # 46 项全站+后台
   SCIO_DB=/var/lib/scio/admin.db SCIO_AUDIT_PASS=<后台密码> node scripts/rollback-proof.mjs   # 3 项回滚语义
   ```
 

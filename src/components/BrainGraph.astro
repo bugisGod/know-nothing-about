@@ -83,7 +83,6 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     <!-- （底部摘要浮层 star-sheet 已移除：定位在画面底部会与标语/页脚文字重叠。
          语义改为：悬停看摘要卡（graph-tip），点击直接进文章页） -->
     <button type="button" id="explore-exit" class="explore-exit" aria-hidden="true">✦ EXIT EXPLORE</button>
-    <div id="explore-help" class="explore-help" aria-hidden="true">拖动浏览 · 滚轮缩放 · 点击星团 / 恒星查看</div>
     <div id="graph-tip" class="graph-tip" aria-hidden="true">
       <p class="tip-kind"></p>
       <p class="tip-title"></p>
@@ -403,10 +402,33 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     transition: opacity 0.3s ease, color 0.3s ease;
   }
 
-  .graph-frame :global(.cluster-label[data-state="hover"]) .cl-count,
-  .graph-frame :global(.cluster-label[data-state="focus"]) .cl-count {
+  /* ★ 整段后代选择器必须一起包进 :global()：.cl-count 是 JS 动态创建的，
+     不带 data-astro-cid；只把父级包 global、子级留在括号外，Astro 会给子级补上
+     scope 属性选择器 → 选择器永不匹配（篇数 hover 长期不显示的隐藏 bug）。 */
+  .graph-frame :global(.cluster-label[data-state="hover"] .cl-count),
+  .graph-frame :global(.cluster-label[data-state="focus"] .cl-count) {
     opacity: 1;
     color: #ffc46b;
+  }
+
+  /* ★ 探索态描述行（方案 B 第 2 层，2026-11-09 重做）：
+     与 .cl-count 同样 absolute 脱流 → 标签盒高度仍等于团名，避让公式（lh=offsetHeight）
+     不受影响；pointer-events:none 保证点击穿透，不遮挡聚焦态的文章行。
+     显隐由主循环按「漫游态 + 屏幕尺度」写 opacity，不用 hover 卡片（上次回归教训）。 */
+  .graph-frame :global(.cl-desc) {
+    position: absolute;
+    top: calc(100% + 24px);
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    opacity: 0;
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--text-2);
+    text-shadow: 0 1px 8px rgba(7, 8, 14, 0.9);
+    transition: opacity 0.35s ease;
+    pointer-events: none;
   }
 
   /* 聚焦态：团名居中并带上一条极淡的下划隔离线（参考图锁定态的星团标题） */
@@ -473,24 +495,6 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
   .graph-frame :global(.explore-exit:hover) {
     border-color: rgba(217, 184, 121, 0.55);
     color: var(--accent);
-  }
-  .graph-frame :global(.explore-help) {
-    position: absolute;
-    left: 50%;
-    bottom: 60px;
-    transform: translateX(-50%);
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    color: rgba(232, 230, 223, 0.42);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.6s ease 0.25s;
-    z-index: 4;
-    white-space: nowrap;
-  }
-  .graph-frame :global(.explore-help.show) {
-    opacity: 1;
   }
   /* ★ 漫游态隐藏顶部那颗返回按钮（2026-10-30 补，原为一条从未被 JS 添加的死规则）：
      漫游态顶部胶囊只当「模式名牌」——显示「自由探索」+操作引导，出口统一交给底部
@@ -642,11 +646,14 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
   @media (max-width: 720px) {
     .graph-frame :global(.galaxy-list) {
       top: auto;
-      bottom: 66px;
+      /* ★ 2026-11-09 移动端审查：窄屏页脚实际占高约 110–120px（图标行 + © +
+         备案号 + 视图切换 + padding 26/32），原来的 66px 会让页脚压住最后一条
+         文章行（还会挡点击）。抬到 120px 并收紧高度，避免顶到聚焦信息条。 */
+      bottom: 120px;
       right: 12px;
       left: 12px;
       width: auto;
-      max-height: 40%;
+      max-height: 32%;
       padding: 10px 2px 2px 12px;
       border-left: none;
       border-top: 1px solid rgba(150, 165, 215, 0.14);
@@ -3122,10 +3129,19 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     clusters.forEach((c, k) => {
       const el = document.createElement('div');
       el.className = 'cluster-label';
-      el.innerHTML = `<span class="cl-name"></span><span class="cl-count"></span>`;
+      el.innerHTML = `<span class="cl-name"></span><span class="cl-count"></span><span class="cl-desc"></span>`;
       (el.querySelector('.cl-name') as HTMLElement).textContent = c.title;
       // 星图风计数：零填充两位 + ARTICLES —— 是「星团的信息」，不是列表页的分类徽标
       (el.querySelector('.cl-count') as HTMLElement).textContent = `${String(c.count).padStart(2, '0')} ARTICLES`;
+      // ★ 星团自我介绍（方案 B 第 2 层）：探索/漫游态才显形。内容降级：
+      //   注册表 desc → 话题词前 3 个（没配 desc 的分类也不会空着）→ 空则不生成节点。
+      //   desc/topicList 来自文章 frontmatter，用 textContent 写入，不用 innerHTML 拼。
+      {
+        const d = c.desc?.trim() || (c.topicList?.length ? c.topicList.slice(0, 3).join(' · ') : '');
+        const de = el.querySelector('.cl-desc') as HTMLElement;
+        if (d) de.textContent = d;
+        else de.remove();
+      }
       if (c.color) el.style.color = c.color;
       // 星团标签：探索态 → 页内拉近聚焦；默认态 → 直接进分类页（相机不动）
       el.addEventListener('click', () => {
@@ -3614,7 +3630,6 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     // 探索层 UI 引用（DOM 在组件 HTML 段）
     const exploreBorder = document.getElementById('explore-border') as HTMLElement;
     const exploreExit = document.getElementById('explore-exit') as HTMLButtonElement;
-    const exploreHelp = document.getElementById('explore-help') as HTMLElement;
 
     // （旧「锁定三层同心环」已删：闭合环 = 方案❌的平面圈；锁定轨道视觉由本团轨道弧承担）
 
@@ -4314,7 +4329,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           L.el.dataset.dy = String(Math.round(dy));
           L.el.dataset.px = String(Math.round(x));
           L.el.dataset.py = String(Math.round(y));
-          return { L, x, y, z: tmp.z, ok, dy, box };
+          return { L, x, y, z: tmp.z, ok, dy, box, rPx };
         });
         const taken: Box[] = [];
         items.filter((p) => p.ok).sort((a, b) => a.z - b.z).forEach((p) => {
@@ -4341,6 +4356,29 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           p.L.el.dataset.state = focusIdx === p.L.k ? 'focus'
             : hovCluster === p.L.k ? 'hover' : clusDimT[p.L.k] < 0.8 ? 'dim' : 'idle';
           p.L.el.style.pointerEvents = busy ? 'none' : 'auto';
+          // 探索态描述行（方案 B 第 2 层，2026-11-09 重做）：
+          //   ★ 只在【漫游态】出现——聚焦态由顶部胶囊 + 文章列表承载信息，且这正是上次
+          //     回滚的回归点（描述/胶囊浮层压住文章行点击）。这里不做 hover 卡片，避免
+          //     「悬停卡观感差」重演。
+          //   ★ 判据用「团比标签宽」而非固定像素：团数少时 rPx 大正常显示，团多到标签
+          //     放不下时自动收起，不必回来改阈值（沿用 10-28 那版的自适应思路）。
+          //   ★ 脏检查：主循环每帧跑，无条件写 style 是 60fps 的无效 DOM 写。
+          {
+            const de = p.L.el.querySelector('.cl-desc') as HTMLElement | null;
+            p.L.el.dataset.rpx = String(Math.round(p.rPx)); // 排障/调阈值：团在屏上的视觉半径
+            if (de) {
+              // ★ 判据（2026-11-09 移动端审查方案 B）：桌面比「团直径 vs 团名宽」，
+              //   窄屏改比「团直径 vs 描述行本身宽度」。手机上团名只有 13–33px，
+              //   原判据恒真；但描述行 56–107px、比团直径（42–66px）还宽 → 三条描述
+              //   散成一排、看不出属于哪个团。桌面 rPx*2 只有 74–84px < 107px，
+              //   若全局换成描述行宽会连桌面一起收掉，故只在 ≤720px 启用新判据。
+              const needW = window.innerWidth <= 720 ? de.offsetWidth : p.L.el.offsetWidth;
+              const showDesc = exploreMode && focusIdx < 0 && !busy && op > 0.5
+                && p.rPx * 2 >= needW;
+              const target = showDesc ? '0.72' : '0';
+              if (de.style.opacity !== target) de.style.opacity = target;
+            }
+          }
           if (!busy) {
             // 吸附后位置会小偏移（≤6px），占位矩形同步平移，否则互撞判定会失准
             const sx = px - p.x, sy = py - p.y;
@@ -4351,6 +4389,9 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
           p.L.el.style.opacity = '0';
           p.L.el.style.pointerEvents = 'none';
           p.L.el.dataset.state = 'idle';
+          // 标签被避让隐藏时描述行同步归零，避免恢复显示时残留旧状态
+          const de = p.L.el.querySelector('.cl-desc') as HTMLElement | null;
+          if (de && de.style.opacity !== '0') de.style.opacity = '0';
         });
       }
 
