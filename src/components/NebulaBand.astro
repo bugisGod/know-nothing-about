@@ -9,7 +9,7 @@ interface Props {
 const { height = 440 } = Astro.props;
 ---
 <div class="nebula-band" style={`height:${height}px`} aria-hidden="true">
-  <canvas data-nebula data-height={height}></canvas>
+  <canvas data-nebula data-height={height} aria-hidden="true"></canvas>
 </div>
 
 <script>

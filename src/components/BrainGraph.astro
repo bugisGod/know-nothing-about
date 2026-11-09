@@ -69,7 +69,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       <button type="button" class="gf-back">← 返回全景</button>
       <span class="gf-name"></span>
       <span class="gf-count"></span>
-      <a class="gf-open" href="#">打开分类页 →</a>
+      <a class="gf-open" href="#">打开分类页</a>
     </div>
     <div id="explore-border" class="explore-border" aria-hidden="true"></div>
     <!-- 锁定星团后的文章列表（参考图面板 4）：悬停条目 → 星图里对应的星回亮 -->
@@ -88,7 +88,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       <p class="tip-title"></p>
       <p class="tip-meta"></p>
       <p class="tip-desc"></p>
-      <span class="tip-go">阅读全文 →</span>
+      <span class="tip-go">阅读全文</span>
     </div>
   </div>
   {(caption || captionHint) && (
@@ -146,8 +146,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
 
   .graph-list summary {
     cursor: pointer;
-    font-family: var(--mono);
-    font-size: 11px;
+    font-family: var(--font-sans);
+    font-size: 12px;
     letter-spacing: 0.14em;
     color: var(--muted);
     text-align: center;
@@ -214,8 +214,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
 
   .tip-kind {
     margin: 0;
-    font-family: var(--mono);
-    font-size: 10px;
+    font-family: var(--font-sans);
+    font-size: 12px;
     letter-spacing: 0.2em;
     text-transform: uppercase;
     color: #8d95b8;
@@ -224,8 +224,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
   .tip-go {
     display: inline-block;
     margin: 10px 0 0;
-    font-family: var(--mono);
-    font-size: 10.5px;
+    font-family: var(--font-sans);
+    font-size: 12px;
     letter-spacing: 0.14em;
     color: #ffc46b;
   }
@@ -242,7 +242,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
   .tip-meta {
     margin: 4px 0 0;
     font-family: var(--mono);
-    font-size: 10.5px;
+    font-size: 12px;
     letter-spacing: 0.06em;
     color: #8d95b8;
   }
@@ -476,8 +476,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     border: 1px solid rgba(190, 205, 235, 0.42);
     border-radius: 999px;
     color: #e9edf6;
-    font-family: var(--mono);
-    font-size: 11px;
+    font-family: var(--font-sans);
+    font-size: 12px;
     letter-spacing: 0.3em;
     cursor: pointer;
     opacity: 0;
@@ -513,17 +513,17 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     top: 168px;
     transform: translateX(-50%);
     display: flex;
-    gap: 26px;
+    gap: 16px;
     padding: 10px 20px;
     border: 1px solid rgba(150, 160, 205, 0.14);
     border-radius: 999px;
     background: rgba(13, 15, 25, 0.6);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    font-family: var(--mono);
-    font-size: 10.5px;
+    font-family: var(--font-sans);
+    font-size: 12px;
     letter-spacing: 0.12em;
-    color: rgba(232, 230, 223, 0.55);
+    color: rgba(232, 230, 223, 0.62);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.7s ease;
@@ -692,8 +692,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     border: 0;
     color: var(--muted);
     font: inherit;
-    font-size: 10.5px;
-    font-family: var(--mono);
+    font-size: 12px;
+    font-family: var(--font-sans);
     letter-spacing: 0.08em;
     cursor: pointer;
     padding: 2px 4px;
@@ -709,12 +709,12 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
   }
   .graph-frame :global(.gf-count) {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 12px;
     color: #8d95b8;
   }
   .graph-frame :global(.gf-open) {
-    font-family: var(--mono);
-    font-size: 10.5px;
+    font-family: var(--font-sans);
+    font-size: 12px;
     letter-spacing: 0.06em;
     color: var(--accent);
     text-decoration: none;
@@ -726,8 +726,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
 
   .graph-caption {
     text-align: center;
-    font-family: var(--mono);
-    font-size: 11px;
+    font-family: var(--font-sans);
+    font-size: 12px;
     letter-spacing: 0.1em;
     color: var(--muted);
     margin: 14px 0 0;
@@ -741,7 +741,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
   .cap-sub {
     display: block;
     margin-top: 7px;
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: 0.14em;
     opacity: 0.72;
   }
@@ -860,6 +860,9 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       showRetry();
       return;
     }
+    // Hallmark gate 33：装饰性 canvas 自身声明 aria-hidden（父容器已隐藏，双重保险，
+    // 也让静态检查能读到）——屏幕阅读器不会去读一个空的 WebGL 画布。
+    renderer.domElement.setAttribute('aria-hidden', 'true');
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     // 上下文丢失监听：标签抢占导致运行中丢上下文时，给出重试入口而不是永久黑屏
     renderer.domElement.addEventListener('webglcontextlost', (e) => {
@@ -2701,7 +2704,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     // P1 探索层操作提示（首次进入显示数秒，方案文档模块 5）
     const exploreTip = document.createElement('div');
     exploreTip.className = 'explore-tip';
-    exploreTip.innerHTML = '<span>拖动浏览</span><span>滚轮缩放</span><span>点击星团 / 恒星查看</span>';
+    exploreTip.innerHTML = '<span>拖动浏览</span><span>滚轮缩放</span><span>点一下看简介 · 再点进入</span>';
     frame.appendChild(exploreTip);
 
     // P1 银河中心常驻「scio.」标识：中心=「你」的文字锚点（方案图核心旁标注）
@@ -3152,6 +3155,11 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       clusterLabels.push({ el, k, w: el.offsetWidth });
     });
 
+    // 窄屏统一阈值：取最宽的一条描述行，三个团同进同退（2026-11-10）。
+    // 逐团各判各的会只剩 ai 一条描述，看着像另外两个漏配了数据。
+    const narrowDescW = Math.max(0, ...clusterLabels.map(
+      (L) => (L.el.querySelector('.cl-desc') as HTMLElement | null)?.offsetWidth ?? 0));
+
     // ===== 背景星幕：两个不同深度的微星层 =====
     // 远层（z=-46）小、暗、偏蓝 → 宇宙深处；近层（z=-28）稍大稍亮。
     // 相机游移时两层错位 → 最便宜的「无限深」。同一平面只会得到「墙纸」。
@@ -3406,14 +3414,14 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         q('.tip-title').textContent = 'scio. 个人主页';
         q('.tip-meta').textContent = '关于我 · 项目 · 时间线';
         q('.tip-desc').textContent = '这个站的核心：从一个原点出发的全部思考';
-        q('.tip-go').textContent = '进入主页 →';
+        q('.tip-go').textContent = '进入主页';
       } else if (kind === 'star') {
         const s = stars[idx];
         q('.tip-kind').textContent = `${s.recent ? '新星 · ' : ''}${s.pinned ? '亮星 · ' : ''}${s.kind} · ${s.group}`;
         q('.tip-title').textContent = s.title;
         q('.tip-meta').textContent = s.date ? `${s.date}${s.tags?.length ? ' · ' + s.tags.slice(0, 3).join(' / ') : ''}` : (s.tags?.slice(0, 3).join(' / ') || '');
         q('.tip-desc').textContent = s.desc || '';
-        q('.tip-go').textContent = '阅读全文 →';
+        q('.tip-go').textContent = '阅读全文';
       } else if (kind === 'core') {
         // 星团主星：分类核心（方案图 ② 悬停卡「AI · 12 篇文章 · 专题」的形态）
         const c = clusters[idx];
@@ -3423,7 +3431,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         q('.tip-desc').textContent = c.topicList?.length
           ? c.topicList.slice(0, 5).join(' · ')
           : (c.desc || '');
-        q('.tip-go').textContent = '进入分类 →';
+        q('.tip-go').textContent = '进入分类';
       } else {
         const c = clusters[idx];
         q('.tip-kind').textContent = '星团';
@@ -3433,7 +3441,8 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         q('.tip-desc').textContent = c.topicList?.length
           ? c.topicList.slice(0, 5).join(' · ')
           : (c.desc || '');
-        q('.tip-go').textContent = '进入分类 →';
+        // 探索态点星团卡是页内拉近（flyTo），不是跳分类页 —— 文案必须跟着行为走
+        q('.tip-go').textContent = exploreMode ? '查看此星团' : '进入分类';
       }
       tip.classList.add('show');
     }
@@ -3544,12 +3553,12 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
         ul.appendChild(li);
       });
       listPanel.classList.add('show');
-      listPanel.setAttribute('aria-hidden', 'false');
+      setLayerHidden(listPanel, false);
     }
     function hideList() {
       hoverListIdx = -1;
       listPanel.classList.remove('show');
-      listPanel.setAttribute('aria-hidden', 'true');
+      setLayerHidden(listPanel, true);
     }
 
     // ===== P2 镜头推拉：点击星团 → 银河拉近到该星团（页内探索，不跳转）=====
@@ -3580,7 +3589,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       // ★ 聚焦态隐藏底部按钮（2026-10-28 用户拍板）：顶部「← 返回全景」/点空白/Esc 都能
       //   退出聚焦，底部按钮纯冗余。退出聚焦时 flyBack → enterExplore 会原样接回
       exploreExit.classList.remove('show');
-      exploreExit.setAttribute('aria-hidden', 'true');
+      setLayerHidden(exploreExit, true);
       focusIdx = k;
       hovCluster = -1;
       // 锁定轨道视觉由本团轨道弧承担（focT 分级渐现），不再叠加闭合环
@@ -3600,7 +3609,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       (focusBar.querySelector('.gf-count') as HTMLElement).textContent = `${c.count} 篇 · ${c.topics ?? 0} 个话题`;
       (focusBar.querySelector('.gf-open') as HTMLAnchorElement).href = c.url;
       focusBar.classList.add('show');
-      focusBar.setAttribute('aria-hidden', 'false');
+      setLayerHidden(focusBar, false);
       clearSelection();
       tip.classList.remove('show', 'tap');
       // ★ showList 延迟（2026-10-17 用户「拉近后跳变」）：点击同步路径零 DOM——
@@ -3613,7 +3622,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       focusIdx = -1;
       // 恢复同样交给状态机（他团降权系数回到 1）
       focusBar.classList.remove('show');
-      focusBar.setAttribute('aria-hidden', 'true');
+      setLayerHidden(focusBar, true);
       clearSelection();
       hideList();
       // ★ 来路是探索态 → 回到探索态（镜头退回全景，但保留探索的边框/EXIT/自由漫游）
@@ -3631,6 +3640,15 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
     const exploreBorder = document.getElementById('explore-border') as HTMLElement;
     const exploreExit = document.getElementById('explore-exit') as HTMLButtonElement;
 
+    // ★ 2026-11-10 键盘可访问性：隐藏层只设 aria-hidden 不够 —— 它只挡辅助技术读取，
+    //   不挡 Tab 聚焦（实测默认态第 7/8/9 个焦点落在看不见的返回/打开分类/EXIT 上）。
+    //   inert 同时管住聚焦与交互；显示时移除，淡入淡出动画不受影响。
+    const setLayerHidden = (el: HTMLElement, hidden: boolean) => {
+      el.setAttribute('aria-hidden', String(hidden));
+      el.toggleAttribute('inert', hidden);
+    };
+    for (const el of [focusBar, exploreExit, listPanel]) setLayerHidden(el, true);
+
     // （旧「锁定三层同心环」已删：闭合环 = 方案❌的平面圈；锁定轨道视觉由本团轨道弧承担）
 
     function enterExplore() {
@@ -3643,12 +3661,12 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       (focusBar.querySelector('.gf-open') as HTMLElement).style.display = 'none';
       (focusBar.querySelector('.gf-back') as HTMLElement).textContent = '← 退出探索';
       focusBar.classList.add('show');
-      focusBar.setAttribute('aria-hidden', 'false');
+      setLayerHidden(focusBar, false);
       clearSelection();
       // 探索层视觉：视口边框浮现 + 底部 EXIT（方案模块 2 的模式标识）
       exploreBorder.classList.add('show');
       exploreExit.classList.add('show');
-      exploreExit.setAttribute('aria-hidden', 'false');
+      setLayerHidden(exploreExit, false);
       // hero 整体淡出：EXPLORE（进入）与 EXIT（退出）是互斥 CTA，不能同屏
       document.body.classList.add('explore-on');
       // 首次进入探索层：短暂显示操作提示（会话内一次）
@@ -3671,14 +3689,14 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       if (!keepUI) {
         exploreBorder.classList.remove('show');
         exploreExit.classList.remove('show');
-        exploreExit.setAttribute('aria-hidden', 'true');
+        setLayerHidden(exploreExit, true);
         document.body.classList.remove('explore-on');
       }
       focusBar.classList.remove('explore');
       (focusBar.querySelector('.gf-open') as HTMLElement).style.display = '';
       (focusBar.querySelector('.gf-back') as HTMLElement).textContent = '← 返回全景';
       focusBar.classList.remove('show');
-      focusBar.setAttribute('aria-hidden', 'true');
+      setLayerHidden(focusBar, true);
     }
     (focusBar.querySelector('.gf-back') as HTMLElement).addEventListener('click', () => {
       if (exploreMode) { exitExplore(); return; }
@@ -3752,7 +3770,7 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
       }
     });
     tip.addEventListener('click', () => {
-      // 星团卡上的「进入分类」：探索态 → 页内拉近聚焦；默认态 → 直接进分类页（不位移相机）
+      // 星团卡：探索态 → 页内拉近聚焦（卡片文案「查看此星团」）；默认态 → 进分类页
       if (hitKind === 'cluster') {
         if (exploreMode) { flyTo(hitIdx); return; }
         const u = targetUrl(hitKind, hitIdx);
@@ -4367,12 +4385,12 @@ const dataJson = JSON.stringify({ clusters, stars, links }).replace(/</g, '\\u00
             const de = p.L.el.querySelector('.cl-desc') as HTMLElement | null;
             p.L.el.dataset.rpx = String(Math.round(p.rPx)); // 排障/调阈值：团在屏上的视觉半径
             if (de) {
-              // ★ 判据（2026-11-09 移动端审查方案 B）：桌面比「团直径 vs 团名宽」，
-              //   窄屏改比「团直径 vs 描述行本身宽度」。手机上团名只有 13–33px，
-              //   原判据恒真；但描述行 56–107px、比团直径（42–66px）还宽 → 三条描述
-              //   散成一排、看不出属于哪个团。桌面 rPx*2 只有 74–84px < 107px，
-              //   若全局换成描述行宽会连桌面一起收掉，故只在 ≤720px 启用新判据。
-              const needW = window.innerWidth <= 720 ? de.offsetWidth : p.L.el.offsetWidth;
+              // ★ 判据（方案 B）：桌面比「团直径 vs 团名宽」，窄屏比「团直径 vs
+              //   最宽描述行」。手机上团名只有 13–33px，原判据恒真；描述行 56–107px
+              //   比团直径（42–66px）还宽 → 会散成一排。桌面 rPx*2 仅 74–84px < 107px，
+              //   全局换会连桌面一起收掉，故只在 ≤720px 启用。窄屏用统一阈值，
+              //   三个团同进同退，避免只剩一条描述的参差感。
+              const needW = window.innerWidth <= 720 ? narrowDescW : p.L.el.offsetWidth;
               const showDesc = exploreMode && focusIdx < 0 && !busy && op > 0.5
                 && p.rPx * 2 >= needW;
               const target = showDesc ? '0.72' : '0';

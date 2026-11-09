@@ -51,6 +51,7 @@ body {
   line-height: 1.8;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  caret-color: var(--accent);
 }
 
 a {
@@ -844,7 +845,7 @@ body[data-sky] .sky-background svg {
   padding: 26px 0 32px;
 }
 .footer-meta {
-  font-size: 11px;
+  font-size: 12px;
 }
 .section-heading {
   display: flex;

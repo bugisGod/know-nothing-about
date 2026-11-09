@@ -14,8 +14,7 @@ const { clusters, stars, links, listGroups } = await buildGalaxyData();
       <section class="hero">
         <h1>{SITE.tagline}</h1>
         <p class="origin">— SCIO ME NIHIL SCIRE</p>
-        <button type="button" class="explore" id="explore-btn">EXPLORE <span aria-hidden="true">→</span></button>
-        <p class="whisper">一片属于你的思想星系</p>
+        <button type="button" class="explore" id="explore-btn">EXPLORE</button>
       </section>
 
       <BrainGraph clusters={clusters} stars={stars} links={links} bare />
@@ -170,7 +169,7 @@ const { clusters, stars, links, listGroups } = await buildGalaxyData();
   }
 
   .origin {
-    font-family: var(--mono);
+    font-family: var(--font-sans);
     font-size: 12px;
     letter-spacing: 0.28em;
     color: var(--muted);
@@ -188,8 +187,8 @@ const { clusters, stars, links, listGroups } = await buildGalaxyData();
     border: 1px solid rgba(150, 160, 205, 0.28);
     border-radius: 999px;
     color: var(--text-2);
-    font-family: var(--mono);
-    font-size: 11px;
+    font-family: var(--font-sans);
+    font-size: 12px;
     letter-spacing: 0.32em;
     cursor: pointer;
     transition: color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
@@ -199,22 +198,8 @@ const { clusters, stars, links, listGroups } = await buildGalaxyData();
     border-color: rgba(217, 184, 121, 0.5);
     box-shadow: 0 0 24px rgba(217, 184, 121, 0.12);
   }
-  .explore span {
-    display: inline-block;
-    margin-left: 6px;
-    transition: transform 0.25s ease;
-  }
-  /* 引导语：非常淡的一句，用户即使不点也能欣赏这片活着的银河 */
-  .whisper {
-    margin: 18px 0 0;
-    font-family: var(--font-display);
-    font-size: 12.5px;
-    letter-spacing: 0.42em;
-    color: rgba(232, 230, 223, 0.34);
-  }
-  .explore:hover span {
-    transform: translateX(4px);
-  }
+  /* 首屏减一层淡字（Hallmark audit P0）：原 .whisper「一片属于你的思想星系」与
+     底部 .sky-hint 都在解说这片星图，且 0.34 透明度几乎读不清 —— 删掉重复的一层。 */
 
   /* ===== 底部操作区：提示语 + 星图/列表切换（底部居中，避免与星团标签抢位）===== */
   .sky-hint {
@@ -225,10 +210,10 @@ const { clusters, stars, links, listGroups } = await buildGalaxyData();
     z-index: 2;
     margin: 0;
     text-align: center;
-    font-family: var(--mono);
-    font-size: 10.5px;
+    font-family: var(--font-sans);
+    font-size: 12px;
     letter-spacing: 0.16em;
-    color: rgba(232, 230, 223, 0.34);
+    color: rgba(232, 230, 223, 0.42);
     pointer-events: none;
   }
   .sky-hint-faded {
@@ -246,7 +231,7 @@ const { clusters, stars, links, listGroups } = await buildGalaxyData();
     justify-content: center;
     align-items: center;
     gap: 10px;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--muted);
   }
 
@@ -362,13 +347,13 @@ const { clusters, stars, links, listGroups } = await buildGalaxyData();
     }
 
     .origin {
-      font-size: 10.5px;
+      font-size: 12px;
       letter-spacing: 0.22em;
     }
 
     .sky-hint {
       bottom: 42px;
-      font-size: 10px;
+      font-size: 12px;
       letter-spacing: 0.12em;
     }
 

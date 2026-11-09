@@ -35,7 +35,7 @@ const dust = Array.from({ length: 1400 }, () => {
 ---
 
 <div class="sky-background" aria-hidden="true">
-  <svg viewBox="0 0 1440 1000" preserveAspectRatio="xMidYMid slice">
+  <svg viewBox="0 0 1440 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
     <g class="distant-stars">
       {stars.map((s) => (
         <circle cx={s.x} cy={s.y} r={s.r} opacity={s.o} />

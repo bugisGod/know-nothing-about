@@ -114,3 +114,63 @@ Hallmark 的 depth：**polish**（系统与布局不动，只改 gate 点名的�
 - 线上未部署任何本轮内容；本地 4321 服务跑的是 11-09 22:25 那版（含移动端修复 + 关于页文案删除）。
 - 若要做，建议按上面 P0 → P1 分两批，每批后用 `.shots/hallmark-render-audit.mjs` + `mobile-check.mjs` 复跑；
   P2 只写 `design.md`，不动代码。
+
+---
+
+## 六、P0 / P1 实施记录（2026-11-10 00:55，用户「可以，改完看看效果」）
+
+改动 5 个文件，共 41 行增 / 53 行删；**未动星图、状态机、配色、字体主体**。
+批量 CSS 替换用 `.shots/apply-hallmark-p0p1.py` 按字节执行并逐条校验命中，
+自动识别每个文件自身的 CRLF / LF（`global.css` 是 LF，其余是 CRLF），**无行尾漂移**。
+
+### P0
+
+1. **gate 33**：`StarField.astro:38` 的星空 svg、`NebulaBand.astro:12` 的 canvas 补
+   `aria-hidden="true"`；`BrainGraph.astro` 里 Three.js 动态创建的 WebGL canvas 在
+   `renderer` 建立后 `setAttribute('aria-hidden','true')`。
+2. **gate 75**：13 处 10–11px 功能文字统一提到 **12px**——`EXPLORE`、`sky-hint`（含窄屏覆盖）、
+   `view-switch`、窄屏 `.origin`、`.gf-back` / `.gf-count` / `.gf-open`、`.tip-go` / `.tip-kind` /
+   `.tip-meta`、`.explore-exit` / `.explore-tip`、`.graph-list summary` / `.graph-caption` / `.cap-sub`、
+   窄屏 `.footer-meta`。备案号保持 11px（法定展示）。
+   `sky-hint` 透明度 0.34 → 0.42、`explore-tip` 0.55 → 0.62，可读性同步提一档。
+3. **首屏减一层淡字**：删 `.whisper`「一片属于你的思想星系」（与底部 `sky-hint` 都在解说星图，
+   且 0.34 透明度几乎读不清）。**保留**银河中心的 `scio.` 标识——那是用户定稿的中心锚点。
+
+### P1
+
+4. **gate 64 mono 收窄**：`EXPLORE`、`.origin`、`sky-hint`、`explore-exit`、`explore-tip`、
+   `.gf-back`、`.gf-open`、`.tip-go`、`.tip-kind`、`.graph-list summary`、`.graph-caption`
+   改回 `var(--font-sans)`；**数字/计数类保留 mono**：`cl-count`（02 ARTICLES）、
+   `.gf-count`、`.gl-count`、`.gl-item-d`、`.tip-meta`（日期）。
+5. **gate 63 glued arrows**：去掉 `EXPLORE →`、`打开分类页 →`、`阅读全文 →`、`进入主页 →`
+   四处粘在文字后的箭头（以及 `.explore span` / `:hover span` 的位移样式）。
+
+### 前后对比（同一套 `hallmark-render-audit.mjs`，4 视口）
+
+| 检查 | 改前 | 改后 |
+|---|---|---|
+| `75` <12px 功能文字 | **13 处 / 视口** | **0** |
+| `33` 装饰层无 aria-hidden | **2 个 / 视口** | **0** |
+| `44b` hero 全在首屏 | ✅ | ✅ |
+| `34` 横向溢出 / `49a` 按钮换行 / `40` 对比度 | ✅ | ✅ |
+| `58` 每屏文字量（1440） | 321 字符 | 302 |
+| `62` 无脚本可见文字 | 201 字符 | 182（仍含导航/标题/署名/CTA/页脚） |
+
+### 回归验证
+
+```
+构建通过                  ✓
+self-audit                46/46
+探索态五阶段              13/13
+移动端四视口              无溢出；每条文章行命中 .gl-item；页脚/标签无遮挡
+375×667 真实点击          成功进入 /notes/ai/第一章-zcode源码对照精读/
+移动端描述行判据          未受影响（375 全收 / 390·360 仅 ai / 768 全显示）
+```
+
+### 刻意没做（P2，按报告建议保留）
+
+`63` 的中点串、`67` 的全大写小标签、`✦` 装饰符、`— SCIO ME NIHIL SCIRE`、
+`20` stamp、`48` 字面色——这些是既有项目调性或 Hallmark 自家记账规则，
+建议后续写 `design.md` 做 on-the-record waive，不机械照搬。
+
+**线上未部署**；本地 4321（站点）/ 4322（后台）/ 4400（手机预览代理）已用新构建重启。
