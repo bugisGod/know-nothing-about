@@ -33,6 +33,16 @@ export const SITE = {
   since: 2026,
 };
 
+// ===== 标签数量上限（2026-11-12）=====
+// 单一事实来源：详情页展示与星团话题词汇总都从这里读。
+// 后台录入端（admin/src/*.js 是纯 JS，不能 import .ts）硬编码同一数字并注释对齐。
+// 注意：入口限制只管新编辑；展示端必须同时兜底，历史文章的多标签不会自动变少。
+export const TAG_LIMITS = {
+  input: 5,      // 后台逗号分隔录入最多 5 个（建议 2–3 个）
+  topicList: 5,  // 星团 topicList 汇总最多 5 个
+  detail: 5,     // 详情页最多显示 5 个，超出显示 +N
+} as const;
+
 // 专栏：series slug → 展示名 + 域色（恒星色温系，星图锚星用）
 export const SERIES: Record<string, { title: string; color?: string; desc?: string }> = {
   'ai-agent-book': {

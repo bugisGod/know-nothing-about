@@ -1,5 +1,5 @@
 // 首页银河数据：从 posts 表实时构建（逻辑与原静态版逐行同构——视觉零变化的保证）
-import { PROJECT_COLOR, assignClusterColors } from "../config";
+import { PROJECT_COLOR, TAG_LIMITS, assignClusterColors } from "../config";
 import { categoryRegistry } from "./category-meta";
 import { listNotes, listProjects } from "./posts";
 
@@ -135,7 +135,7 @@ export async function buildGalaxyData() {
     const tally = new Map<string, number>();
     stars.filter((st) => st.cluster === c.key).forEach((st) => st.tags.forEach((t) => tally.set(t, (tally.get(t) ?? 0) + 1)));
     c.topics = tally.size;
-    c.topicList = [...tally.entries()].sort((x, y) => y[1] - x[1]).map(([t]) => t);
+    c.topicList = [...tally.entries()].sort((x, y) => y[1] - x[1]).map(([t]) => t).slice(0, TAG_LIMITS.topicList);
   });
 
   const listGroups = clusters.map((c) => ({
@@ -146,4 +146,11 @@ export async function buildGalaxyData() {
   }));
 
   return { clusters, stars, links, listGroups };
+}
+
+/** 详情页域色：复用首页银河同一份 assignClusterColors 结果，不另写一套配色。
+ *  保证「点进星团后看到的颜色」与首页团色逐比特一致；新增分类零改码。 */
+export async function clusterColorMap(): Promise<Record<string, string>> {
+  const { clusters } = await buildGalaxyData();
+  return Object.fromEntries(clusters.map((c) => [c.key, c.color ?? PROJECT_COLOR]));
 }

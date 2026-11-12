@@ -4,6 +4,8 @@ import SkyBand from "../../components/SkyBand.astro";
 import Icon from "../../components/Icon.astro";
 import ArticleToc from "../../components/ArticleToc.astro";
 import { listProjects, getProject } from "../../lib/posts";
+import { PROJECT_COLOR, TAG_LIMITS } from "../../config";
+import { extractHeadings } from "../../lib/headings";
 
 export async function getStaticPaths() {
   return listProjects().map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
@@ -12,67 +14,57 @@ export async function getStaticPaths() {
 const entry: any = Astro.props.entry ?? getProject(String(Astro.params.slug));
 if (!entry) return Astro.rewrite("/404");
 const entryHtml: string = entry.html;
-const headings = [...entryHtml.matchAll(/<h([1-6]) id="([^"]*)"/g)].map((m) => ({
-  depth: Number(m[1]), slug: m[2], text: '',
-}));
+const headings = extractHeadings(entryHtml);
 const d = entry.data;
+const clusterColor = PROJECT_COLOR;
+const techAll: string[] = (d.tech ?? []).filter(Boolean);
+const techText = techAll.slice(0, TAG_LIMITS.detail).join(" / ")
+  + (techAll.length > TAG_LIMITS.detail ? ` +${techAll.length - TAG_LIMITS.detail}` : "");
 
 const fmt = (date: Date) =>
   `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 ---
 
-<Base title={d.title} description={d.description}>
+<Base title={d.title} description={d.description} clusterColor={clusterColor}>
   <SkyBand reading>
     <div class="crumbs">
       <a href="/projects/">项目复盘</a> / {d.status}
     </div>
-    <h1>{d.title}</h1>
+    <h1>{d.title}<span class="title-dot" aria-hidden="true">.</span></h1>
+    {d.description && <p class="page-desc">{d.description}</p>}
+    <div class="page-meta">
+      {d.period && <span>{d.period}</span>}
+      {d.role && <span>{d.role}</span>}
+      <span>更新于 {fmt(d.date)}</span>
+      {techText && <span class="tech">{techText}</span>}
+      {(d.link || d.repo) && (
+        <span class="links">
+          {d.link && (
+            <a href={d.link} target="_blank" rel="noopener">
+              <Icon name="link" size={13} /> 线上地址
+            </a>
+          )}
+          {d.repo && (
+            <a href={d.repo} target="_blank" rel="noopener">
+              <Icon name="github" size={13} /> 仓库
+            </a>
+          )}
+        </span>
+      )}
+    </div>
   </SkyBand>
   <div class="container reading-container article-layout">
     <ArticleToc headings={headings} />
     <article class="prose" data-pagefind-body>
-      <div class="page-meta">
-        {d.period && <span>{d.period}</span>}
-        {d.role && <span>{d.role}</span>}
-        <span>更新于 {fmt(d.date)}</span>
-      </div>
-      <div class="sub-lines">
-        <span class="tech">{d.tech.join(" / ")}</span>
-        {(d.link || d.repo) && (
-          <span class="links">
-            {d.link && (
-              <a href={d.link} target="_blank" rel="noopener">
-                <Icon name="link" size={13} /> 线上地址
-              </a>
-            )}
-            {d.repo && (
-              <a href={d.repo} target="_blank" rel="noopener">
-                <Icon name="github" size={13} /> 仓库
-              </a>
-            )}
-          </span>
-        )}
-      </div>
       <div set:html={entryHtml} />
     </article>
   </div>
 </Base>
 
 <style>
-  .sub-lines {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    flex-wrap: wrap;
-    margin: 0 0 10px;
-    padding-bottom: 22px;
-    border-bottom: 1px solid var(--border);
-  }
-
   .tech {
     color: var(--muted);
-    font-size: 12.5px;
-    font-family: var(--mono);
+    font-size: 12px;
   }
 
   .links {

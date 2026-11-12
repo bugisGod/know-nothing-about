@@ -2,10 +2,12 @@
 import Base from "../../layouts/Base.astro";
 import SkyBand from "../../components/SkyBand.astro";
 import ArticleToc from "../../components/ArticleToc.astro";
-import { SERIES } from "../../config";
+import { SERIES, TAG_LIMITS } from "../../config";
+import { extractHeadings } from "../../lib/headings";
 import { categoryRegistry } from "../../lib/category-meta";
 import { tagLabel } from "../../lib/tags";
 import { listNotes, getNote } from "../../lib/posts";
+import { clusterColorMap } from "../../lib/galaxy-data";
 export async function getStaticPaths() {
   // SSR：库中笔记即合法参数（新发布自动出现，无需构建）
   return listNotes().map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
@@ -15,11 +17,7 @@ if (!entry) return Astro.rewrite("/404");
 const CATS = categoryRegistry();
 // md 正文（预渲染 html）+ 标题锚点（与 render() 的 headings 同构）
 const entryHtml: string = entry.html;
-const headings = [...entryHtml.matchAll(/<h([1-6]) id="([^"]*)"/g)].map((m) => ({
-  depth: Number(m[1]),
-  slug: m[2],
-  text: "",
-}));
+const headings = extractHeadings(entryHtml);
 const notes = listNotes().sort(
   (a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0),
 );
@@ -34,6 +32,11 @@ const cjkCount = (entry.content_md?.match(/[\u4e00-\u9fff]/g) ?? []).length;
 const latinWords = (entry.content_md?.match(/[A-Za-z]+/g) ?? []).length;
 const minutes = Math.max(1, Math.round(cjkCount / 380 + latinWords / 500));
 const category = entry.id.split("/")[0];
+// 域色与首页银河同源（同一份 assignClusterColors 结果）
+const clusterColor = (await clusterColorMap())[`cat:${category}`];
+const allTags: string[] = entry.data.tags ?? [];
+const tagText = allTags.slice(0, TAG_LIMITS.detail).map(tagLabel).join(" / ")
+  + (allTags.length > TAG_LIMITS.detail ? ` +${allTags.length - TAG_LIMITS.detail}` : "");
 const fmt = (date?: Date) =>
   date?.toISOString().slice(0, 10).replaceAll("-", ".") ?? "";
 ---
@@ -41,6 +44,7 @@ const fmt = (date?: Date) =>
 <Base
   title={entry.data.title}
   description={entry.data.description ?? entry.data.title}
+  clusterColor={clusterColor}
 >
   <SkyBand reading>
     <div class="crumbs">
@@ -50,7 +54,8 @@ const fmt = (date?: Date) =>
         {CATS[category]?.label ?? category}
       </a>
     </div>
-    <h1>{entry.data.title}</h1>
+    <h1>{entry.data.title}<span class="title-dot" aria-hidden="true">.</span></h1>
+    {entry.data.description && <p class="page-desc">{entry.data.description}</p>}
     <div class="page-meta">
       {entry.data.date && (
         <time datetime={entry.data.date.toISOString()}>
@@ -58,7 +63,7 @@ const fmt = (date?: Date) =>
         </time>
       )}
       <span>{minutes} 分钟阅读</span>
-      <span>{entry.data.tags.map((t) => tagLabel(t)).join(" / ")}</span>
+      <span>{tagText}</span>
     </div>
   </SkyBand>
   <div class="container reading-container article-layout">

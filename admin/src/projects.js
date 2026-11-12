@@ -100,8 +100,8 @@ projects.get('/projects/:id/edit', (c) => {
     <div><label>状态</label><select id="f-status">${statusOpts}</select></div>
   </div>
   <div class="fields f3e">
-    <div><label>技术栈（逗号分隔）</label><input id="f-tech" value="${techStr}"></div>
-    <div><label>标签（可选）</label><input id="f-tags" list="regtags" value="${tagsStr}"><datalist id="regtags">${regTags.map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join('')}</datalist></div>
+    <div><label>技术栈（逗号分隔，最多 5 项）</label><input id="f-tech" value="${techStr}"></div>
+    <div><label>标签（可选，最多 5 个）</label><input id="f-tags" list="regtags" value="${tagsStr}"><datalist id="regtags">${regTags.map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join('')}</datalist></div>
     <div><label>日期</label><input id="f-date" type="date" value="${val('date') || new Date().toISOString().slice(0, 10)}"></div>
   </div>
   <div class="fields" style="grid-template-columns:1fr 1fr">
@@ -131,8 +131,9 @@ async function saveDraft() {
     fm: {
       description: $('f-desc').value.trim(),
       date: $('f-date').value, period: $('f-period').value.trim(), role: $('f-role').value.trim(),
-      status: $('f-status').value, tech: $('f-tech').value.split(/[,，]/).map(s=>s.trim()).filter(Boolean),
-      tags: $('f-tags').value.split(/[,，]/).map(s=>s.trim()).filter(Boolean),
+      // 与 src/config.ts TAG_LIMITS.input 对齐（admin 是纯 JS，不能 import .ts）
+      status: $('f-status').value, tech: $('f-tech').value.split(/[,，]/).map(s=>s.trim()).filter(Boolean).slice(0, 5),
+      tags: $('f-tags').value.split(/[,，]/).map(s=>s.trim()).filter(Boolean).slice(0, 5),
       link: $('f-link').value.trim(), repo: $('f-repo').value.trim(),
     },
     content_md: $('f-body').value,

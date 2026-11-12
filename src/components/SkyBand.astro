@@ -15,11 +15,33 @@ const { compact = false, reading = false } = Astro.props;
   .sky-band {
     padding: 68px 0 42px;
   }
+  /* 阅读页页头收拢：元信息与 description 已移进本组件，不再需要 68/42 的大留白 */
+  .sky-band.reading {
+    padding: 52px 0 30px;
+  }
   .sky-band.compact {
     padding-top: 48px;
   }
   .sky-band.reading .container {
     max-width: 1040px;
+    position: relative;
+    z-index: 1;
+  }
+  /* 阅读页页头：把已有星空「染」上一层极淡域色星雾。
+     不新增星点 DOM —— 全站已有 StarField + 深空照片，再叠一层会双重曝光（见 global.css 注释）。 */
+  .sky-band.reading {
+    position: relative;
+  }
+  .sky-band.reading::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse 68% 120% at 18% 0%,
+      color-mix(in srgb, var(--cluster-color, var(--accent)) 13%, transparent),
+      transparent 70%
+    );
   }
   .sky-band :global(h1) {
     max-width: 740px;
@@ -30,18 +52,67 @@ const { compact = false, reading = false } = Astro.props;
     margin: 14px 0 18px;
     letter-spacing: 0.04em;
     text-wrap: balance;
+    /* Hallmark Floor 50：长标题不撑破容器 */
+    overflow-wrap: break-word;
+    min-width: 0;
+  }
+  /* 详情页标题：与首页 hero 同一套衬线（--font-display），中文走 Noto Serif SC 600；
+     琥珀句点沿用 about 页 .id-dot 的写法，不发明新标记 */
+  .sky-band.reading :global(h1) {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(36px, 4vw, 52px);
+    line-height: 1.22;
+    letter-spacing: 0.01em;
+  }
+  .sky-band.reading :global(.title-dot) {
+    color: var(--accent);
+  }
+  /* 元信息：一行观测坐标，域色星点起头，中点分隔（站点既有语言）。
+     后代选择器整段包 :global —— 否则 slot 内容不带本组件 scope 属性，选择器永不匹配。 */
+  .sky-band.reading :global(.page-meta) {
+    gap: 8px;
+    margin: 6px 0 0;
+    font-size: 12px;
+  }
+  .sky-band.reading :global(.page-meta::before) {
+    content: "";
+    flex: none;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--cluster-color, var(--accent));
+    opacity: 0.8;
+  }
+  .sky-band.reading :global(.page-meta > * + *::before) {
+    content: "·";
+    margin-right: 8px;
+    color: var(--border-strong);
   }
   .sky-band :global(.page-desc) {
     margin-bottom: 0;
+  }
+  /* 详情页 lede：紧跟标题，与下方元信息留一线呼吸 */
+  .sky-band.reading :global(.page-desc) {
+    max-width: 44em;
+    margin: 0 0 14px;
+    font-size: 14.5px;
+    line-height: 1.7;
   }
   @media (max-width: 760px) {
     .sky-band,
     .sky-band.compact {
       padding: 32px 0 24px;
     }
+    .sky-band.reading {
+      padding: 28px 0 18px;
+    }
     .sky-band :global(h1) {
       font-size: 28px;
       text-wrap: initial;
+    }
+    .sky-band.reading :global(h1) {
+      font-size: 30px;
     }
   }
 </style>

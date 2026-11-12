@@ -120,7 +120,7 @@ function renderEditor(d, catList, regTags = []) {
     <div><label>slug（文件名）</label><input id="f-slug" value="${esc(d.slug)}" placeholder="如 my-note"></div>
   </div>
   <div class="fields f3e">
-    <div><label>标签（逗号分隔）</label><input id="f-tags" list="regtags" value="${tagsStr}">
+    <div><label>标签（逗号分隔，最多 5 个，建议 2–3 个）</label><input id="f-tags" list="regtags" value="${tagsStr}">
 <datalist id="regtags">${regTags.map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join('')}</datalist></div>
     <div><label>专栏 series（可选）</label><input id="f-series" value="${val('series')}"></div>
     <div><label>日期</label><input id="f-date" type="date" value="${val('date') || new Date().toISOString().slice(0, 10)}"></div>
@@ -156,7 +156,8 @@ async function saveDraft() {
   const fm = {
     description: $('f-desc').value.trim(),
     date: $('f-date').value,
-    tags: $('f-tags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean),
+    // 与 src/config.ts TAG_LIMITS.input 对齐（admin 是纯 JS，不能 import .ts）
+    tags: $('f-tags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean).slice(0, 5),
     series: $('f-series').value.trim(),
     pinned: $('f-pinned').checked,
     draft: $('f-draft').checked,
