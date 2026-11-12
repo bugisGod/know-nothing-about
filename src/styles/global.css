@@ -669,6 +669,102 @@ article.prose figure.fig-wide {
   line-height: 1.7;
 }
 
+/* ===== 配图点击放大（2026-11-12）=====
+   信息图按 720px 排版后图内文字只剩 6~7px，点开看原图。
+   渐进增强：无 JS 时 figure 仍是普通图片。不新增星点层、不用玻璃拟态。 */
+.figure-zoom-trigger {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  line-height: 0;
+}
+.figure-zoom-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.figure-zoom-trigger img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+dialog.figure-lightbox {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 24px;
+  border: 0;
+  background: rgba(6, 7, 9, 0.94);
+  display: none;
+  place-items: center;
+}
+dialog.figure-lightbox[open] {
+  display: grid;
+}
+dialog.figure-lightbox::backdrop {
+  background: rgba(6, 7, 9, 0.94);
+}
+.figure-lightbox-img {
+  max-width: min(1400px, 92vw);
+  max-height: 86vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.figure-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-inset);
+  color: var(--text-2);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.figure-lightbox-close:hover,
+.figure-lightbox-close:focus-visible {
+  color: var(--text);
+  border-color: var(--border-strong);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  dialog.figure-lightbox[open] .figure-lightbox-img {
+    animation: figure-zoom-in 0.22s ease-out;
+  }
+  @keyframes figure-zoom-in {
+    from { opacity: 0; transform: scale(0.985); }
+    to { opacity: 1; transform: scale(1); }
+  }
+}
+
+/* 窄屏：92vw 会把 1400px 的信息图压回 345px，等于点了没放大。
+   改为按原图比例显示（受 86vh 约束），灯箱可左右滑动看细节。 */
+@media (max-width: 760px) {
+  dialog.figure-lightbox[open] {
+    display: block;
+    overflow: auto;
+    padding: 56px 12px 24px;
+  }
+  .figure-lightbox-img {
+    max-width: none;
+    margin: 0 auto;
+  }
+}
+
 .prose hr {
   border: none;
   border-top: 1px solid var(--border);

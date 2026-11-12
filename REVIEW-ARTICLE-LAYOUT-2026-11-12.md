@@ -241,3 +241,38 @@ Hallmark 分级与 waive 依据见 `REVIEW-HALLMARK-ARTICLE-2026-11-12.md`（aud
 P2 配图观测窗化（羽化边缘 / 去硬边框 / 域色微晕）、P3 目录星轨 + h2 尾迹。
 本轮按约定**只做 P0+P1 出截图确认调性**；`design.md` 第五节已把这套约定锁定。
 
+---
+
+## 九、配图点击放大（2026-11-12 23:30，用户「做吧」）
+
+**背景**：第八节部署后的线上实拍显示，720px 排版虽解决了「突出 / 裁切 / 盖目录」，
+但两张信息图内 12–14px 文字被缩到 6–7px，发虚读不清。服务器上那条手工 1200px
+规则的注释也写明初衷是「720 显示会糊」——两边其实是同一个问题的两种错误解法。
+**正解是布局与查看分离：排版保持 720px，点开看原图。**
+
+### 落地（方案 B：原生 dialog 灯箱）
+
+| 文件 | 内容 |
+|---|---|
+| `src/scripts/figure-zoom.ts`（新） | 自动把 `.prose figure img` 包成 `<button class="figure-zoom-trigger">`（`aria-label` 带图片说明、天然可 Tab、`:focus-visible` 琥珀描边）；每页共用一个 `<dialog>`；Esc / 点背景 / 关闭按钮 / 键盘 Enter 均可开合；监听 `astro:page-load` 兼容后续页面切换 |
+| `src/layouts/Base.astro` | 加一行 import，与 `meteors.ts` 并列 |
+| `src/styles/global.css` | 灯箱样式全部使用既有令牌（`--bg` / `--border` / `--text-2` / `--accent` / `--radius`）；不新增星点层、不用玻璃拟态；`prefers-reduced-motion` 下无动画 |
+
+**渐进增强**：脚本失效时 figure 仍是普通图片，只是不能放大，不会出现空白或隐藏内容。
+
+### 窄屏修正（复验时发现的真缺陷）
+
+第一版 `max-width: min(1400px, 92vw)` 在 375 手机上把大图压到 **345px**，
+比正文列的 331px 只大 4%，点了等于没点。改为窄屏 `max-width: none` +
+`dialog { overflow:auto }`，按原图比例显示（仍受 86vh 约束），可左右滑动看细节。
+实测手机 **911×574px**（正文列 331px 的 2.75 倍）。
+
+### 验证
+
+`.shots/verify-zoom.mjs` **29/29**：桌面 1230px / 手机 911px、原图 src 正确、
+无横向溢出、无控制台错误、四种关闭方式、键盘可聚焦与 Enter 打开。
+另跑 `self-audit 46/46`、探索态 `13/13`、移动端四视口、Hallmark render 复查。
+
+**刻意不动**：正文里的内联 `style="width:100%;height:auto;border-radius:10px"`
+（与模板 CSS 重复且值一致，清它要改 DB 里的文章内容，无实际收益）。
+
