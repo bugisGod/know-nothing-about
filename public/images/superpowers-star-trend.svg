@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 460" width="920" height="460" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<rect width="920" height="460" fill="#ffffff"/>
+<text x="90" y="30" font-size="20" font-weight="700" fill="#111827">superpowers Star 增长（已核实的三个时间点）</text>
+<line x1="90" y1="390" x2="880" y2="390" stroke="#e5e7eb" stroke-width="1"/><text x="80" y="395" text-anchor="end" font-size="14" fill="#9ca3af">300k</text><line x1="90" y1="277" x2="880" y2="277" stroke="#e5e7eb" stroke-width="1"/><text x="80" y="282" text-anchor="end" font-size="14" fill="#9ca3af">310k</text><line x1="90" y1="163" x2="880" y2="163" stroke="#e5e7eb" stroke-width="1"/><text x="80" y="168" text-anchor="end" font-size="14" fill="#9ca3af">320k</text><line x1="90" y1="50" x2="880" y2="50" stroke="#e5e7eb" stroke-width="1"/><text x="80" y="55" text-anchor="end" font-size="14" fill="#9ca3af">330k</text>
+<polyline points="90,281 485,120 880,109" fill="none" stroke="#0e7490" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="90" cy="281" r="7" fill="#0e7490" stroke="#fff" stroke-width="2"/><circle cx="485" cy="120" r="7" fill="#0e7490" stroke="#fff" stroke-width="2"/><circle cx="880" cy="109" r="7" fill="#0e7490" stroke="#fff" stroke-width="2"/>
+<text x="90" y="265" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2937">309,623</text><text x="485" y="104" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2937">323,822</text><text x="880" y="93" text-anchor="middle" font-size="17" font-weight="700" fill="#1f2937">324,829</text>
+<text x="90" y="428" text-anchor="middle" font-size="15" fill="#6b7280">2026-10-31</text><text x="485" y="428" text-anchor="middle" font-size="15" fill="#6b7280">2026-11-22</text><text x="880" y="428" text-anchor="middle" font-size="15" fill="#6b7280">2026-11-24</text>
+<text x="90" y="454" font-size="13" fill="#9ca3af">数据来源：GitHub 仓库页与第三方文章记录；连线仅连接已核实点，不代表每日数据</text>
+</svg>
