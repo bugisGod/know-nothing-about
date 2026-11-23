@@ -169,4 +169,17 @@
 - 回滚仍是 posts 全表快照，单篇发布后回滚会整表回退；弹窗清单里已写明。
 - git commit 与 pagefind 重建仍针对全站，清单里已写明。
 - `SCIO_SRC_DIR` 脏检查未改：无人值守发布前仍需确认服务器工作区干净（存在未跟踪 `.bak` 时需处理）。
-- **代码未提交、线上未部署**；线上仍是 `639b585`。
+- **已提交并部署**：本地 / GitHub `2c879c5`，服务器 `6a3c87b`（cherry-pick 内容等价）；
+  线上端点、新路由鉴权、后台新 UI、发布接口防误发均已实测通过。
+
+### 部署记录（2026-11-24 01:05）
+
+服务器在部署前有自己的 3 笔 wenshu 发布提交 + 9 个 staged 发布产物。处理顺序：
+先用 `git commit` 固化 staged 产物（让工作区干净，这是无人值守发布的前提），
+再 `git fetch origin` + `cherry-pick 639b585..origin/main`，最后 `npm run build` +
+`systemctl restart scio-site scio-admin`。**全程未用 `reset --hard` / `clean -fd`**。
+
+线上实测：首页 / 知识库 / diskmap / pagefind / RSS / sitemap / 后台登录 /
+`editor-common.js` 全 200；`/draft-preview/1`、`/draft-media/nope.png` 无 token 均 403；
+线上笔记与项目编辑器页含 `preview-tab / upload-button / f-cover / preview-frame / publish-dialog`；
+发布 plan 与 publish 无参均 400；文章页模板正常、og:image 回退 `/og.png`。
