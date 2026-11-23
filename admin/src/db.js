@@ -23,6 +23,15 @@ db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA busy_timeout = 5000;');
 
 try { db.exec('ALTER TABLE drafts ADD COLUMN published_at TEXT'); } catch {}
+// 11-24：草稿真预览 token / 发布范围 / 文章封面（旧库兼容，重复执行无副作用）
+try { db.exec(`CREATE TABLE IF NOT EXISTS preview_tokens (
+  token TEXT PRIMARY KEY,
+  draft_id INTEGER NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+)`); } catch {}
+try { db.exec("ALTER TABLE publishes ADD COLUMN scope TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE posts ADD COLUMN cover TEXT DEFAULT ''"); } catch {}
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY,

@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS posts (
   repo TEXT DEFAULT '',
   content_md TEXT DEFAULT '',
   html TEXT DEFAULT '',
+  cover TEXT DEFAULT '',
   updated_at TEXT DEFAULT (datetime('now')),
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(kind, category, slug)
@@ -72,13 +73,15 @@ CREATE TABLE IF NOT EXISTS posts (
 CREATE INDEX IF NOT EXISTS idx_posts_kind ON posts(kind);
 CREATE INDEX IF NOT EXISTS idx_posts_series ON posts(series);
 `);
+  // 旧库兼容（表空间已存在时 CREATE TABLE IF NOT EXISTS 不会补列）
+  try { d.exec("ALTER TABLE posts ADD COLUMN cover TEXT DEFAULT ''"); } catch {}
 }
 
 export interface NoteEntry {
   id: string; slug: string; collection: "notes";
   data: {
     title: string; description?: string; date?: Date; tags: string[];
-    related?: string[]; pinned: boolean; draft: boolean; series?: string;
+    related?: string[]; pinned: boolean; draft: boolean; series?: string; cover?: string;
   };
   /** 仅 getNote() 返回全文；listNotes 列表查询为省 IO 不带这两列 */
   html?: string; content_md?: string;
@@ -88,7 +91,7 @@ export interface ProjectEntry {
   data: {
     title: string; description: string; date: Date; period?: string; role?: string;
     tech: string[]; tags: string[]; status: "进行中" | "已完成" | "已归档";
-    link?: string; repo?: string; draft: boolean;
+    link?: string; repo?: string; draft: boolean; cover?: string;
   };
   html: string;
 }
@@ -110,7 +113,7 @@ function toNote(r: any): NoteEntry {
       tags: J(r.tags),
       related: J(r.related).length ? J(r.related) : undefined,
       pinned: !!r.pinned, draft: false,
-      series: r.series || undefined,
+      series: r.series || undefined, cover: r.cover || undefined,
     },
     html: r.html, content_md: r.content_md,
   };
@@ -124,6 +127,7 @@ function toProject(r: any): ProjectEntry {
       tech: J(r.tech), tags: J(r.tags),
       status: (r.status || "已完成") as any,
       link: r.link || undefined, repo: r.repo || undefined, draft: false,
+      cover: r.cover || undefined,
     },
     html: r.html,
   };
@@ -137,7 +141,7 @@ export function listNotes(category?: string): NoteEntry[] {
   // ★ 列表场景轻量查询（2026-10-27 审查 P2-2）：不再 SELECT html/content_md 全文——
   //   列表/银河/RSS/sitemap 只需要元数据，详情页走 getNote()（全列）。
   //   全表全文查询在内容到几十篇后是每次开页 O(n) 次全文读
-  const COLS = "id,kind,category,slug,title,description,date,tags,related,pinned,series,period,role,tech,status,link,repo,updated_at,created_at";
+  const COLS = "id,kind,category,slug,title,description,date,tags,related,pinned,series,period,role,tech,status,link,repo,cover,updated_at,created_at";
   const rows = category_
     ? db().prepare(`SELECT ${COLS} FROM posts WHERE kind='note' AND lower(category)=? ORDER BY date DESC`).all(category_)
     : db().prepare(`SELECT ${COLS} FROM posts WHERE kind='note' ORDER BY title`).all();

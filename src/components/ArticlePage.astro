@@ -1,0 +1,178 @@
+---
+// 文章页主体（笔记 / 项目 / 草稿预览共用）
+// ★ 单一真源：详情页与后台「真预览」都渲染这一个组件，模板改一次三处同步。
+//   以前预览用 marked + 后台自绘 CSS，与线上是两套 DOM/CSS —— 所见非所得。
+import Base from "../layouts/Base.astro";
+import SkyBand from "../components/SkyBand.astro";
+import Icon from "../components/Icon.astro";
+import ArticleToc from "../components/ArticleToc.astro";
+import { SERIES, TAG_LIMITS } from "../config";
+import { extractHeadings } from "../lib/headings";
+import { categoryRegistry } from "../lib/category-meta";
+import { tagLabel } from "../lib/tags";
+import { listNotes } from "../lib/posts";
+
+interface Props {
+  kind: "note" | "project";
+  entry: any;
+  clusterColor?: string;
+  /** 草稿预览：不显示相邻导航、不进搜索索引，额外挂一条预览标记 */
+  preview?: boolean;
+}
+const { kind, entry, clusterColor, preview = false } = Astro.props;
+const d = entry.data;
+const entryHtml: string = entry.html ?? "";
+const headings = extractHeadings(entryHtml);
+const CATS = categoryRegistry();
+const category = kind === "note" ? String(entry.id).split("/")[0] : "";
+
+const allTags: string[] = d.tags ?? [];
+const tagText =
+  allTags.slice(0, TAG_LIMITS.detail).map(tagLabel).join(" / ") +
+  (allTags.length > TAG_LIMITS.detail ? ` +${allTags.length - TAG_LIMITS.detail}` : "");
+const techAll: string[] = (d.tech ?? []).filter(Boolean);
+const techText =
+  techAll.slice(0, TAG_LIMITS.detail).join(" / ") +
+  (techAll.length > TAG_LIMITS.detail ? ` +${techAll.length - TAG_LIMITS.detail}` : "");
+
+const cjkCount = (entry.content_md?.match(/[\u4e00-\u9fff]/g) ?? []).length;
+const latinWords = (entry.content_md?.match(/[A-Za-z]+/g) ?? []).length;
+const minutes = Math.max(1, Math.round(cjkCount / 380 + latinWords / 500));
+
+const fmtIso = (date?: Date) =>
+  date?.toISOString().slice(0, 10).replaceAll("-", ".") ?? "";
+const fmtLocal = (date: Date) =>
+  `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+
+// 相邻笔记：预览态草稿还不在正式列表里，算了也没意义
+const notes = kind === "note" && !preview
+  ? listNotes().sort((a, b) => (b.data.date?.getTime() ?? 0) - (a.data.date?.getTime() ?? 0))
+  : [];
+const seriesName = kind === "note" ? d.series : undefined;
+const peers = seriesName ? notes.filter((n) => n.data.series === seriesName) : notes;
+const idx = peers.findIndex((n) => n.id === entry.id);
+const newer = idx > 0 ? peers[idx - 1] : null;
+const older = idx < peers.length - 1 ? peers[idx + 1] : null;
+---
+
+<Base
+  title={d.title}
+  description={d.description ?? d.title}
+  clusterColor={clusterColor}
+  ogImage={d.cover}
+  noindex={preview}
+>
+  <SkyBand reading>
+    <div class="crumbs">
+      {
+        kind === "note" ? (
+          <>
+            <a href="/notes/">知识库</a>
+            <span> / </span>
+            <a href={`/notes/?category=${encodeURIComponent(category)}`}>
+              {CATS[category]?.label ?? category}
+            </a>
+          </>
+        ) : (
+          <>项目复盘 / {d.status}</>
+        )
+      }
+    </div>
+    <h1>{d.title}<span class="title-dot" aria-hidden="true">.</span></h1>
+    {d.description && <p class="page-desc">{d.description}</p>}
+    <div class="page-meta">
+      {
+        kind === "note" ? (
+          <>
+            {d.date && <time datetime={d.date.toISOString()}>{fmtIso(d.date)}</time>}
+            <span>{minutes} 分钟阅读</span>
+            <span>{tagText}</span>
+          </>
+        ) : (
+          <>
+            {d.period && <span>{d.period}</span>}
+            {d.role && <span>{d.role}</span>}
+            <span>更新于 {fmtLocal(d.date)}</span>
+            {techText && <span class="tech">{techText}</span>}
+            {(d.link || d.repo) && (
+              <span class="links">
+                {d.link && (
+                  <a href={d.link} target="_blank" rel="noopener">
+                    <Icon name="link" size={13} /> 线上地址
+                  </a>
+                )}
+                {d.repo && (
+                  <a href={d.repo} target="_blank" rel="noopener">
+                    <Icon name="github" size={13} /> 仓库
+                  </a>
+                )}
+              </span>
+            )}
+          </>
+        )
+      }
+    </div>
+  </SkyBand>
+  <div class="container reading-container article-layout">
+    <ArticleToc headings={headings} />
+    <article class="prose" data-pagefind-body={preview ? undefined : ""}>
+      {preview && (
+        <p class="draft-preview-note" data-pagefind-ignore>
+          草稿预览 · 内容与发布后的文章页同源，尚未上线
+        </p>
+      )}
+      {kind === "note" && seriesName && (
+        <div class="series-badge">{SERIES[seriesName]?.title ?? seriesName}</div>
+      )}
+      <div set:html={entryHtml} />
+      {kind === "note" && !preview && (older || newer) && (
+        <nav class="article-pagination" aria-label="相邻笔记" data-pagefind-ignore>
+          {older && (
+            <a href={`/notes/${older.id}/`}>
+              <span>← 更早一篇</span>
+              <b>{older.data.title}</b>
+            </a>
+          )}
+          {newer && (
+            <a href={`/notes/${newer.id}/`}>
+              <span>更新一篇 →</span>
+              <b>{newer.data.title}</b>
+            </a>
+          )}
+        </nav>
+      )}
+    </article>
+  </div>
+</Base>
+
+<style>
+  .tech {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .links {
+    display: flex;
+    gap: 14px;
+  }
+  .links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12.5px;
+    color: var(--text-2);
+  }
+  .links a:hover {
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  /* 预览角标：只出现在真预览里，用站点既有令牌，不引入新语言 */
+  .draft-preview-note {
+    margin: 0 0 26px;
+    padding: 7px 12px;
+    border-left: 2px solid var(--accent);
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+</style>

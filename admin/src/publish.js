@@ -26,7 +26,50 @@ function run(cmd0, args, cwd, log) {
   return r.stdout;
 }
 
-export function publishStream() {
+// ★ 本次发布范围（单一真源）：确认弹窗的 dry-run 清单与真正发布用同一套过滤规则。
+//   旧实现无条件 SELECT * FROM drafts + 脏过滤 = 全库脏草稿一起发（自动化每天跑会误发）。
+function collectDrafts(draftId) {
+  const rows = draftId
+    ? db.prepare("SELECT * FROM drafts WHERE kind IN ('note','project') AND id=?").all(draftId)
+    : db.prepare("SELECT * FROM drafts WHERE kind IN ('note','project')").all();
+  return rows.filter((d) => {
+    if (d.published_at && !(d.updated_at > d.published_at)) return false; // 脏过滤
+    const fm = JSON.parse(d.fm || '{}');
+    if (fm.draft) return true;                                            // 下架
+    return !!(d.title && d.slug && (d.kind !== 'note' || d.category));    // 可上线
+  });
+}
+export function publishPlan(opts = {}) {
+  const draftId = opts.draftId ? Number(opts.draftId) : undefined;
+  if (draftId && !db.prepare('SELECT id FROM drafts WHERE id=?').get(draftId)) {
+    return { ok: false, error: '草稿不存在' };
+  }
+  const items = collectDrafts(draftId).map((d) => {
+    const fm = JSON.parse(d.fm || '{}');
+    return {
+      id: d.id, kind: d.kind, title: d.title || '（无标题）',
+      path: d.kind === 'note' ? `${d.category}/${d.slug}` : d.slug,
+      action: fm.draft ? '下架' : '上线',
+    };
+  });
+  const mediaStage = join(DATA_DIR, 'media');
+  const mediaCount = existsSync(mediaStage)
+    ? readdirSync(mediaStage).filter((f) => !f.startsWith('.')).length : 0;
+  return {
+    ok: true, scope: draftId ? `single:${draftId}` : 'all', items, mediaCount,
+    notes: [
+      '只写本次清单里的草稿；其余草稿保持原样，不会被一起发布',
+      'git commit 与搜索索引重建仍针对全站执行（不是只处理这一篇）',
+      '回滚是 posts 全表快照，不是单篇回滚',
+      mediaCount ? `本次会搬运 ${mediaCount} 张暂存图片` : '没有待搬运的图片',
+    ],
+  };
+}
+
+export function publishStream(opts = {}) {
+  const draftId = opts.draftId ? Number(opts.draftId) : undefined;
+  const scope = opts.scope || (draftId ? `single:${draftId}` : 'all');
+  const trigger = opts.trigger || 'web';
   // 返回 ReadableStream：发布步骤逐行推送
   const queue = [];
   let push = (chunk) => queue.push(chunk);
@@ -35,10 +78,15 @@ export function publishStream() {
     start(controller) {
       const send = (obj) => controller.enqueue(enc.encode(JSON.stringify(obj) + '\n'));
       (async () => {
-        const log = (line) => send({ t: 'log', line });
-        const pubId = db.prepare("INSERT INTO publishes (trigger) VALUES ('web')").run().lastInsertRowid;
+        const log = (line) => { send({ t: 'log', line }); cap(line); };
+        const pubId = db.prepare("INSERT INTO publishes (trigger, scope) VALUES (?,?)").run(trigger, scope).lastInsertRowid;
         let logText = '';
-        const cap = (s) => { logText += s + '\n'; };
+        // ★ 失败原因（11-24 P0）：构建 stdout/stderr 以前只推客户端不进 DB，
+        //   失败记录里只剩「退出码 1」。这里让同一份输出同时写进 log，并限长防膨胀。
+        const cap = (s) => {
+          logText += s + '\n';
+          if (logText.length > 60000) logText = logText.slice(-60000);
+        };
         // ★ 库级互斥（双实例防线）：抢不到锁=另一进程在发，直接拒绝。
         //   lockOwner 声明在 try 外——finally 里 releaseLock 要用，try 内 const 会作用域隔离
         const lockOwner = `admin-${process.pid}`;
@@ -47,6 +95,10 @@ export function publishStream() {
           if (!acquireLock('publish', lockOwner)) throw new Error('另一进程正在发布（库锁被占）');
           running = true;
           log('── scio 发布管线 ──');
+          if (draftId && !db.prepare('SELECT id FROM drafts WHERE id=?').get(draftId)) {
+            throw new Error('草稿不存在，拒绝发布');
+          }
+          log(`· 本次范围: ${scope}（${collectDrafts(draftId).length} 篇草稿待写）`);
           if (!SRC_DIR) throw new Error('SCIO_SRC_DIR 未配置');
 
           // 1. 同步远端（有远端时）
@@ -81,23 +133,20 @@ export function publishStream() {
           } catch {}
 
           // 2. ★ 直写 posts 表（SSR 即时生效，2026-10-18）：html 预渲染 + UPSERT
-          const drafts = db.prepare("SELECT * FROM drafts WHERE kind IN ('note','project')").all();
+          // ★ 范围收口：draftId 存在时只取这一篇；collectDrafts 已做脏过滤与可发布性过滤
+          const drafts = collectDrafts(draftId);
           let written = 0;
           const upsert = db.prepare(`INSERT INTO posts
             (kind, category, slug, title, description, date, tags, related, pinned, series,
-             period, role, tech, status, link, repo, content_md, html)
+             period, role, tech, status, link, repo, content_md, html, cover)
             VALUES (@kind,@category,@slug,@title,@description,@date,@tags,@related,@pinned,@series,
-                    @period,@role,@tech,@status,@link,@repo,@content_md,@html)
+                    @period,@role,@tech,@status,@link,@repo,@content_md,@html,@cover)
             ON CONFLICT(kind, category, slug) DO UPDATE SET
               title=@title, description=@description, date=@date, tags=@tags, related=@related,
               pinned=@pinned, series=@series, period=@period, role=@role, tech=@tech,
               status=@status, link=@link, repo=@repo, content_md=@content_md, html=@html,
-              updated_at=strftime('%Y-%m-%d %H:%M:%f','now')`);
+              cover=@cover, updated_at=strftime('%Y-%m-%d %H:%M:%f','now')`);
           for (const d of drafts) {
-            // ★ 脏过滤（2026-10-20 实测设计缺陷）：只发「从未发布或发后又改过」的草稿——
-            //   原全量重发把历次转入编辑的旧副本一起发（+3 行），回滚语义也被搅乱
-            const dirty = !d.published_at || d.updated_at > d.published_at;
-            if (!dirty) continue;
             const fm = JSON.parse(d.fm || '{}');
             if (fm.draft) {
               // ★ 下架：勾「隐藏」= 从线上移除（原 v2 只跳过写入，旧行一直在线）
@@ -108,7 +157,6 @@ export function publishStream() {
               db.prepare("UPDATE drafts SET published_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=?").run(d.id);
               continue;
             }
-            if (!d.title || !d.slug || (d.kind === 'note' && !d.category)) continue;
             const html = await renderMarkdown(d.content_md || '');
             // ★ 分类 key 写入侧归一小写（2026-10-26 审查 P2-1）：UNIQUE(kind,category,slug) 里
             //   category 大小写敏感，AI 与 ai 会各存一行 → 首页长出两个团（哈希不同、形状不同）。
@@ -121,7 +169,7 @@ export function publishStream() {
               pinned: fm.pinned ? 1 : 0, series: fm.series || '',
               period: fm.period || '', role: fm.role || '', tech: JSON.stringify(fm.tech || []),
               status: fm.status || '已完成', link: fm.link || '', repo: fm.repo || '',
-              content_md: d.content_md || '', html,
+              content_md: d.content_md || '', html, cover: fm.cover || '',
             };
             upsert.run(row);
             db.prepare("UPDATE drafts SET published_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=?").run(d.id);
@@ -183,7 +231,7 @@ export function publishStream() {
             .run(logText, git(['rev-parse', '--short', 'HEAD']), pubId);
           send({ t: 'ok' });
         } catch (e) {
-          cap(String(e.message || e));
+          cap(String(e.stack || e.message || e));
           db.prepare("UPDATE publishes SET status='failed', log=?, finished_at=datetime('now') WHERE id=?").run(logText, pubId);
           send({ t: 'err', line: String(e.message || e) });
         } finally {

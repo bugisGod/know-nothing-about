@@ -2,7 +2,8 @@
 // 列表（已发布=读仓库 md，草稿=读 SQLite）/ 新建 / 编辑 / 自动保存 / 发布
 import { Hono } from 'hono';
 import { db } from './db.js';
-import { renderLayout } from './views.js';
+import { renderLayout, publishDialog } from './views.js';
+import { createPreviewToken } from './preview.js';
 import { listRepoNotes, noteAsDraftData } from './repo.js';
 
 export const notes = new Hono();
@@ -105,13 +106,12 @@ function renderEditor(d, catList, regTags = []) {
   const fm = JSON.parse(d.fm || '{}');
   const val = (k) => esc(fm[k] ?? '');
   const tagsStr = esc(Array.isArray(fm.tags) ? fm.tags.join(', ') : (fm.tags || ''));
+  const previewToken = createPreviewToken(d.id);
+  const siteBase = String(process.env.SCIO_SITE_URL || '').replace(/\/$/, '');
   return `
 <div class="row" style="justify-content:space-between;margin-bottom:6px">
   <h2 style="margin:0">${d.published_path ? '编辑（已发布）' : '写笔记'}</h2>
-  <div class="row">
-    <span id="savemark" class="muted"></span>
-    <a class="btn ghost" href="/admin/notes">返回列表</a>
-  </div>
+  <div class="row"><span id="savemark" class="muted"></span><a class="btn ghost" href="/admin/notes">返回列表</a></div>
 </div>
 <div class="card">
   <div class="fields f3">
@@ -132,112 +132,54 @@ function renderEditor(d, catList, regTags = []) {
     <div style="display:flex;align-items:flex-end;height:100%;padding-bottom:2px">
       <label class="check"><input type="checkbox" id="f-draft" ${fm.draft ? 'checked' : ''}>构建时隐藏</label></div>
   </div>
-  <input type="hidden" id="d-id" value="${d.id}">
-</div>
-
-<div class="row" style="justify-content:space-between;margin:18px 0 8px">
-  <div class="hint">正文（Markdown）· 粘贴 / 拖入图片自动上传</div>
-  <div class="row">
-    <button id="btn-preview" class="btn ghost sm" type="button">预览</button>
-    <button id="btn-publish" class="btn" type="button">保存并发布上线</button>
+  <div class="fields" style="grid-template-columns:1fr">
+    <div><label>封面 cover（可选，用作分享图 og:image）</label>
+      <div class="row"><input id="f-cover" style="flex:1;min-width:0" value="${val('cover')}" placeholder="/images/xxx.webp 或 https://…">
+      <button id="btn-cover-upload" class="btn ghost sm" type="button">上传封面</button></div>
+      <input id="cover-input" type="file" accept="image/*" hidden></div>
   </div>
+  <input type="hidden" id="d-id" value="${d.id}">
+  <input type="hidden" id="preview-token" value="${previewToken}">
+  <input type="hidden" id="site-base" value="${esc(siteBase)}">
+</div>
+<div class="row" style="justify-content:space-between;margin:18px 0 0">
+  <div class="ed-tabs">
+    <button id="tab-edit" class="ed-tab on" type="button">编辑</button>
+    <button id="tab-preview" class="ed-tab" data-testid="preview-tab" type="button">预览</button>
+    <button id="btn-preview-new" class="btn ghost sm" type="button">↗ 新窗口</button>
+    <button id="btn-upload" class="btn ghost sm" data-testid="upload-button" type="button">上传图片</button>
+    <input id="file-input" type="file" accept="image/*" hidden>
+    <span id="upload-status" class="hint"></span>
+  </div>
+  <button id="btn-publish" class="btn" type="button">保存并发布这篇</button>
 </div>
 <div class="ed-grid" id="editwrap">
   <textarea id="f-body" class="ed-body" placeholder="# 开始写…">${esc(d.content_md)}</textarea>
-  <div id="preview" class="card ed-preview"></div>
+  <iframe id="preview-frame" class="ed-preview" title="草稿真实预览"></iframe>
 </div>
 <div id="publog" class="card log" style="margin-top:14px;display:none"></div>
+${publishDialog()}
 <script type="module">
+import { initEditor } from '/admin/assets/editor-common.js';
 const $ = (id) => document.getElementById(id);
-const id = $('d-id').value;
-let saveTimer = null;
-
-async function saveDraft() {
-  const fm = {
-    description: $('f-desc').value.trim(),
-    date: $('f-date').value,
-    // 与 src/config.ts TAG_LIMITS.input 对齐（admin 是纯 JS，不能 import .ts）
-    tags: $('f-tags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean).slice(0, 5),
-    series: $('f-series').value.trim(),
-    pinned: $('f-pinned').checked,
-    draft: $('f-draft').checked,
-  };
-  const payload = {
+initEditor({
+  fieldIds: ['f-title','f-cat','f-slug','f-tags','f-series','f-date','f-desc','f-cover','f-pinned','f-draft'],
+  collect: () => ({
     title: $('f-title').value.trim(),
     category: $('f-cat').value.trim(),
     slug: $('f-slug').value.trim(),
-    fm, content_md: $('f-body').value,
-  };
-  const mark = $('savemark');
-  mark.textContent = '保存中…';
-  const r = await fetch('/admin/api/drafts/' + id, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  mark.textContent = r.ok ? ('已保存 ' + new Date().toLocaleTimeString()) : ('保存失败 ' + r.status);
-}
-$('f-body').addEventListener('input', () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveDraft, 1500); });
-['f-title','f-cat','f-slug','f-tags','f-series','f-date','f-desc'].forEach(idEl =>
-  $(idEl).addEventListener('change', saveDraft));
-
-// 预览
-const { marked } = await import('/admin/assets/marked.esm.js');
-let previewOn = false;
-$('btn-preview').addEventListener('click', async () => {
-  previewOn = !previewOn;
-  const pv = $('preview');
-  pv.style.display = previewOn ? 'block' : 'none';
-  $('btn-preview').textContent = previewOn ? '关闭预览' : '预览';
-  if (previewOn) render();
-});
-function render() { if (previewOn) $('preview').innerHTML = marked.parse($('f-body').value); }
-let rTimer = null;
-$('f-body').addEventListener('input', () => { clearTimeout(rTimer); rTimer = setTimeout(render, 500); });
-
-// 图片：粘贴 / 拖入 / 选择
-async function uploadImage(file) {
-  const fd = new FormData();
-  fd.append('file', file);
-  const r = await fetch('/admin/api/media', { method: 'POST', body: fd });
-  const j = await r.json();
-  if (!j.ok) { alert('上传失败: ' + (j.error || '')); return; }
-  const ta = $('f-body');
-  const ins = '\\n![' + (j.name || '图') + '](/images/' + j.dest + ')\\n';
-  const s = ta.selectionStart;
-  ta.value = ta.value.slice(0, s) + ins + ta.value.slice(ta.selectionEnd);
-  ta.selectionStart = ta.selectionEnd = s + ins.length;
-  saveDraft(); render();
-}
-document.addEventListener('paste', (e) => {
-  for (const it of e.clipboardData.items) {
-    if (it.type.startsWith('image/')) { e.preventDefault(); uploadImage(it.getAsFile()); }
-  }
-});
-$('f-body').addEventListener('drop', (e) => {
-  for (const f of e.dataTransfer.files) {
-    if (f.type.startsWith('image/')) { e.preventDefault(); uploadImage(f); }
-  }
-});
-
-// 发布
-$('btn-publish').addEventListener('click', async () => {
-  if (!confirm('保存并构建发布上线？')) return;
-  await saveDraft();
-  $('btn-publish').disabled = true;
-  const log = $('publog');
-  log.style.display = 'block'; log.textContent = '发布中…\\n';
-  try {
-    const r = await fetch('/admin/api/publish', { method: 'POST' });
-    const reader = r.body.getReader();
-    const dec = new TextDecoder();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      log.textContent += dec.decode(value);
-      log.scrollTop = log.scrollHeight;
-    }
-  } catch (err) { log.textContent += '\\n发布请求失败: ' + err; }
-  $('btn-publish').disabled = false;
+    fm: {
+      description: $('f-desc').value.trim(),
+      date: $('f-date').value,
+      // 与 src/config.ts TAG_LIMITS.input 对齐（admin 是纯 JS，不能 import .ts）
+      tags: $('f-tags').value.split(/[,，]/).map((s) => s.trim()).filter(Boolean).slice(0, 5),
+      series: $('f-series').value.trim(),
+      pinned: $('f-pinned').checked,
+      draft: $('f-draft').checked,
+      cover: $('f-cover').value.trim(),
+    },
+    content_md: $('f-body').value,
+  }),
 });
 </script>`;
 }

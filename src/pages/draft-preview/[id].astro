@@ -1,0 +1,63 @@
+---
+// 真预览（受保护路由）：从 drafts 表读草稿，用与线上完全相同的 ArticlePage 组件渲染。
+// 未发布内容不对外可见：必须带一次性 token（由后台编辑器签发，60 分钟有效）。
+import ArticlePage from "../../components/ArticlePage.astro";
+import { renderMarkdown } from "../../lib/md";
+import { clusterColorMap } from "../../lib/galaxy-data";
+import { PROJECT_COLOR } from "../../config";
+import { db } from "../../lib/posts";
+import { verifyPreviewToken, rewriteDraftMedia } from "../../lib/draft-preview";
+
+const id = Number(Astro.params.id);
+const token = Astro.url.searchParams.get("t") ?? "";
+Astro.response.headers.set("cache-control", "no-store");
+Astro.response.headers.set("x-robots-tag", "noindex, nofollow");
+
+if (!Number.isInteger(id) || !verifyPreviewToken(token, id)) {
+  return new Response(
+    "<!doctype html><meta charset=utf-8><p>预览链接无效或已过期，请回到编辑器重新打开预览。</p>",
+    { status: 403, headers: { "content-type": "text/html; charset=utf-8" } },
+  );
+}
+const row = db().prepare("SELECT * FROM drafts WHERE id=?").get(id) as any;
+if (!row) {
+  return new Response("草稿不存在", { status: 404 });
+}
+
+const fm = JSON.parse(row.fm || "{}");
+// 与发布管线同一套 renderMarkdown（remark-gfm + shiki + 标题锚点）
+const html = rewriteDraftMedia(await renderMarkdown(row.content_md || ""), token);
+const kind: "note" | "project" = row.kind === "project" ? "project" : "note";
+const slug = String(row.slug || "").toLowerCase();
+const category = String(row.category || "").toLowerCase();
+const dateStr = fm.date || new Date().toISOString().slice(0, 10);
+
+const entry = {
+  id: kind === "note" ? `${category}/${slug}` : slug,
+  slug,
+  collection: kind === "note" ? "notes" : "projects",
+  data: {
+    title: row.title || "（无标题草稿）",
+    description: fm.description || "",
+    date: new Date(dateStr.length === 10 ? dateStr + "T00:00:00Z" : dateStr),
+    tags: Array.isArray(fm.tags) ? fm.tags : [],
+    related: Array.isArray(fm.related) ? fm.related : [],
+    pinned: !!fm.pinned,
+    draft: !!fm.draft,
+    series: fm.series || undefined,
+    period: fm.period || undefined,
+    role: fm.role || undefined,
+    tech: Array.isArray(fm.tech) ? fm.tech : [],
+    status: fm.status || "已完成",
+    link: fm.link || undefined,
+    repo: fm.repo || undefined,
+    cover: fm.cover || "",
+  },
+  html,
+  content_md: row.content_md || "",
+};
+const clusterColor =
+  kind === "project" ? PROJECT_COLOR : (await clusterColorMap())[`cat:${category}`];
+---
+
+<ArticlePage kind={kind} entry={entry} clusterColor={clusterColor} preview />

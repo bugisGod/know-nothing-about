@@ -162,9 +162,17 @@ api.post('/media', async (c) => {
   db.prepare('INSERT INTO media (filename, mime, size) VALUES (?,?,?)').run(name, file.type, file.size);
   return c.json({ ok: true, name: file.name, dest: name }); // 正文引用 /images/<name>，发布时由管线搬运
 });
+// ★ 发布清单 dry-run（确认弹窗用）：与真正发布共用 collectDrafts，规则不会漂移
+api.get('/publish/plan', (c) => {
+  const all = c.req.query('all') === '1';
+  const draftId = all ? undefined : (Number(c.req.query('draftId')) || undefined);
+  // ★ 不传参数绝不默认全量：旧脚本误调会把全部草稿列进「本次范围」
+  if (!all && !draftId) return c.json({ ok: false, error: '需要 draftId 或 all=1' }, 400);
+  return c.json(publishPlan({ draftId }));
+});
 app.route('/admin/api', api);
 
-import { publishStream, rollback } from './publish.js';
+import { publishStream, publishPlan, rollback } from './publish.js';
 import { renderPublishes } from './views.js';
 app.get('/admin/stats', (c) => {
   const days = db.prepare(`SELECT date(ts) d, COUNT(*) pv, COUNT(DISTINCT sid) uv FROM analytics GROUP BY date(ts) ORDER BY d DESC LIMIT 14`).all();
@@ -209,8 +217,19 @@ app.post('/admin/publishes/rollback', async (c) => {
   void msg;
   return c.redirect('/admin/publishes?ok=1');
 });
-app.post('/admin/api/publish', (c) => {
-  return new Response(publishStream(), { headers: { 'content-type': 'application/x-ndjson', 'cache-control': 'no-store' } });
+app.post('/admin/api/publish', async (c) => {
+  const b = await c.req.json().catch(() => ({}));
+  const draftId = b && b.draftId != null ? Number(b.draftId) : undefined;
+  if (draftId && !db.prepare('SELECT id FROM drafts WHERE id=?').get(draftId)) {
+    return c.json({ ok: false, error: '草稿不存在' }, 404);
+  }
+  // ★ 发布范围必须显式：无 draftId 时只有 scope:'all' 才放行。
+  //   原来「没传参数 = 全量」等于旧脚本/误调一键上线全部草稿，正是 #5 要防的事故。
+  const scope = b && b.scope === 'all' ? 'all' : (draftId ? `single:${draftId}` : '');
+  if (!scope) return c.json({ ok: false, error: '需要 draftId 或显式 scope:"all"' }, 400);
+  const trigger = (b && b.trigger) || 'web';
+  return new Response(publishStream({ draftId: draftId || undefined, scope, trigger }),
+    { headers: { 'content-type': 'application/x-ndjson', 'cache-control': 'no-store' } });
 });
 app.post('/admin/logout', (c) => {
   const token = getCookie(c, COOKIE);

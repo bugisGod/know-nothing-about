@@ -126,17 +126,38 @@ input[type=checkbox]{width:auto;margin-right:7px;accent-color:var(--ac)}
 .empty{padding:34px 16px;text-align:center;color:var(--muted);font-size:13.5px}
 
 /* ── 编辑器 ── */
-.ed-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
-.ed-body{min-height:56vh;font-family:var(--mono);font-size:13.5px;line-height:1.8}
-.ed-preview{min-height:56vh;display:none;overflow:auto}
-.ed-preview img{max-width:100%;border-radius:8px}
-.ed-preview h1,.ed-preview h2{font-family:var(--font-display);border-bottom:1px solid var(--bd);padding-bottom:6px;margin:14px 0 10px}
-.ed-preview code{background:var(--bg-inset);padding:2px 6px;border-radius:4px;font-size:13px;font-family:var(--mono)}
-.ed-preview pre{background:var(--bg-inset);padding:12px;border-radius:8px;overflow:auto;font-family:var(--mono);font-size:13px}
-.ed-preview blockquote{border-left:3px solid var(--bd);padding-left:12px;color:var(--tx2);margin:10px 0}
-.ed-preview p,.ed-preview li{margin:8px 0}
-.ed-preview a{color:var(--ac);text-decoration:underline}
-@media(max-width:820px){.ed-grid{grid-template-columns:1fr}.ed-preview{display:none!important}}
+/* 编辑器：编辑 / 预览互斥 tab（旧版窄屏 display:none，手机上根本看不到预览） */
+.ed-grid{display:block}
+.ed-body{min-height:56vh;width:100%;font-family:var(--mono);font-size:13.5px;line-height:1.8}
+.ed-preview{display:none;width:100%;height:72vh;border:1px solid var(--bd);border-radius:8px;background:var(--bg)}
+.ed-tabs{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
+.ed-tab{background:transparent;color:var(--tx2);border:1px solid var(--bd);border-radius:999px;
+  padding:5px 14px;font-size:13px;font-family:inherit;cursor:pointer}
+.ed-tab:hover{color:var(--tx);border-color:var(--bd-strong)}
+.ed-tab.on{color:var(--bg);background:var(--ac);border-color:var(--ac);font-weight:600}
+#upload-status{margin-left:4px}
+@media(max-width:820px){.ed-preview{height:70vh}}
+/* 发布确认弹窗：页内 dialog，可被自动化点掉 */
+dialog.pc-dialog{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;
+  border:1px solid var(--bd-strong);border-radius:12px;background:var(--card);
+  color:var(--tx);max-width:min(560px,92vw);width:100%;padding:0;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+dialog.pc-dialog::backdrop{background:rgba(3,4,7,.72)}
+.pc-body{padding:20px 22px}
+.pc-body h3{margin-bottom:6px}
+.pc-plan{margin-top:14px;max-height:44vh;overflow:auto;background:var(--bg-inset);
+  border:1px solid var(--bd);border-radius:8px;padding:12px 14px;font-size:13px}
+.pc-scope{color:var(--ac);margin-bottom:8px}
+.pc-list{list-style:none;margin:0;padding:0}
+.pc-list li{padding:4px 0;border-bottom:1px solid var(--bd)}
+.pc-list li:last-child{border-bottom:0}
+.pc-list b{color:var(--ok);font-weight:600;margin-right:4px}
+.pc-notes{margin-top:10px;color:var(--muted);font-size:12.5px;line-height:1.7}
+tr.pub-failed td{background:rgba(217,138,138,.06)}
+.pub-err{color:var(--er);font-size:12.5px}
+details.pub-detail summary{cursor:pointer;color:var(--tx2);font-size:12.5px}
+details.pub-detail pre{white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;
+  font-family:var(--mono);font-size:12px;line-height:1.6;margin:8px 0 0;padding:10px;
+  background:var(--bg-inset);border-radius:6px}
 .log{white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;max-height:300px;overflow:auto;line-height:1.7}
 
 /* ── 登录 ── */
@@ -154,6 +175,21 @@ code{font-family:var(--mono);font-size:12.5px}
   .wrap{padding:18px 14px 56px}
 }
 `;
+
+/** 发布确认弹窗（#2）：两个编辑器与发布历史页共用的同一段 DOM / 稳定选择器 */
+export function publishDialog() {
+  return `<dialog id="publish-confirm" class="pc-dialog" aria-labelledby="pc-title" data-testid="publish-dialog">
+  <form method="dialog" class="pc-body">
+    <h3 id="pc-title">确认发布</h3>
+    <div class="hint">发布后文章即时上线。请先核对本次范围。</div>
+    <div id="publish-plan" class="pc-plan">读取清单…</div>
+    <div class="row" style="justify-content:flex-end;margin-top:16px">
+      <button id="publish-confirm-cancel" class="btn ghost sm" type="button">取消</button>
+      <button id="publish-confirm-ok" data-testid="publish-confirm" class="btn" type="submit" value="ok">确认发布</button>
+    </div>
+  </form>
+</dialog>`;
+}
 
 export function renderLayout({ title, body, user, active }) {
   const NAV = [
@@ -231,19 +267,34 @@ ${recent.length ? `<h2 style="margin:26px 0 10px">最近编辑</h2>
 }
 
 export function renderPublishes({ user, rows }) {
+  const errFirst = (log) => {
+    const lines = String(log || '').split('\n').filter(Boolean).reverse();
+    return lines.find((l) => /error|失败|Error|退出码|未配置|拒绝/i.test(l)) || lines[0] || '';
+  };
   return renderLayout({ title: '发布历史', user, active: '/admin/publishes', body: `
 <div class="row" style="justify-content:space-between;margin-bottom:14px">
   <h2 style="margin:0">发布历史</h2>
-  <form method="post" action="/admin/publishes/rollback" onsubmit="return confirm('回滚到上一个版本？')">
-    <button class="btn ghost sm" type="submit">↩ 回滚上一版</button></form>
+  <div class="row">
+    <button id="btn-publish-all" class="btn ghost sm" type="button">发布全部草稿…</button>
+    <form method="post" action="/admin/publishes/rollback" onsubmit="return confirm('回滚到上一个版本？（posts 全表快照）')">
+      <button class="btn ghost sm" type="submit">↩ 回滚上一版</button></form>
+  </div>
 </div>
+<div id="publog" class="card log" style="margin-top:0;margin-bottom:14px;display:none"></div>
 <div class="card flush">
 <table class="tbl">
-<thead><tr><th>#</th><th>状态</th><th>commit</th><th>时间</th></tr></thead>
-<tbody>${rows.map((p) => `<tr>
+<thead><tr><th>#</th><th>状态</th><th>范围</th><th>commit</th><th>时间</th><th>日志 / 失败原因</th></tr></thead>
+<tbody>${rows.map((p) => `<tr class="${p.status === 'failed' ? 'pub-failed' : ''}">
 <td>${p.id}</td>
-<td>${statusBadge(p.status)}</td>
+<td>${statusBadge(p.status)}${p.status === 'failed' ? `<div class="pub-err">${esc(errFirst(p.log))}</div>` : ''}</td>
+<td class="muted">${esc(p.scope || '—')}</td>
 <td><code>${esc(p.commit_sha || '—')}</code></td>
-<td class="muted">${esc(String(p.finished_at || p.started_at || ''))}</td></tr>`).join('') || '<tr><td><div class="empty">还没有发布记录</div></td></tr>'}
-</tbody></table></div>` });
+<td class="muted">${esc(String(p.finished_at || p.started_at || ''))}</td>
+<td>${p.log ? `<details class="pub-detail"><summary>展开日志 / 报错原文</summary><pre>${esc(p.log)}</pre></details>` : '<span class="muted">无</span>'}</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty">还没有发布记录</div></td></tr>'}
+</tbody></table></div>
+${publishDialog()}
+<script type="module">
+import { createPublishFlow } from '/admin/assets/editor-common.js';
+createPublishFlow({ planQuery: '?all=1', publishBody: { scope: 'all' }, btnId: 'btn-publish-all', logId: 'publog' });
+</script>` });
 }

@@ -15,6 +15,10 @@ interface Props {
   description?: string;
   home?: boolean;
   clusterColor?: string;
+  /** 文章级分享封面（og:image）：相对路径或外链；未配置回退 /og.png */
+  ogImage?: string;
+  /** 草稿预览等内部页面：禁止索引 */
+  noindex?: boolean;
 }
 
 const {
@@ -22,12 +26,20 @@ const {
   description = "个人名片 · 知识库 · 项目复盘",
   home = false,
   clusterColor,
+  ogImage,
+  noindex = false,
 } = Astro.props;
 // 域色只接受 6 位十六进制：categories.json 由后台导出，避免任意 CSS 注入
 const safeClusterColor =
   clusterColor && /^#[0-9a-fA-F]{6}$/.test(clusterColor) ? clusterColor : undefined;
 const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : Astro.url.pathname;
 const pageTitle = title ? `${title} · ${SITE.title}` : SITE.title;
+// og:image 必须是绝对地址（社交平台不解析相对路径）。只放行站内路径与 http(s) 外链，
+// 避免后台 frontmatter 里的任意字符串被拼进 meta。
+const safeOg = ogImage && (
+  /^https?:\/\//.test(ogImage) || (ogImage.startsWith("/") && !ogImage.startsWith("//"))
+) ? ogImage : "/og.png";
+const ogImageUrl = new URL(safeOg, Astro.site ?? SITE.url).href;
 ---
 
 <!doctype html>
@@ -47,6 +59,7 @@ const pageTitle = title ? `${title} · ${SITE.title}` : SITE.title;
         } catch (e) {}
       })();
     </script>
+    {noindex && <meta name="robots" content="noindex,nofollow" />}
     <meta name="generator" content={Astro.generator} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonical} />
@@ -54,7 +67,7 @@ const pageTitle = title ? `${title} · ${SITE.title}` : SITE.title;
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content={new URL("/og.png", Astro.site ?? "https://nihilscire.com").href} />
+    <meta property="og:image" content={ogImageUrl} />
     <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body
