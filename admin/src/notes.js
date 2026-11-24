@@ -107,7 +107,9 @@ function renderEditor(d, catList, regTags = []) {
   const val = (k) => esc(fm[k] ?? '');
   const tagsStr = esc(Array.isArray(fm.tags) ? fm.tags.join(', ') : (fm.tags || ''));
   const previewToken = createPreviewToken(d.id);
-  const siteBase = String(process.env.SCIO_SITE_URL || '').replace(/\/$/, '');
+  // 预览基址必须是浏览器可达的公开地址；SCIO_SITE_URL 是服务器本机 pagefind 用的，
+  // 常配成 127.0.0.1，不能拿来做 iframe。本地调试才用 SCIO_PREVIEW_BASE 覆盖。
+  const siteBase = String(process.env.SCIO_PREVIEW_BASE || 'https://nihilscire.com').replace(/\/$/, '');
   return `
 <div class="row" style="justify-content:space-between;margin-bottom:6px">
   <h2 style="margin:0">${d.published_path ? '编辑（已发布）' : '写笔记'}</h2>
