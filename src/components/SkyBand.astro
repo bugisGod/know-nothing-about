@@ -105,14 +105,21 @@ const { compact = false, reading = false } = Astro.props;
       padding: 32px 0 24px;
     }
     .sky-band.reading {
-      padding: 28px 0 18px;
+      padding: 20px 0 12px;
     }
     .sky-band :global(h1) {
       font-size: 28px;
       text-wrap: initial;
     }
     .sky-band.reading :global(h1) {
-      font-size: 30px;
+      font-size: 24px;
+      /* 长标题在手机上折三行，收紧上下边距给正文让位（桌面保持原值） */
+      margin: 10px 0 12px;
+    }
+    .sky-band.reading :global(.page-desc) {
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 0 0 10px;
     }
   }
 </style>
